@@ -43,6 +43,10 @@ app.use("/api/onboarding", onboardingRoutes)
 
 app.use("/api/public", require("./src/routes/public.routes"));
 
+// index.js or src/app.js
+app.use("/api", require("./src/routes/profile.routes"));
+
+
 const adminRoutes = require("./src/routes/admin.routes");
 app.use("/api", adminRoutes);
 
@@ -59,9 +63,10 @@ app.use((err, req, res, next) => {
 // ---------------------------
 // Start Server + DB
 // ---------------------------
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 
 const { seedIfEmpty } = require("./src/utils/seed");
+const seedAll = require("./src/seeds/seedAll");
 
 (async () => {
   try {
@@ -74,6 +79,8 @@ const { seedIfEmpty } = require("./src/utils/seed");
     
     // 👉 Run seeding if needed
     await seedIfEmpty();
+
+    await seedAll();
 
     // 🔑 Ensure default admin exists
     await ensureAdmin();

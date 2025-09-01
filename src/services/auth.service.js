@@ -26,7 +26,7 @@ async function createUserAndSendVerification({
   const expiresAt = dayjs().add(24, "hour").toDate();
   await VerificationToken.create({ userId: user.id, token, expiresAt, type: "email_verify" });
 
-  const link = `${process.env.BASE_URL || ""}/api/auth/verify/${token}`;
+  const link = `${process.env.BASE_URL || ""}/verify/${token}`;
   
   await sendTemplatedEmail({
   to: user.email,
@@ -76,7 +76,7 @@ async function resendVerification(email) {
   const expiresAt = dayjs().add(24, "hour").toDate();
   await VerificationToken.create({ userId: user.id, token, expiresAt, type: "email_verify" });
 
-  const link = `${process.env.BASE_URL || ""}/api/auth/verify/${token}`;
+  const link = `${process.env.BASE_URL || ""}/verify/${token}`;
  
   await sendTemplatedEmail({
   to: user.email,

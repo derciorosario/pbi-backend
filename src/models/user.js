@@ -19,7 +19,9 @@ module.exports = (sequelize, DataTypes) => {
       phone: { type: DataTypes.STRING },
       biography: { type: DataTypes.TEXT },
       nationality: { type: DataTypes.STRING },
-      countryOfResidence: { type: DataTypes.STRING },
+      country: { type: DataTypes.STRING, allowNull: true }, 
+      city: { type: DataTypes.STRING, allowNull: true },            // nationality
+      countryOfResidence: { type: DataTypes.STRING, allowNull: true }, 
 
       // 🔑 password
       passwordHash: { type: DataTypes.STRING, allowNull: false },

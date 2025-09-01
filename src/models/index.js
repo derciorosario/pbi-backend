@@ -44,6 +44,17 @@ Category.belongsToMany(User, { through: UserCategory, foreignKey: "categoryId", 
 User.belongsToMany(Subcategory, { through: UserSubcategory, foreignKey: "userId", otherKey: "subcategoryId", as: "subcategories" });
 Subcategory.belongsToMany(User, { through: UserSubcategory, foreignKey: "subcategoryId", otherKey: "userId", as: "users" });
 
+
+const NewsArticle = require("./newsArticle")(sequelize, DataTypes);
+
+// Author relations
+User.hasMany(NewsArticle,   { foreignKey: "userId", as: "news" });
+NewsArticle.belongsTo(User, { foreignKey: "userId", as: "author" });
+
+Profile.hasMany(NewsArticle,   { foreignKey: "profileId", as: "news" });
+NewsArticle.belongsTo(Profile, { foreignKey: "profileId", as: "profile" });
+
+
 /* ============ Exports ============ */
 module.exports = {
   sequelize,
@@ -56,7 +67,7 @@ module.exports = {
   Subcategory,
   UserCategory,
   UserSubcategory,
-
+  NewsArticle,
   Goal,
   UserGoal,
 };
