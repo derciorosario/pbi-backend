@@ -5,9 +5,9 @@ module.exports = (sequelize, DataTypes) => {
     "Category",
     {
       id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
-      name: { type: DataTypes.STRING, allowNull: false, unique: true },
+      name: { type: DataTypes.STRING, allowNull: false },
     },
-    { tableName: "categories", timestamps: true }
+    { tableName: "categories", timestamps: true, }
   );
   return Category;
 };

@@ -176,6 +176,8 @@ async function updateIdentity(req, res, next) {
 
     profile.primaryIdentity = primaryIdentity || null;
     profile.onboardingProfileTypeDone = !!primaryIdentity;
+
+    console.log({primaryIdentity})
     await profile.save();
 
     return getMe(req, res, next);

@@ -10,6 +10,7 @@ async function state(req, res, next) {
 }
 
 async function saveProfileType(req, res, next) {
+  console.log({aaaaaaaaa:req.user.sub,bbb:req.body.primaryIdentity})
   try {
     const out = await Svc.setProfileType(req.user.sub, req.body.primaryIdentity);
     res.json(out);
@@ -24,6 +25,7 @@ async function saveCategories(req, res, next) {
 }
 
 async function saveGoals(req, res, next) {
+  console.log({x:req.user.sub})
   try {
     const out = await Svc.setGoals(req.user.sub, req.body.goalIds);
     res.json(out);

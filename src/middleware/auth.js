@@ -23,7 +23,7 @@ module.exports = (required = true) => {
       const user = await User.findByPk(sub, { attributes: ["id"] });
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      req.user = { sub: user.id };
+      req.user = { sub: user.id,id: user.id };
       next();
     } catch (e) {
       if (required) return res.status(401).json({ message: "Invalid token" });

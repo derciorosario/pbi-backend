@@ -5,7 +5,7 @@ module.exports = (sequelize, DataTypes) => {
     "VerificationToken",
     {
       id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
-      token: { type: DataTypes.STRING, allowNull: false, unique: true },
+      token: { type: DataTypes.STRING, allowNull: false },
       userId: { type: DataTypes.UUID, allowNull: false },
       type: {
         type: DataTypes.ENUM("email_verify", "password_reset"),
@@ -14,7 +14,7 @@ module.exports = (sequelize, DataTypes) => {
       expiresAt: { type: DataTypes.DATE, allowNull: false },
       usedAt: { type: DataTypes.DATE },
     },
-    { tableName: "verification_tokens", timestamps: true }
+    { tableName: "verification_tokens", timestamps: true, }
   );
 
   return VerificationToken;

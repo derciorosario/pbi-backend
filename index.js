@@ -21,7 +21,8 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 
 // 📦 Parse JSON bodies
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // 📝 Logging
 app.use(morgan("dev"));
@@ -41,7 +42,18 @@ app.use("/api/auth", limiter, authRoutes);
 const onboardingRoutes = require("./src/routes/onboarding.routes");
 app.use("/api/onboarding", onboardingRoutes)
 
+const jobRoutes = require("./src/routes/job.routes");
+app.use("/api/jobs", jobRoutes)
+
 app.use("/api/public", require("./src/routes/public.routes"));
+
+app.use("/api/categories", require("./src/routes/category.routes"));
+
+const eventRoutes = require("./src/routes/event.routes");
+app.use("/api/events", eventRoutes);
+
+const feedRoutes = require("./src/routes/feed.routes");
+app.use("/api", feedRoutes);
 
 // index.js or src/app.js
 app.use("/api", require("./src/routes/profile.routes"));
@@ -49,6 +61,10 @@ app.use("/api", require("./src/routes/profile.routes"));
 
 const adminRoutes = require("./src/routes/admin.routes");
 app.use("/api", adminRoutes);
+
+const peopleRoutes = require("./src/routes/people.routes");
+app.use("/api/people", peopleRoutes);
+
 
 
 // ❌ 404 handler
@@ -67,6 +83,34 @@ const PORT = process.env.PORT || 5000;
 
 const { seedIfEmpty } = require("./src/utils/seed");
 const seedAll = require("./src/seeds/seedAll");
+
+async function sanitizeJobsFKs(sequelize) {
+  const qi = sequelize.getQueryInterface();
+
+  // 1) Garanta tipo compatível com UUID (MySQL: CHAR(36))
+  // Se a coluna já é CHAR(36) / BINARY(16), o ALTER é no-op.
+  await sequelize.query(`
+    ALTER TABLE jobs
+      MODIFY COLUMN categoryId CHAR(36) NULL,
+      MODIFY COLUMN subcategoryId CHAR(36) NULL
+  `);
+
+  // 2) Zerar valores órfãos antes de criar/atualizar FK
+  await sequelize.query(`
+    UPDATE jobs j
+    LEFT JOIN categories c ON j.categoryId = c.id
+    SET j.categoryId = NULL
+    WHERE j.categoryId IS NOT NULL AND c.id IS NULL
+  `);
+
+  await sequelize.query(`
+    UPDATE jobs j
+    LEFT JOIN subcategories s ON j.subcategoryId = s.id
+    SET j.subcategoryId = NULL
+    WHERE j.subcategoryId IS NOT NULL AND s.id IS NULL
+  `);
+}
+
 
 (async () => {
   try {

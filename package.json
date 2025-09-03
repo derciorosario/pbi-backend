@@ -27,7 +27,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js",
-    "seed": "node seed/loadAll.js"
+    "seed": "node seed/loadAll.js",
+    "jobs-events": "node src/seeds/seedJobsAndEvents.js"
   },
   "keywords": [],
   "author": "",

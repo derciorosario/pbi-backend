@@ -13,7 +13,6 @@ module.exports = (sequelize, DataTypes) => {
       email: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
         validate: { isEmail: true },
       },
       phone: { type: DataTypes.STRING },
@@ -36,7 +35,7 @@ module.exports = (sequelize, DataTypes) => {
       isVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
 
       provider: { type: DataTypes.ENUM("local", "google"), allowNull: false, defaultValue: "local" },
-      googleId: { type: DataTypes.STRING(64), allowNull: true, unique: true },
+      googleId: { type: DataTypes.STRING(64), allowNull: true },
       avatarUrl: { type: DataTypes.STRING(512), allowNull: true, validate: { isUrl: true } },
     },
     {

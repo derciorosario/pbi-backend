@@ -19,15 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       // FR-5: Primary Identity
       // IMPORTANT: Frontend must send one of these EXACT values
       primaryIdentity: {
-        type: DataTypes.ENUM(
-          "Entrepreneur",
-          "Seller",
-          "Buyer",
-          "Job Seeker",
-          "Recruiter",
-          "Investor",
-          "Other"
-        ),
+        type: DataTypes.STRING ,
         allowNull: true,
       },
 

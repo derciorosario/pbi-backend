@@ -40,7 +40,7 @@ async function setCategories(userId, categoryIds = [], subcategoryIds = []) {
     Subcategory.findAll({ where: { id: subcategoryIds } }),
   ]);
   if (cats.length < 1)  throw Object.assign(new Error("At least 1 industry category required"), { status: 400 });
-  if (subs.length < 2)  throw Object.assign(new Error("Select at least 2 subcategories"), { status: 400 });
+  if (subs.length < 1)  throw Object.assign(new Error("Select at least 1 subcategories"), { status: 400 });
 
   // replace selections (idempotent)
   await UserCategory.destroy({ where: { userId } });

@@ -9,24 +9,46 @@ const {
   Subcategory,
   UserCategory,
   UserSubcategory,
+  Goal,
+  UserGoal,
 } = require("../models");
 
-// ---------- Minimal catalog (only seeded if empty) ----------
-
 const bcrypt = require("bcryptjs");
+
+/* -------------------------------- Catalogs -------------------------------- */
 
 const CATALOG = [
   {
     name: "Technology",
-    subs: ["Software Development", "Artificial Intelligence", "Cybersecurity", "Data Analysis", "Fintech", "Telecom & Connectivity", "Hardware & Devices"],
+    subs: [
+      "Software Development",
+      "Artificial Intelligence",
+      "Cybersecurity",
+      "Data Analysis",
+      "Fintech",
+      "Telecom & Connectivity",
+      "Hardware & Devices",
+    ],
   },
   {
     name: "Agriculture",
-    subs: ["Crop Production", "Livestock & Poultry", "Agro-Processing", "Agro-Tech", "Equipment & Inputs"],
+    subs: [
+      "Crop Production",
+      "Livestock & Poultry",
+      "Agro-Processing",
+      "Agro-Tech",
+      "Equipment & Inputs",
+    ],
   },
   {
     name: "Commerce & Financial Services",
-    subs: ["Banking", "Insurance", "Fintech", "Investment & Capital Markets", "Microfinance & Cooperative Services"],
+    subs: [
+      "Banking",
+      "Insurance",
+      "Fintech",
+      "Investment & Capital Markets",
+      "Microfinance & Cooperative Services",
+    ],
   },
   {
     name: "Marketing & Advertising",
@@ -44,11 +66,35 @@ const CATALOG = [
   },
   {
     name: "Tourism & Hospitality",
-    subs: ["Hotels & Accommodation", "Travel Agencies & Tour Operators", "Eco-Tourism", "Cultural Tourism", "Event Management"],
+    subs: [
+      "Hotels & Accommodation",
+      "Travel Agencies & Tour Operators",
+      "Eco-Tourism",
+      "Cultural Tourism",
+      "Event Management",
+    ],
   },
 ];
 
-// ---------- Helpers ----------
+const GOALS_CATALOG = [
+  "Hire Engineers",
+  "Find Investors",
+  "Raise Capital",
+  "Find Clients",
+  "Partnerships",
+  "Mentorship",
+  "Recruitment",
+  "Find Co-founder",
+  "Job Opportunities",
+  "Sell Products/Services",
+];
+
+/* -------------------------------- Helpers --------------------------------- */
+
+async function hash(pwd = "ChangeMe@123") {
+  return bcrypt.hash(pwd, 10);
+}
+
 async function ensureCategoriesIfEmpty() {
   const count = await Category.count();
   if (count > 0) return;
@@ -60,6 +106,13 @@ async function ensureCategoriesIfEmpty() {
     }
   }
   console.log(`✅ Seeded ${CATALOG.length} categories (because DB had none).`);
+}
+
+async function ensureGoalsIfEmpty() {
+  const count = await Goal.count();
+  if (count > 0) return;
+  await Goal.bulkCreate(GOALS_CATALOG.map((name) => ({ name })));
+  console.log(`✅ Seeded ${GOALS_CATALOG.length} goals (because DB had none).`);
 }
 
 async function findCategoryIdsByNames(names = []) {
@@ -74,16 +127,26 @@ async function findSubcategoryIdsByNames(pairs = []) {
   for (const { categoryName, subName } of pairs) {
     const cat = await Category.findOne({ where: { name: categoryName } });
     if (!cat) continue;
-    const sub = await Subcategory.findOne({ where: { name: subName, categoryId: cat.id } });
+    const sub = await Subcategory.findOne({
+      where: { name: subName, categoryId: cat.id },
+    });
     if (sub) out.push(sub.id);
   }
   return out;
 }
 
+async function findGoalIdsByNames(names = []) {
+  if (!names.length) return [];
+  const rows = await Goal.findAll({ where: { name: names } });
+  return rows.map((g) => g.id);
+}
 
+/**
+ * Cria/atualiza User + Profile e associa categorias, subcategorias e goals.
+ */
 async function upsertUserWithProfile({
   email,
-  password = "User@123",        // default password if not provided
+  password = "User@123",
   name,
   phone,
   nationality,
@@ -94,15 +157,15 @@ async function upsertUserWithProfile({
   profile = {},
   categories = [],
   subcategories = [],
+  goals = [], // <<--- array de nomes de goals
 }) {
-  // 👇 hash once and store in the correct column
   const passwordHash = await hash(password);
 
   let user = await User.findOne({ where: { email } });
   if (!user) {
     user = await User.create({
       email,
-      passwordHash,              // <-- IMPORTANT: your model expects this
+      passwordHash,
       name,
       phone,
       nationality,
@@ -114,14 +177,11 @@ async function upsertUserWithProfile({
     });
     console.log(`👤 Created user: ${email}`);
   } else {
-    // optional: do NOT re-hash; keep existing hash unless you really want to reset it
-    // If you want to force-reset:
-    // user.passwordHash = passwordHash;
     await user.save();
     console.log(`ℹ️  User already exists: ${email}`);
   }
 
-  // Ensure profile exists
+  // Profile
   let prof = await Profile.findOne({ where: { userId: user.id } });
   if (!prof) {
     prof = await Profile.create({
@@ -137,12 +197,12 @@ async function upsertUserWithProfile({
       categoryId: null,
       subcategoryId: null,
       onboardingProfileTypeDone: !!profile.primaryIdentity,
-      onboardingCategoriesDone:  categories.length > 0 || subcategories.length > 0,
-      onboardingGoalsDone:       false,
+      onboardingCategoriesDone:
+        categories.length > 0 || subcategories.length > 0,
+      onboardingGoalsDone: goals.length > 0,
     });
     console.log(`🧩 Profile created for: ${email}`);
   } else {
-    // Update minimal bits if provided
     Object.assign(prof, {
       primaryIdentity: profile.primaryIdentity ?? prof.primaryIdentity,
       professionalTitle: profile.professionalTitle ?? prof.professionalTitle,
@@ -151,38 +211,64 @@ async function upsertUserWithProfile({
       birthDate: profile.birthDate ?? prof.birthDate,
       experienceLevel: profile.experienceLevel ?? prof.experienceLevel,
       skills: Array.isArray(profile.skills) ? profile.skills : prof.skills,
-      languages: Array.isArray(profile.languages) ? profile.languages : prof.languages,
+      languages: Array.isArray(profile.languages)
+        ? profile.languages
+        : prof.languages,
+      onboardingGoalsDone:
+        typeof prof.onboardingGoalsDone === "boolean"
+          ? prof.onboardingGoalsDone || goals.length > 0
+          : goals.length > 0,
     });
     await prof.save();
     console.log(`🛠️  Profile updated for: ${email}`);
   }
 
-  // Attach categories / subcategories (many-to-many)
+  // Categorias/Subcategorias (M2M)
   if (categories.length || subcategories.length) {
     const catIds = await findCategoryIdsByNames(categories);
     const subIds = await findSubcategoryIdsByNames(subcategories);
 
-    // Clean previous
     await UserCategory.destroy({ where: { userId: user.id } });
     await UserSubcategory.destroy({ where: { userId: user.id } });
 
-    // Insert new
-    for (const cid of catIds) await UserCategory.create({ userId: user.id, categoryId: cid });
-    for (const sid of subIds) await UserSubcategory.create({ userId: user.id, subcategoryId: sid });
+    if (catIds.length) {
+      await UserCategory.bulkCreate(
+        catIds.map((cid) => ({ userId: user.id, categoryId: cid }))
+      );
+    }
+    if (subIds.length) {
+      await UserSubcategory.bulkCreate(
+        subIds.map((sid) => ({ userId: user.id, subcategoryId: sid }))
+      );
+    }
 
-    console.log(`🔗 Linked ${catIds.length} categories & ${subIds.length} subcategories to ${email}`);
+    console.log(
+      `🔗 Linked ${catIds.length} categories & ${subIds.length} subcategories to ${email}`
+    );
+  }
+
+  // Goals (M2M)
+  if (goals.length) {
+    const goalIds = await findGoalIdsByNames(goals);
+
+    // remove prev e adiciona os novos
+    await UserGoal.destroy({ where: { userId: user.id } });
+    if (goalIds.length) {
+      await UserGoal.bulkCreate(
+        goalIds.map((gid) => ({ userId: user.id, goalId: gid }))
+      );
+    }
+
+    console.log(`🎯 Linked ${goalIds.length} goals to ${email}`);
   }
 
   return user;
 }
 
-async function hash(pwd = "ChangeMe@123") {
-  return bcrypt.hash(pwd, 10);
-}
-
+/* --------------------------------- Data ----------------------------------- */
 
 const BULK_USERS = [
-  // --- Companies ---
+  // Companies
   {
     email: "afri-agro@pbi.africa",
     password: "Company@123",
@@ -204,8 +290,12 @@ const BULK_USERS = [
     categories: ["Agriculture", "Commerce & Financial Services"],
     subcategories: [
       { categoryName: "Agriculture", subName: "Agro-Processing" },
-      { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets" },
+      {
+        categoryName: "Commerce & Financial Services",
+        subName: "Investment & Capital Markets",
+      },
     ],
+    goals: ["Find Clients", "Partnerships", "Raise Capital"],
   },
   {
     email: "sa-renew@pbi.africa",
@@ -230,6 +320,7 @@ const BULK_USERS = [
       { categoryName: "Energy", subName: "Renewable Energy (Solar, Wind, Hydro)" },
       { categoryName: "Infrastructure & Construction", subName: "Civil Engineering & Roads" },
     ],
+    goals: ["Find Investors", "Partnerships"],
   },
   {
     email: "naija-fintech@pbi.africa",
@@ -255,6 +346,7 @@ const BULK_USERS = [
       { categoryName: "E-Commerce", subName: "Digital Payment Solutions" },
       { categoryName: "Commerce & Financial Services", subName: "Banking" },
     ],
+    goals: ["Find Clients", "Hire Engineers", "Raise Capital"],
   },
   {
     email: "kenya-logistics@pbi.africa",
@@ -279,9 +371,10 @@ const BULK_USERS = [
       { categoryName: "E-Commerce", subName: "Logistics & Delivery Services" },
       { categoryName: "Maritime & Transport", subName: "Freight & Delivery Services" },
     ],
+    goals: ["Find Clients", "Partnerships"],
   },
 
-  // --- Individuals (Job Seekers, Professionals, etc.) ---
+  // Individuals
   {
     email: "amara.dev@pbi.africa",
     password: "User@123",
@@ -302,6 +395,7 @@ const BULK_USERS = [
     },
     categories: ["Technology"],
     subcategories: [{ categoryName: "Technology", subName: "Software Development" }],
+    goals: ["Job Opportunities", "Mentorship"],
   },
   {
     email: "amina.designer@pbi.africa",
@@ -326,6 +420,7 @@ const BULK_USERS = [
       { categoryName: "Marketing & Advertising", subName: "Branding & Creative Strategy" },
       { categoryName: "Technology", subName: "Software Development" },
     ],
+    goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   {
     email: "youssef.data@pbi.africa",
@@ -350,6 +445,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Data Analysis" },
       { categoryName: "Marketing & Advertising", subName: "Market Research & Analytics" },
     ],
+    goals: ["Find Clients", "Mentorship"],
   },
   {
     email: "chinedu.hr@pbi.africa",
@@ -371,6 +467,7 @@ const BULK_USERS = [
     },
     categories: ["Professional Services"],
     subcategories: [{ categoryName: "Professional Services", subName: "Human Resources" }],
+    goals: ["Recruitment", "Find Clients"],
   },
   {
     email: "helena.events@pbi.africa",
@@ -395,9 +492,10 @@ const BULK_USERS = [
       { categoryName: "Tourism & Hospitality", subName: "Event Management" },
       { categoryName: "Marketing & Advertising", subName: "Event Marketing & Activations" },
     ],
+    goals: ["Find Clients", "Partnerships"],
   },
 
-  // --- Admins ---
+  // Admins (não aparecem em sugestões/feeds para usuário)
   {
     email: "ops.admin@pbi.africa",
     password: "Admin@123",
@@ -421,6 +519,7 @@ const BULK_USERS = [
       { categoryName: "Public Sector", subName: "Policy & Regulation" },
       { categoryName: "Professional Services", subName: "Consulting" },
     ],
+    goals: ["Recruitment"],
   },
   {
     email: "content.admin@pbi.africa",
@@ -442,34 +541,35 @@ const BULK_USERS = [
     },
     categories: ["Media & Entertainment", "Education"],
     subcategories: [
-      { categoryName: "Media & Entertainment", subName: "Publishing (Books, Magazines, Digital Publishing" },
+      {
+        categoryName: "Media & Entertainment",
+        subName: "Publishing (Books, Magazines, Digital Publishing",
+      },
       { categoryName: "Education", subName: "EdTech" },
     ],
+    goals: ["Mentorship"],
   },
 ];
 
-// ---------- Main ----------
+/* --------------------------------- Main ----------------------------------- */
+
 (async () => {
   try {
     await sequelize.authenticate();
     console.log("🔌 DB connected (seed).");
 
-    // Optionally ensure models are up to date in dev:
+    // Em dev, se quiser:
     // await sequelize.sync({ alter: true });
 
     await ensureCategoriesIfEmpty();
+    await ensureGoalsIfEmpty();
 
-    // -------- DEMO USERS --------
-
-    // 1) Company user (accountType: company)
     for (const u of BULK_USERS) {
-    await upsertUserWithProfile(u);
+      await upsertUserWithProfile(u);
     }
 
     console.log("✅ Seed completed.");
-   // process.exit(0);
   } catch (err) {
     console.error("❌ Seed failed:", err);
-    //process.exit(1);
   }
 })();

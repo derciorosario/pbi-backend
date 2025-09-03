@@ -10,7 +10,7 @@ const setProfileType = [
 
 const setCategories = [
   body("categoryIds").isArray({ min: 1 }),
-  body("subcategoryIds").isArray({ min: 2 }), // ≥ 2 subcategories total
+  body("subcategoryIds").isArray({ min: 1 }), // ≥ 2 subcategories total
 ];
 
 const setGoals = [
