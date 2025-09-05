@@ -52,6 +52,9 @@ app.use("/api/categories", require("./src/routes/category.routes"));
 const eventRoutes = require("./src/routes/event.routes");
 app.use("/api/events", eventRoutes);
 
+const serviceRoutes = require("./src/routes/service.routes");
+app.use("/api/services", serviceRoutes);
+
 const feedRoutes = require("./src/routes/feed.routes");
 app.use("/api", feedRoutes);
 
@@ -101,7 +104,8 @@ const seedAll = require("./src/seeds/seedAll");
     console.log("✅ Database connected");
 
     // Auto-sync DB tables (use migrations in production)
-    await sequelize.sync({ alter: true });
+    // Temporarily disable alter:true to avoid "Too many keys" error
+    await sequelize.sync({ alter: false });
     
     // 👉 Run seeding if needed
     //await seedIfEmpty();

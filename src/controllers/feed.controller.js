@@ -1,47 +1,51 @@
 // src/controllers/feed.controller.js
 const { Op } = require("sequelize");
-const { Job, Event, Category, Subcategory, User, Profile, UserCategory,
-  Goal,Connection ,ConnectionRequest,
-  Identity} = require("../models");
+const {
+  Job,
+  Event,
+  Category,
+  Subcategory,
+  User,
+  Profile,
+  UserCategory,
+  Goal,
+  Connection,
+  ConnectionRequest,
+  Identity,
+  Service, // [SERVICE] import
+} = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 
-
-
-
 exports.getMeta = async (req, res) => {
-  
   const categories = await Category.findAll({
     include: [{ model: Subcategory, as: "subcategories" }],
-    order: [["name", "ASC"], [{ model: Subcategory, as: "subcategories" }, "name", "ASC"]],
+    order: [
+      ["name", "ASC"],
+      [{ model: Subcategory, as: "subcategories" }, "name", "ASC"],
+    ],
   });
 
-  
   const identities = await Identity.findAll({
-  include: [
-    {
-      model: Category,
-      as: "categories",
-      include: [
-        { model: Subcategory, as: "subcategories" }
-      ]
-    }
-  ],
-  order: [
-    ["name", "ASC"], // order by Identity.name
-    [{ model: Category, as: "categories" }, "name", "ASC"], // order by Category.name
-    [
-      { model: Category, as: "categories" },
-      { model: Subcategory, as: "subcategories" },
-      "name",
-      "ASC"
-    ] // order by Subcategory.name
-  ]
-});
-
-
-  const goals=await Goal.findAll({
-    order: [["name", "ASC"]],
+    include: [
+      {
+        model: Category,
+        as: "categories",
+        include: [{ model: Subcategory, as: "subcategories" }],
+      },
+    ],
+    order: [
+      ["name", "ASC"],
+      [{ model: Category, as: "categories" }, "name", "ASC"],
+      [
+        { model: Category, as: "categories" },
+        { model: Subcategory, as: "subcategories" },
+        "name",
+        "ASC",
+      ],
+    ],
   });
+
+  const goals = await Goal.findAll({ order: [["name", "ASC"]] });
 
   const countries = [
     "Angola","Ghana","Nigeria","Kenya","South Africa","Mozambique","Tanzania","Uganda","Zimbabwe","Zambia",
@@ -50,24 +54,29 @@ exports.getMeta = async (req, res) => {
 
   res.json({
     goals,
-    identities:identities.map(i=>({
-       id: String(i.id),
-       name: i.name,
-       categories: categories.map(c => ({
-          id: String(c.id),
-          name: c.name,
-          subcategories: (c.subcategories || []).map(s => ({ id: String(s.id), name: s.name })),
-       }))
+    identities: identities.map((i) => ({
+      id: String(i.id),
+      name: i.name,
+      categories: categories.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        subcategories: (c.subcategories || []).map((s) => ({
+          id: String(s.id),
+          name: s.name,
+        })),
+      })),
     })),
-    categories: categories.map(c => ({
+    categories: categories.map((c) => ({
       id: String(c.id),
       name: c.name,
-      subcategories: (c.subcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+      subcategories: (c.subcategories || []).map((s) => ({
+        id: String(s.id),
+        name: s.name,
+      })),
     })),
-    countries
+    countries,
   });
 };
-
 
 const like = (v) => ({ [Op.like]: `%${v}%` });
 const pickNumber = (v) => {
@@ -75,10 +84,10 @@ const pickNumber = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-// ---- Humanizer: "Just now", "1 min ago", "2 hours ago", "3 days ago" ----
+// ---- Humanizer
 function timeAgo(date) {
   const d = new Date(date);
-  const diff = (Date.now() - d.getTime()) / 1000; // seconds
+  const diff = (Date.now() - d.getTime()) / 1000;
 
   if (diff < 45) return "Just now";
   if (diff < 90) return "1 min ago";
@@ -92,16 +101,50 @@ function timeAgo(date) {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
 
-  // fallback simples: data local
   return d.toLocaleDateString();
 }
 
-// Includes comuns para trazer nomes de categoria/subcategoria
+// Includes
 const includeCategoryRefs = [
   { model: Category, as: "category", attributes: ["id", "name"] },
   { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
   { model: User, as: "postedBy", attributes: ["id", "name"] },
 ];
+
+const includeEventRefs = [
+  { model: Category, as: "category", attributes: ["id", "name"] },
+  { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
+  { model: User, as: "organizer", attributes: ["id", "name"] },
+];
+
+// [SERVICE] dynamic include for services → provider + provider.interests(+category/subcategory)
+function makeServiceInclude({ categoryId, subcategoryId }) {
+  const interestsWhere = {};
+  if (categoryId) interestsWhere.categoryId = categoryId;
+  if (subcategoryId) interestsWhere.subcategoryId = subcategoryId;
+
+  const needInterests = Boolean(categoryId || subcategoryId);
+
+  return [
+    {
+      model: User,
+      as: "provider",
+      attributes: ["id", "name"],
+      include: [
+        {
+          model: UserCategory,
+          as: "interests",
+          required: needInterests, // only enforce join when filtering by cat/subcat
+          where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
+          include: [
+            { model: Category, as: "category", attributes: ["id", "name"], required: false },
+            { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
+          ],
+        },
+      ],
+    },
+  ];
+}
 
 exports.getFeed = async (req, res) => {
   try {
@@ -168,21 +211,24 @@ exports.getFeed = async (req, res) => {
       }
     }
 
-    // ---------------- 2) WHEREs com base somente nos FILTROS (quando existirem) ----------------
+    // ---------------- WHEREs from filters ----------------
     const whereCommon = {};
     if (country) whereCommon.country = country;
     if (city) whereCommon.city = like(city);
 
     const whereJob = { ...whereCommon };
     const whereEvent = { ...whereCommon };
+    const whereService = { ...whereCommon }; // [SERVICE]
 
     if (categoryId) {
       whereJob.categoryId = categoryId;
       whereEvent.categoryId = categoryId;
+      // [SERVICE] handled via include(User -> interests) not directly on services table
     }
     if (subcategoryId) {
       whereJob.subcategoryId = subcategoryId;
       whereEvent.subcategoryId = subcategoryId;
+      // [SERVICE] same as above (via interests)
     }
 
     if (q) {
@@ -196,74 +242,151 @@ exports.getFeed = async (req, res) => {
         { description: like(q) },
         { city: like(q) },
       ];
+      // [SERVICE]
+      whereService[Op.or] = [
+        { title: like(q) },
+        { description: like(q) },
+        { city: like(q) },
+      ];
     }
 
-
-    async function getConStatusItems(items){
-
-        const currentUserId = req.user?.id || null;
-        const targetIds = items
-        .map((it) => (it.kind === "job" ? it.postedByUserId : it.organizerUserId))
+    // ---------------- Connection status decorator ----------------
+    async function getConStatusItems(items) {
+      const currentUserId = req.user?.id || null;
+      const targetIds = items
+        .map((it) =>
+          it.kind === "job"
+            ? it.postedByUserId
+            : it.kind === "event"
+            ? it.organizerUserId
+            : it.kind === "service"
+            ? it.providerUserId
+            : null
+        )
         .filter(Boolean);
 
-        const statusMap = await getConnectionStatusMap(currentUserId, targetIds, { Connection, ConnectionRequest });
+      const statusMap = await getConnectionStatusMap(currentUserId, targetIds, {
+        Connection,
+        ConnectionRequest,
+      });
 
-        const withStatus = items.map((it) => {
-        const ownerId = it.kind === "job" ? it.postedByUserId : it.organizerUserId;
-        return { ...it, connectionStatus: ownerId ? (statusMap[ownerId] || (currentUserId ? "none" : "unauthenticated")) : (currentUserId ? "none" : "unauthenticated") };
-        });
+      const withStatus = items.map((it) => {
+        const ownerId =
+          it.kind === "job"
+            ? it.postedByUserId
+            : it.kind === "event"
+            ? it.organizerUserId
+            : it.kind === "service"
+            ? it.providerUserId
+            : null;
 
-        return  withStatus
+        return {
+          ...it,
+          connectionStatus: ownerId
+            ? statusMap[ownerId] || (currentUserId ? "none" : "unauthenticated")
+            : currentUserId
+            ? "none"
+            : "unauthenticated",
+        };
+      });
 
+      return withStatus;
     }
 
-    // ---------------- 3) Mapeadores com nomes + timeAgo ----------------
-    
+    // ---------------- Mappers ----------------
     const mapJob = (j) => ({
-    kind: "job",
-    id: j.id,
-    title: j.title,
-    companyName: j.companyName,
-    jobType: j.jobType,
-    workMode: j.workMode,
-    categoryId: j.categoryId ? String(j.categoryId) : "",
-    categoryName: j.category?.name || "",
-    subcategoryId: j.subcategoryId ? String(j.subcategoryId) : "",
-    subcategoryName: j.subcategory?.name || "",
-    description: j.description,
-    city: j.city,
-    country: j.country,
-    currency: j.currency,
-    salaryMin: j.salaryMin,
-    salaryMax: j.salaryMax,
-    createdAt: j.createdAt,
-    timeAgo: timeAgo(j.createdAt),
-    postedByUserId: j.postedByUserId || null,
-    postedByUserName: j.postedBy?.name || null,
+      kind: "job",
+      id: j.id,
+      title: j.title,
+      companyName: j.companyName,
+      jobType: j.jobType,
+      workMode: j.workMode,
+      categoryId: j.categoryId ? String(j.categoryId) : "",
+      categoryName: j.category?.name || "",
+      subcategoryId: j.subcategoryId ? String(j.subcategoryId) : "",
+      subcategoryName: j.subcategory?.name || "",
+      description: j.description,
+      city: j.city,
+      country: j.country,
+      currency: j.currency,
+      salaryMin: j.salaryMin,
+      salaryMax: j.salaryMax,
+      createdAt: j.createdAt,
+      timeAgo: timeAgo(j.createdAt),
+      postedByUserId: j.postedByUserId || null,
+      postedByUserName: j.postedBy?.name || null,
     });
 
     const mapEvent = (e) => ({
-    kind: "event",
-    id: e.id,
-    title: e.title,
-    eventType: e.eventType,
-    description: e.description,
-    coverImageBase64: e.coverImageBase64,
-    isPaid: e.isPaid,
-    price: e.price,
-    currency: e.currency,
-    categoryId: e.categoryId ? String(e.categoryId) : "",
-    categoryName: e.category?.name || "",
-    subcategoryId: e.subcategoryId ? String(e.subcategoryId) : "",
-    subcategoryName: e.subcategory?.name || "",
-    city: e.city,
-    country: e.country,
-    createdAt: e.createdAt,
-    timeAgo: timeAgo(e.createdAt),
-    organizerUserId: e.organizerUserId || null,      // <—
+      kind: "event",
+      id: e.id,
+      title: e.title,
+      eventType: e.eventType,
+      description: e.description,
+      coverImageBase64: e.coverImageBase64,
+      isPaid: e.isPaid,
+      price: e.price,
+      currency: e.currency,
+      categoryId: e.categoryId ? String(e.categoryId) : "",
+      categoryName: e.category?.name || "",
+      subcategoryId: e.subcategoryId ? String(e.subcategoryId) : "",
+      subcategoryName: e.subcategory?.name || "",
+      city: e.city,
+      country: e.country,
+      createdAt: e.createdAt,
+      timeAgo: timeAgo(e.createdAt),
+      organizerUserId: e.organizerUserId || null,
+      organizerUserName: e.organizer?.name || null,
     });
 
-    // ---------------- 4) Scoring para priorização (quando há usuário e NÃO há filtro) ----------------
+    // [SERVICE] choose a representative category/subcategory from provider's interests
+    function pickServiceCatSub(svc, preferredCatId, preferredSubId) {
+      const ints = svc.provider?.interests || [];
+      if (!ints.length) return {};
+      // try match subcat, then cat, else first
+      let hit =
+        (preferredSubId &&
+          ints.find((i) => String(i.subcategoryId) === String(preferredSubId))) ||
+        (preferredCatId &&
+          ints.find((i) => String(i.categoryId) === String(preferredCatId))) ||
+        ints[0];
+
+      return {
+        categoryId: hit?.categoryId ?? null,
+        categoryName: hit?.category?.name ?? "",
+        subcategoryId: hit?.subcategoryId ?? null,
+        subcategoryName: hit?.subcategory?.name ?? "",
+      };
+    }
+
+    const mapService = (s) => {
+      const picked = pickServiceCatSub(s, categoryId, subcategoryId);
+      return {
+        kind: "service",
+        id: s.id,
+        title: s.title,
+        serviceType: s.serviceType,
+        description: s.description,
+        priceAmount: s.priceAmount,
+        priceType: s.priceType,
+        deliveryTime: s.deliveryTime,
+        locationType: s.locationType,
+        experienceLevel: s.experienceLevel,
+        // derived cat/subcat (from provider interests)
+        categoryId: picked.categoryId ? String(picked.categoryId) : "",
+        categoryName: picked.categoryName || "",
+        subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
+        subcategoryName: picked.subcategoryName || "",
+        city: s.city,
+        country: s.country,
+        createdAt: s.createdAt,
+        timeAgo: timeAgo(s.createdAt),
+        providerUserId: s.providerUserId || null,
+        providerUserName: s.provider?.name || null,
+      };
+    };
+
+    // ---------------- Scoring ----------------
     const userCatSet = new Set(userDefaults.categoryIds || []);
     const userSubSet = new Set(userDefaults.subcategoryIds || []);
     const userCity = (userDefaults.city || "").toLowerCase();
@@ -271,27 +394,28 @@ exports.getFeed = async (req, res) => {
 
     const scoreItem = (x) => {
       let s = 0;
-      if (x.subcategoryId && userSubSet.has(x.subcategoryId)) s += 4;
-      else if (x.categoryId && userCatSet.has(x.categoryId)) s += 3;
+      // NOTE: categoryId/subcategoryId on services are derived from provider interests
+      const subId = Number(x.subcategoryId || 0);
+      const catId = Number(x.categoryId || 0);
+      if (subId && userSubSet.has(subId)) s += 4;
+      else if (catId && userCatSet.has(catId)) s += 3;
 
       if (userCity && x.city && x.city.toLowerCase() === userCity) s += 2;
       if (userCountry && x.country === userCountry) s += 1;
       return s;
     };
 
-    // ---------------- 5) Fluxos por aba e por situação (filtros x priorização) ----------------
-
-    // (A) Há filtros OU não há usuário -> usar somente filtros
+    // ---------------- Flows ----------------
+    // (A) Filters present OR no user → use filters only
     if (isFilterActive || !currentUserId) {
       if (tab === "events") {
         const events = await Event.findAll({
           where: whereEvent,
-          include: includeCategoryRefs,
+          include: includeEventRefs,
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
-        
         return res.json({ items: await getConStatusItems(events.map(mapEvent)) });
       }
 
@@ -303,11 +427,23 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items:  await getConStatusItems(jobs.map(mapJob)) });
+        return res.json({ items: await getConStatusItems(jobs.map(mapJob)) });
+      }
+
+      // [SERVICE] services tab
+      if (tab === "services") {
+        const services = await Service.findAll({
+          where: whereService,
+          include: makeServiceInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        return res.json({ items: await getConStatusItems(services.map(mapService)) });
       }
 
       // “All”
-      const [jobsAll, eventsAll] = await Promise.all([
+      const [jobsAll, eventsAll, servicesAll] = await Promise.all([
         Job.findAll({
           where: whereJob,
           include: includeCategoryRefs,
@@ -316,7 +452,13 @@ exports.getFeed = async (req, res) => {
         }),
         Event.findAll({
           where: whereEvent,
-          include: includeCategoryRefs,
+          include: includeEventRefs,
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Service.findAll({
+          where: whereService,
+          include: makeServiceInclude({ categoryId, subcategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
@@ -325,22 +467,20 @@ exports.getFeed = async (req, res) => {
       const merged = [
         ...jobsAll.map(mapJob),
         ...eventsAll.map(mapEvent),
+        ...servicesAll.map(mapService), // [SERVICE]
       ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       const windowed = merged.slice(off, off + lim);
-
-
-      
-      return res.json({ items:  await getConStatusItems(windowed)});
+      return res.json({ items: await getConStatusItems(windowed) });
     }
 
-    // (B) Não há filtros e há usuário -> priorização (score)
+    // (B) No filters & has user → prioritization (score)
     const bufferFactor = 3;
     const bufferLimit = lim * bufferFactor;
 
     if (tab === "events") {
       const events = await Event.findAll({
-        include: includeCategoryRefs,
+        include: includeEventRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
@@ -353,7 +493,7 @@ exports.getFeed = async (req, res) => {
           new Date(b.createdAt) - new Date(a.createdAt)
       );
       const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
-      return res.json({ items:  await getConStatusItems(windowed) });
+      return res.json({ items: await getConStatusItems(windowed) });
     }
 
     if (tab === "jobs") {
@@ -371,37 +511,71 @@ exports.getFeed = async (req, res) => {
           new Date(b.createdAt) - new Date(a.createdAt)
       );
       const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
-      return res.json({ items:  await getConStatusItems(windowed) });
+      return res.json({ items: await getConStatusItems(windowed) });
     }
 
-    // “All” com priorização
-    const [jobsBuf, eventsBuf] = await Promise.all([
-      Job.findAll({ include: includeCategoryRefs, order: [["createdAt", "DESC"]], limit: bufferLimit }),
-      Event.findAll({ include: includeCategoryRefs, order: [["createdAt", "DESC"]], limit: bufferLimit }),
+    // [SERVICE] prioritized services tab
+    if (tab === "services") {
+      const services = await Service.findAll({
+        include: makeServiceInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+      const scored = services
+        .map(mapService)
+        .map((x) => ({ ...x, _score: scoreItem(x) }));
+      scored.sort(
+        (a, b) =>
+          b._score - a._score ||
+          new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
+    // “All” prioritized
+    const [jobsBuf, eventsBuf, servicesBuf] = await Promise.all([
+      Job.findAll({
+        include: includeCategoryRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Event.findAll({
+        include: includeEventRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Service.findAll({
+        include: makeServiceInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
     ]);
 
     const mergedScored = [
       ...jobsBuf.map(mapJob),
       ...eventsBuf.map(mapEvent),
+      ...servicesBuf.map(mapService), // [SERVICE]
     ].map((x) => ({ ...x, _score: scoreItem(x) }));
 
-
-    
     mergedScored.sort(
       (a, b) =>
         b._score - a._score ||
         new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    const windowed = mergedScored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
-    return res.json({ items:  await getConStatusItems( windowed) });
+    const windowed = mergedScored
+      .slice(off, off + lim)
+      .map(({ _score, ...rest }) => rest);
+
+    return res.json({ items: await getConStatusItems(windowed) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get feed" });
   }
 };
 
-
+// ---------------- Suggestions (unchanged) ----------------
 function normalizeToArray(v) {
   if (!v) return null;
   if (Array.isArray(v)) return v.filter(Boolean);
@@ -417,20 +591,17 @@ exports.getSuggestions = async (req, res) => {
       q,
       country: qCountry,
       city: qCity,
-      // agora aceitamos tanto categoryId quanto cats
-      categoryId,        // pode ser único ou CSV
-      cats,              // pode ser único ou CSV
-      subcategoryId,     // pode ser único ou CSV
-      goalId,            // único ou CSV (também aceito)
+      categoryId,
+      cats,
+      subcategoryId,
+      goalId,
       limit = 10,
     } = req.query;
 
-    
-const like = (v) => ({ [Op.like]: `%${v}%` });
+    const like = (v) => ({ [Op.like]: `%${v}%` });
 
     const currentUserId = req.user?.id || null;
 
-    // ===== 1) Defaults do usuário logado =====
     let userDefaults = {
       country: null,
       city: null,
@@ -456,7 +627,6 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
       }
     }
 
-    // ===== 2) Filtros efetivos (prioriza query) =====
     const qCats = normalizeToArray(cats) || normalizeToArray(categoryId);
     const qSubcats = normalizeToArray(subcategoryId);
     const qGoals = normalizeToArray(goalId);
@@ -469,13 +639,11 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
       goalIds: qGoals ? qGoals.map(String) : (userDefaults.goalIds.length ? userDefaults.goalIds : null),
     };
 
-    // ===== 3) Guards (sem admin e sem o próprio) =====
     const baseUserGuards = {
       accountType: { [Op.ne]: "admin" },
       ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {}),
     };
 
-    // ===== 4) WHERE base para User =====
     const whereUserBase = { ...baseUserGuards };
     if (eff.country) whereUserBase.country = eff.country;
     if (eff.city) whereUserBase.city = like(eff.city);
@@ -522,26 +690,24 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
       required: false,
     };
 
-    // ===== 5) Estratégia (filtros têm prioridade) =====
     const hasExplicitFilter = Boolean(q || qCountry || qCity || qCats || qSubcats || qGoals);
 
     let matchesRaw = [];
 
     if (hasExplicitFilter) {
-      // Respeita filtros: o que vier vira required nos JOINs correspondentes
-      matchesRaw = await User.findAll({
-        subQuery: false,
-        where: whereUserBase,
-        include: [
-          profileInclude,
-          makeGoalsInclude(Boolean(qGoals)),
-          makeInterestsInclude(Boolean(qCats || qSubcats)),
-        ],
-        limit: Number(limit),
-        order: [["createdAt", "DESC"]],
-      });
+     matchesRaw = await User.findAll({
+  subQuery: false,
+  where: whereUserBase,
+  include: [
+    profileInclude,
+    makeGoalsInclude(Boolean(qGoals)),
+    makeInterestsInclude(Boolean(qCats || qSubcats)),
+  ],
+  limit: Number(limit),
+  order: [["createdAt", "DESC"]],
+});
+
     } else if (currentUserId) {
-      // Sem filtros: tenta goals -> categorias/subcats -> geral
       if (userDefaults.goalIds.length) {
         matchesRaw = await User.findAll({
           subQuery: false,
@@ -569,7 +735,6 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
           order: [["createdAt", "DESC"]],
         });
       }
-      // Ordena por maior overlap de goals, se o user tiver goals
       if (userDefaults.goalIds.length) {
         const mySet = new Set(userDefaults.goalIds.map(String));
         matchesRaw = matchesRaw
@@ -578,11 +743,14 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
             const overlap = ids.filter((id) => mySet.has(id)).length;
             return { u, overlap };
           })
-          .sort((a, b) => (b.overlap - a.overlap) || (new Date(b.u.createdAt) - new Date(a.u.createdAt)))
+          .sort(
+            (a, b) =>
+              b.overlap - a.overlap ||
+              new Date(b.u.createdAt) - new Date(a.u.createdAt)
+          )
           .map((x) => x.u);
       }
     } else {
-      // Público geral
       matchesRaw = await User.findAll({
         subQuery: false,
         where: whereUserBase,
@@ -592,7 +760,6 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
       });
     }
 
-    // ===== 6) Nearby =====
     const nearbyWhere = { ...baseUserGuards };
     if (eff.city) nearbyWhere.city = like(eff.city);
     else if (eff.country) nearbyWhere.country = eff.country;
@@ -617,7 +784,6 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
       order: [["createdAt", "DESC"]],
     });
 
-    // ===== 7) Map =====
     const mapUser = (u, idx) => {
       const goalsNames = (u.goals || []).map((g) => g.name).filter(Boolean);
       return {
@@ -636,31 +802,36 @@ const like = (v) => ({ [Op.like]: `%${v}%` });
     };
 
     let matches = matchesRaw.map(mapUser);
-    let nearby  = nearbyRaw.map(mapUser);
+    let nearby = nearbyRaw.map(mapUser);
 
     const allTargets = [...matches, ...nearby].map((u) => u.id).filter(Boolean);
-
-    const statusMap = await getConnectionStatusMap(currentUserId, allTargets, { Connection, ConnectionRequest });
-
-    const decorate = (arr) => arr.map((u) => ({
-    ...u,
-    connectionStatus: statusMap[u.id] || (currentUserId ? "none" : "unauthenticated"),
-    }));
-
-    matches=decorate(matches).filter(i=>i.connectionStatus=="none" || i.connectionStatus=="unauthenticated")
-    nearby=decorate(nearby).filter(i=>i.connectionStatus=="none" || i.connectionStatus=="unauthenticated")
-
-    res.json({
-    matchesCount: matches.length,
-    nearbyCount: nearby.length,
-    matches: matches,
-    nearby: nearby,
+    const statusMap = await getConnectionStatusMap(currentUserId, allTargets, {
+      Connection,
+      ConnectionRequest,
     });
 
+    const decorate = (arr) =>
+      arr.map((u) => ({
+        ...u,
+        connectionStatus:
+          statusMap[u.id] || (currentUserId ? "none" : "unauthenticated"),
+      }));
+
+    matches = decorate(matches).filter(
+      (i) => i.connectionStatus == "none" || i.connectionStatus == "unauthenticated"
+    );
+    nearby = decorate(nearby).filter(
+      (i) => i.connectionStatus == "none" || i.connectionStatus == "unauthenticated"
+    );
+
+    res.json({
+      matchesCount: matches.length,
+      nearbyCount: nearby.length,
+      matches: matches,
+      nearby: nearby,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get suggestions" });
   }
 };
-
-

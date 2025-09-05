@@ -21,6 +21,7 @@ const NewsArticle = require("./newsArticle")(sequelize, DataTypes);
 
 const Job = require("./job")(sequelize, DataTypes);
 const Event = require("./event")(sequelize, DataTypes);
+const Service = require("./service")(sequelize, DataTypes);
 
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
@@ -74,6 +75,13 @@ Event.belongsTo(User, { foreignKey: "organizerUserId", as: "organizer" });
 Event.belongsTo(Category,    { foreignKey: "categoryId",    as: "category" });
 Event.belongsTo(Subcategory, { foreignKey: "subcategoryId", as: "subcategory" });
 
+// Service
+User.hasMany(Service, { foreignKey: "providerUserId", as: "services" });
+Service.belongsTo(User, { foreignKey: "providerUserId", as: "provider" });
+
+Service.belongsTo(Category, { foreignKey: "categoryId", as: "category" });
+Service.belongsTo(Subcategory, { foreignKey: "subcategoryId", as: "subcategory" });
+
 
 const Connection        = require("./connection")(sequelize, DataTypes);
 const ConnectionRequest = require("./connectionRequest")(sequelize, DataTypes);
@@ -118,19 +126,31 @@ SubsubCategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcateg
 User.belongsToMany(SubsubCategory, { through: UserSubsubCategory, as: "subsubcategories", foreignKey: "userId", otherKey: "subsubCategoryId" });
 SubsubCategory.belongsToMany(User, { through: UserSubsubCategory, as: "users", foreignKey: "subsubCategoryId", otherKey: "userId" });
 
-// Jobs / Events (optional level-3 link)
+// Jobs / Events / Services (optional level-3 link)
 Job.belongsTo(SubsubCategory,   { as: "subsubCategory", foreignKey: "subsubCategoryId" });
 Event.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
+Service.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
 
 Identity.hasMany(Category, { foreignKey: "identityId", as: "categories", onDelete: "RESTRICT" });
 Category.belongsTo(Identity, { foreignKey: "identityId", as: "identity" });
-
 
 
 const JobIdentity       = require("./jobIdentity")(sequelize, DataTypes);
 const JobCategory       = require("./JobCategory")(sequelize, DataTypes);
 const JobSubcategory    = require("./JobSubcategory")(sequelize, DataTypes);
 const JobSubsubCategory = require("./jobSubsubCategory")(sequelize, DataTypes);
+
+// Event audience association models
+const EventIdentity       = require("./EventIdentity")(sequelize, DataTypes);
+const EventCategory       = require("./EventCategory")(sequelize, DataTypes);
+const EventSubcategory    = require("./EventSubcategory")(sequelize, DataTypes);
+const EventSubsubCategory = require("./EventSubsubCategory")(sequelize, DataTypes);
+
+// Service audience association models
+const ServiceIdentity       = require("./ServiceIdentity")(sequelize, DataTypes);
+const ServiceCategory       = require("./ServiceCategory")(sequelize, DataTypes);
+const ServiceSubcategory    = require("./ServiceSubcategory")(sequelize, DataTypes);
+const ServiceSubsubCategory = require("./ServiceSubsubCategory")(sequelize, DataTypes);
 
 
 Job.belongsToMany(Identity, {
@@ -185,6 +205,112 @@ SubsubCategory.belongsToMany(Job, {
   as: "jobs",
 });
 
+// Event audience associations
+Event.belongsToMany(Identity, {
+  through: "event_identities",
+  foreignKey: "eventId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Event, {
+  through: "event_identities",
+  foreignKey: "identityId",
+  otherKey: "eventId",
+  as: "events",
+});
+
+Event.belongsToMany(Category, {
+  through: "event_categories",
+  foreignKey: "eventId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Event, {
+  through: "event_categories",
+  foreignKey: "categoryId",
+  otherKey: "eventId",
+  as: "events",
+});
+
+Event.belongsToMany(Subcategory, {
+  through: "event_subcategories",
+  foreignKey: "eventId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Event, {
+  through: "event_subcategories",
+  foreignKey: "subcategoryId",
+  otherKey: "eventId",
+  as: "events",
+});
+
+Event.belongsToMany(SubsubCategory, {
+  through: "event_subsubcategories",
+  foreignKey: "eventId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Event, {
+  through: "event_subsubcategories",
+  foreignKey: "subsubCategoryId",
+  otherKey: "eventId",
+  as: "events",
+});
+
+// Service audience associations
+Service.belongsToMany(Identity, {
+  through: "service_identities",
+  foreignKey: "serviceId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Service, {
+  through: "service_identities",
+  foreignKey: "identityId",
+  otherKey: "serviceId",
+  as: "services",
+});
+
+Service.belongsToMany(Category, {
+  through: "service_categories",
+  foreignKey: "serviceId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Service, {
+  through: "service_categories",
+  foreignKey: "categoryId",
+  otherKey: "serviceId",
+  as: "services",
+});
+
+Service.belongsToMany(Subcategory, {
+  through: "service_subcategories",
+  foreignKey: "serviceId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Service, {
+  through: "service_subcategories",
+  foreignKey: "subcategoryId",
+  otherKey: "serviceId",
+  as: "services",
+});
+
+Service.belongsToMany(SubsubCategory, {
+  through: "service_subsubcategories",
+  foreignKey: "serviceId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Service, {
+  through: "service_subsubcategories",
+  foreignKey: "subsubCategoryId",
+  otherKey: "serviceId",
+  as: "services",
+});
+
 
 module.exports = {
   UserSubcategory, UserSubsubCategory,
@@ -206,4 +332,15 @@ module.exports = {
   UserGoal,
   Event,
   Job,
+  // Export event audience association models
+  EventIdentity,
+  EventCategory,
+  EventSubcategory,
+  EventSubsubCategory,
+  // Export service model and audience association models
+  Service,
+  ServiceIdentity,
+  ServiceCategory,
+  ServiceSubcategory,
+  ServiceSubsubCategory,
 };

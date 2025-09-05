@@ -1,23 +1,6 @@
-const { Event, Category, Subcategory, SubsubCategory } = require("../models");
+const { Service, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
-const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setEventAudience } = require("./_eventAudienceHelpers");
-
-// tiny helper
-function ensurePaidFields(body) {
-  if (body.registrationType === "Paid") {
-    if (body.price == null || body.price === "")
-      throw new Error("Price is required for paid events");
-    if (!body.currency) throw new Error("Currency is required for paid events");
-  }
-}
-
-function combineDateTime(dateStr, timeStr, tz) {
-  // Expect date: "YYYY-MM-DD", time: "HH:mm" (24h). Store as UTC Date.
-  // If you already send ISO from FE, you can skip this.
-  const iso = `${dateStr}T${timeStr || "00:00"}:00${tz ? "" : "Z"}`;
-  // We store raw ISO; DB will keep timestamp; FE can handle formatting by tz
-  return new Date(iso);
-}
+const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setServiceAudience } = require("./_serviceAudienceHelpers");
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -25,17 +8,20 @@ exports.getMeta = async (req, res) => {
     include: [{ model: Subcategory, as: "subcategories", order: [["name", "ASC"]] }],
   });
 
-  const currencies = [
-    "USD","EUR","GBP","NGN","ZAR","GHS","KES","TZS","MAD","EGP","XOF","XAF","CFA","AOA","ETB","UGX","RWF","BWP","NAD","MZN"
-  ];
+  const serviceTypes = ["Consulting", "Freelance Work", "Product/Service"];
+  const priceTypes = ["Fixed Price", "Hourly"];
+  const deliveryTimes = ["1 Day", "3 Days", "1 Week", "2 Weeks", "1 Month"];
+  const locationTypes = ["Remote", "On-site"];
+  const experienceLevels = ["Entry Level", "Intermediate", "Expert"];
 
-  const timezones = [
-    "Africa/Abidjan","Africa/Accra","Africa/Addis_Ababa","Africa/Algiers","Africa/Cairo","Africa/Casablanca",
-    "Africa/Dakar","Africa/Dar_es_Salaam","Africa/Johannesburg","Africa/Kampala","Africa/Kigali",
-    "Africa/Lagos","Africa/Nairobi","Africa/Maputo"
-  ];
-
-  res.json({ categories, currencies, timezones });
+  res.json({ 
+    categories, 
+    serviceTypes, 
+    priceTypes, 
+    deliveryTimes, 
+    locationTypes, 
+    experienceLevels 
+  });
 };
 
 exports.create = async (req, res) => {
@@ -45,30 +31,19 @@ exports.create = async (req, res) => {
 
     const {
       title,
+      serviceType,
       description,
-      eventType,
-      categoryId,
-      subcategoryId,
-
-      // date/time from FE:
-      date,        // "YYYY-MM-DD"
-      startTime,   // "HH:mm"
-      endTime,     // "HH:mm"
-      timezone,
-
+      priceAmount,
+      priceType,
+      deliveryTime,
       locationType,
+      experienceLevel,
       country,
       city,
-      address,
-      onlineUrl,
-
-      registrationType,
-      price,
-      currency,
-      capacity,
-      registrationDeadline, // "YYYY-MM-DD"
-      coverImageUrl,
-      coverImageBase64,
+      skills,
+      attachments,
+      categoryId,
+      subcategoryId,
 
       // Audience selection
       identityIds: _identityIds,
@@ -77,12 +52,13 @@ exports.create = async (req, res) => {
       subsubCategoryIds: _subsubCategoryIds,
     } = req.body;
 
+    // Basic validation
     if (!title || !description) return res.status(400).json({ message: "Title and description are required" });
-    if (!eventType) return res.status(400).json({ message: "Event type is required" });
+    if (!serviceType) return res.status(400).json({ message: "Service type is required" });
     if (!locationType) return res.status(400).json({ message: "Location type is required" });
-    if (!date || !startTime) return res.status(400).json({ message: "Date and start time are required" });
-
-    ensurePaidFields({ registrationType, price, currency });
+    if (locationType === "On-site" && !country) {
+      return res.status(400).json({ message: "Country is required for on-site services" });
+    }
 
     // Normalize audience arrays
     const identityIds = await normalizeIdentityIds(toIdArray(_identityIds));
@@ -116,44 +92,36 @@ exports.create = async (req, res) => {
       }
     }
 
-    const startAt = combineDateTime(date, startTime, timezone);
-    const endAt = endTime ? combineDateTime(date, endTime, timezone) : null;
-    const regDeadline = registrationDeadline ? combineDateTime(registrationDeadline, "23:59", timezone) : null;
-
-    const event = await Event.create({
-      organizerUserId: uid,
+    // Create service
+    const service = await Service.create({
+      providerUserId: uid,
       title,
+      serviceType,
       description,
-      eventType,
+      priceAmount: priceAmount ? Number(priceAmount) : null,
+      priceType,
+      deliveryTime,
+      locationType,
+      experienceLevel,
+      country: locationType === "On-site" ? country : null,
+      city: locationType === "On-site" ? city : null,
+      skills: Array.isArray(skills) ? skills : (typeof skills === 'string' ? skills.split(',').map(s => s.trim()) : []),
+      attachments: Array.isArray(attachments) ? attachments : [],
       categoryId: primaryCategoryId,
       subcategoryId: primarySubcategoryId,
-      startAt,
-      endAt,
-      timezone: timezone || null,
-      locationType,
-      country: country || null,
-      city: city || null,
-      address: address || null,
-      onlineUrl: onlineUrl || null,
-      registrationType,
-      price: registrationType === "Paid" ? price : null,
-      currency: registrationType === "Paid" ? currency : null,
-      capacity: capacity || null,
-      registrationDeadline: regDeadline,
-      coverImageUrl: coverImageUrl || null,
-      coverImageBase64:coverImageBase64 || null
     });
 
     // Set audience associations
-    await setEventAudience(event, {
+    await setServiceAudience(service, {
       identityIds,
       categoryIds: categoryIds.length ? categoryIds : (primaryCategoryId ? [primaryCategoryId] : []),
       subcategoryIds: subcategoryIds.length ? subcategoryIds : (primarySubcategoryId ? [primarySubcategoryId] : []),
       subsubCategoryIds
     });
 
-    const created = await Event.findByPk(event.id, {
+    const created = await Service.findByPk(service.id, {
       include: [
+        { model: User, as: "provider", attributes: ["id", "name", "email"] },
         { model: Category, as: "category" },
         { model: Subcategory, as: "subcategory" },
         // Include audience associations
@@ -166,8 +134,8 @@ exports.create = async (req, res) => {
 
     res.status(201).json(created);
   } catch (err) {
-    console.error("createEvent error:", err);
-    res.status(400).json({ message: err.message || "Could not create event" });
+    console.error("createService error:", err);
+    res.status(400).json({ message: err.message || "Could not create service" });
   }
 };
 
@@ -177,14 +145,13 @@ exports.update = async (req, res) => {
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
     const { id } = req.params;
-    const event = await Event.findByPk(id);
-    if (!event) return res.status(404).json({ message: "Event not found" });
-    if (event.organizerUserId !== uid && req.user?.accountType !== "admin") {
+    const service = await Service.findByPk(id);
+    if (!service) return res.status(404).json({ message: "Service not found" });
+    if (service.providerUserId !== uid && req.user?.accountType !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
     const {
-      registrationType,
       identityIds: _identityIds,
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
@@ -192,8 +159,6 @@ exports.update = async (req, res) => {
       ...body
     } = req.body;
     
-    if (registrationType) ensurePaidFields({ registrationType, ...body });
-
     // Normalize audience arrays if provided
     const identityIds = _identityIds !== undefined ? await normalizeIdentityIds(toIdArray(_identityIds)) : null;
     const categoryIds = _categoryIds !== undefined ? toIdArray(_categoryIds) : null;
@@ -204,8 +169,8 @@ exports.update = async (req, res) => {
     if (categoryIds || subcategoryIds || subsubCategoryIds) {
       try {
         await validateAudienceHierarchy({
-          categoryIds: categoryIds ?? [event.categoryId].filter(Boolean),
-          subcategoryIds: subcategoryIds ?? [event.subcategoryId].filter(Boolean),
+          categoryIds: categoryIds ?? [service.categoryId].filter(Boolean),
+          subcategoryIds: subcategoryIds ?? [service.subcategoryId].filter(Boolean),
           subsubCategoryIds: subsubCategoryIds ?? [],
         });
       } catch (err) {
@@ -213,39 +178,50 @@ exports.update = async (req, res) => {
       }
     }
 
-    // If FE still sends separate date/time updates:
-    if (body.date || body.startTime || body.endTime) {
-      const baseDate = body.date || event.startAt.toISOString().slice(0, 10);
-      if (body.startTime) event.startAt = new Date(`${baseDate}T${body.startTime}:00Z`);
-      if (body.endTime) event.endAt = new Date(`${baseDate}T${body.endTime}:00Z`);
+    // Handle skills array
+    let skills = service.skills;
+    if (body.skills !== undefined) {
+      skills = Array.isArray(body.skills) 
+        ? body.skills 
+        : (typeof body.skills === 'string' ? body.skills.split(',').map(s => s.trim()) : []);
+    }
+
+    // Handle attachments array
+    let attachments = service.attachments;
+    if (body.attachments !== undefined) {
+      attachments = Array.isArray(body.attachments) ? body.attachments : [];
     }
 
     // Simple update
-    Object.assign(event, {
-      title: body.title ?? event.title,
-      description: body.description ?? event.description,
-      eventType: body.eventType ?? event.eventType,
-      categoryId: body.categoryId ?? event.categoryId,
-      subcategoryId: body.subcategoryId ?? event.subcategoryId,
-      timezone: body.timezone ?? event.timezone,
-      locationType: body.locationType ?? event.locationType,
-      country: body.country ?? event.country,
-      city: body.city ?? event.city,
-      address: body.address ?? event.address,
-      onlineUrl: body.onlineUrl ?? event.onlineUrl,
-      registrationType: body.registrationType ?? event.registrationType,
-      price: (body.registrationType || event.registrationType) === "Paid" ? (body.price ?? event.price) : null,
-      currency: (body.registrationType || event.registrationType) === "Paid" ? (body.currency ?? event.currency) : null,
-      capacity: body.capacity ?? event.capacity,
-      registrationDeadline: body.registrationDeadline ? new Date(`${body.registrationDeadline}T23:59:00Z`) : event.registrationDeadline,
-      coverImageUrl: body.coverImageUrl ?? event.coverImageUrl,
+    Object.assign(service, {
+      title: body.title ?? service.title,
+      serviceType: body.serviceType ?? service.serviceType,
+      description: body.description ?? service.description,
+      priceAmount: body.priceAmount !== undefined ? (body.priceAmount ? Number(body.priceAmount) : null) : service.priceAmount,
+      priceType: body.priceType ?? service.priceType,
+      deliveryTime: body.deliveryTime ?? service.deliveryTime,
+      locationType: body.locationType ?? service.locationType,
+      experienceLevel: body.experienceLevel ?? service.experienceLevel,
+      categoryId: body.categoryId ?? service.categoryId,
+      subcategoryId: body.subcategoryId ?? service.subcategoryId,
+      skills,
+      attachments,
     });
 
-    await event.save();
+    // Handle location fields based on locationType
+    if (service.locationType === "Remote") {
+      service.country = null;
+      service.city = null;
+    } else {
+      service.country = body.country ?? service.country;
+      service.city = body.city ?? service.city;
+    }
+
+    await service.save();
 
     // Update audience associations if provided
     if (identityIds !== null || categoryIds !== null || subcategoryIds !== null || subsubCategoryIds !== null) {
-      await setEventAudience(event, {
+      await setServiceAudience(service, {
         identityIds: identityIds ?? undefined,
         categoryIds: categoryIds ?? undefined,
         subcategoryIds: subcategoryIds ?? undefined,
@@ -253,8 +229,9 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Event.findByPk(event.id, {
+    const updated = await Service.findByPk(service.id, {
       include: [
+        { model: User, as: "provider", attributes: ["id", "name", "email"] },
         { model: Category, as: "category" },
         { model: Subcategory, as: "subcategory" },
         // Include audience associations
@@ -267,15 +244,16 @@ exports.update = async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error("updateEvent error:", err);
-    res.status(400).json({ message: err.message || "Could not update event" });
+    console.error("updateService error:", err);
+    res.status(400).json({ message: err.message || "Could not update service" });
   }
 };
 
 exports.getOne = async (req, res) => {
   const { id } = req.params;
-  const event = await Event.findByPk(id, {
+  const service = await Service.findByPk(id, {
     include: [
+      { model: User, as: "provider", attributes: ["id", "name", "email"] },
       { model: Category, as: "category" },
       { model: Subcategory, as: "subcategory" },
       // Include audience associations
@@ -285,24 +263,52 @@ exports.getOne = async (req, res) => {
       { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
     ],
   });
-  if (!event) return res.status(404).json({ message: "Event not found" });
-  res.json(event);
+  if (!service) return res.status(404).json({ message: "Service not found" });
+  res.json(service);
 };
 
 exports.list = async (req, res) => {
-  const { q, categoryId, country } = req.query;
+  const { q, categoryId, serviceType, locationType, country } = req.query;
   const where = {};
+  
   if (categoryId) where.categoryId = categoryId;
+  if (serviceType) where.serviceType = serviceType;
+  if (locationType) where.locationType = locationType;
   if (country) where.country = country;
+  
   if (q) {
     where[Op.or] = [
       { title: { [Op.like]: `%${q}%` } },
       { description: { [Op.like]: `%${q}%` } },
     ];
   }
-  const rows = await Event.findAll({
+  
+  const rows = await Service.findAll({
     where,
-    order: [["startAt", "ASC"]],
+    order: [["createdAt", "DESC"]],
+    include: [
+      { model: User, as: "provider", attributes: ["id", "name", "email"] },
+      { model: Category, as: "category" },
+      { model: Subcategory, as: "subcategory" },
+      // Include audience associations
+      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+    ],
+  });
+  
+  res.json(rows);
+};
+
+// Get services provided by the current user
+exports.getMyServices = async (req, res) => {
+  const uid = req.user?.id;
+  if (!uid) return res.status(401).json({ message: "Unauthorized" });
+
+  const services = await Service.findAll({
+    where: { providerUserId: uid },
+    order: [["createdAt", "DESC"]],
     include: [
       { model: Category, as: "category" },
       { model: Subcategory, as: "subcategory" },
@@ -313,5 +319,6 @@ exports.list = async (req, res) => {
       { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
     ],
   });
-  res.json(rows);
+
+  res.json(services);
 };
