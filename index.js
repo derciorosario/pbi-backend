@@ -55,6 +55,9 @@ app.use("/api/events", eventRoutes);
 const serviceRoutes = require("./src/routes/service.routes");
 app.use("/api/services", serviceRoutes);
 
+const productRoutes = require("./src/routes/product.routes");
+app.use("/api/products", productRoutes);
+
 const feedRoutes = require("./src/routes/feed.routes");
 app.use("/api", feedRoutes);
 

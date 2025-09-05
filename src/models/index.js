@@ -22,6 +22,7 @@ const NewsArticle = require("./newsArticle")(sequelize, DataTypes);
 const Job = require("./job")(sequelize, DataTypes);
 const Event = require("./event")(sequelize, DataTypes);
 const Service = require("./service")(sequelize, DataTypes);
+const Product = require("./product")(sequelize, DataTypes);
 
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
@@ -81,6 +82,10 @@ Service.belongsTo(User, { foreignKey: "providerUserId", as: "provider" });
 
 Service.belongsTo(Category, { foreignKey: "categoryId", as: "category" });
 Service.belongsTo(Subcategory, { foreignKey: "subcategoryId", as: "subcategory" });
+
+// Product
+User.hasMany(Product, { foreignKey: "sellerUserId", as: "products" });
+Product.belongsTo(User, { foreignKey: "sellerUserId", as: "seller" });
 
 
 const Connection        = require("./connection")(sequelize, DataTypes);
@@ -151,6 +156,12 @@ const ServiceIdentity       = require("./ServiceIdentity")(sequelize, DataTypes)
 const ServiceCategory       = require("./ServiceCategory")(sequelize, DataTypes);
 const ServiceSubcategory    = require("./ServiceSubcategory")(sequelize, DataTypes);
 const ServiceSubsubCategory = require("./ServiceSubsubCategory")(sequelize, DataTypes);
+
+// Product audience association models
+const ProductIdentity       = require("./ProductIdentity")(sequelize, DataTypes);
+const ProductCategory       = require("./ProductCategory")(sequelize, DataTypes);
+const ProductSubcategory    = require("./ProductSubcategory")(sequelize, DataTypes);
+const ProductSubsubCategory = require("./ProductSubsubCategory")(sequelize, DataTypes);
 
 
 Job.belongsToMany(Identity, {
@@ -311,6 +322,59 @@ SubsubCategory.belongsToMany(Service, {
   as: "services",
 });
 
+// Product audience associations
+Product.belongsToMany(Identity, {
+  through: "product_identities",
+  foreignKey: "productId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Product, {
+  through: "product_identities",
+  foreignKey: "identityId",
+  otherKey: "productId",
+  as: "products",
+});
+
+Product.belongsToMany(Category, {
+  through: "product_categories",
+  foreignKey: "productId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Product, {
+  through: "product_categories",
+  foreignKey: "categoryId",
+  otherKey: "productId",
+  as: "products",
+});
+
+Product.belongsToMany(Subcategory, {
+  through: "product_subcategories",
+  foreignKey: "productId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Product, {
+  through: "product_subcategories",
+  foreignKey: "subcategoryId",
+  otherKey: "productId",
+  as: "products",
+});
+
+Product.belongsToMany(SubsubCategory, {
+  through: "product_subsubcategories",
+  foreignKey: "productId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Product, {
+  through: "product_subsubcategories",
+  foreignKey: "subsubCategoryId",
+  otherKey: "productId",
+  as: "products",
+});
+
 
 module.exports = {
   UserSubcategory, UserSubsubCategory,
@@ -343,4 +407,10 @@ module.exports = {
   ServiceCategory,
   ServiceSubcategory,
   ServiceSubsubCategory,
+  // Export product model and audience association models
+  Product,
+  ProductIdentity,
+  ProductCategory,
+  ProductSubcategory,
+  ProductSubsubCategory,
 };

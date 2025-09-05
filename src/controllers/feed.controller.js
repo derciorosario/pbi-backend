@@ -695,18 +695,17 @@ exports.getSuggestions = async (req, res) => {
     let matchesRaw = [];
 
     if (hasExplicitFilter) {
-     matchesRaw = await User.findAll({
-  subQuery: false,
-  where: whereUserBase,
-  include: [
-    profileInclude,
-    makeGoalsInclude(Boolean(qGoals)),
-    makeInterestsInclude(Boolean(qCats || qSubcats)),
-  ],
-  limit: Number(limit),
-  order: [["createdAt", "DESC"]],
-});
-
+      matchesRaw = await User.findAll({
+        subQuery: false,
+        where: whereUserBase,
+        include: [
+          profileInclude,
+          makeGoalsInclude(Boolean(qGoals)),
+          makeInterestsInclude(Boolean(qCats || qSubcats)),
+        ],
+        limit: Number(limit),
+        order: [["createdAt", "DESC"]],
+      });
     } else if (currentUserId) {
       if (userDefaults.goalIds.length) {
         matchesRaw = await User.findAll({
