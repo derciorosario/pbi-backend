@@ -1,4 +1,90 @@
-const { Job, Category, Subcategory } = require("../models");
+const { Job, Category, Subcategory, SubsubCategory } = require("../models");
+const { toIdArray, validateAudienceHierarchy, setJobAudience } = require("./_jobAudienceHelpers");
+
+exports.createJob = async (req, res) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+
+    const {
+      title, companyName, department, experienceLevel,
+      jobType, workMode, description, requiredSkills,
+      country, city, minSalary, maxSalary, currency, benefits,
+      applicationDeadline, positions, applicationInstructions, contactEmail,
+      categoryId, subcategoryId, status,
+
+      // NEW (arrays are accepted as arrays or CSV):
+      identityIds: _identityIds,
+      categoryIds: _categoryIds,
+      subcategoryIds: _subcategoryIds,
+      subsubCategoryIds: _subsubCategoryIds,
+    } = req.body;
+
+    // normalize numeric fields
+    const minS = (minSalary !== undefined && minSalary !== null && minSalary !== "") ? Number(minSalary) : null;
+    const maxS = (maxSalary !== undefined && maxSalary !== null && maxSalary !== "") ? Number(maxSalary) : null;
+    if ((minS && Number.isNaN(minS)) || (maxS && Number.isNaN(maxS))) {
+      return res.status(400).json({ message: "minSalary/maxSalary must be numbers" });
+    }
+    if (minS !== null && maxS !== null && minS > maxS) {
+      return res.status(400).json({ message: "minSalary cannot be greater than maxSalary" });
+    }
+
+    // normalize skills
+    const skills = parseSkills(requiredSkills);
+
+    // NEW: normalize audience arrays
+    const identityIds = toIdArray(_identityIds);
+    const categoryIds = toIdArray(_categoryIds);
+    const subcategoryIds = toIdArray(_subcategoryIds);
+    const subsubCategoryIds = toIdArray(_subsubCategoryIds);
+
+    // For backward compatibility, keep single categoryId/subcategoryId required as before.
+    // If not provided, pick the first from arrays (if present).
+    const primaryCategoryId = categoryId || categoryIds[0];
+    if (!primaryCategoryId) {
+      return res.status(400).json({ message: "categoryId (or categoryIds[0]) is required." });
+    }
+    const primarySubcategoryId = subcategoryId || subcategoryIds[0] || null;
+
+    await validateCategoryPair(primaryCategoryId, primarySubcategoryId);
+    await validateAudienceHierarchy({ categoryIds: categoryIds.length ? categoryIds : [primaryCategoryId], subcategoryIds, subsubCategoryIds });
+
+
+   
+    // create job
+    const job = await Job.create({
+      title, companyName, department, experienceLevel,
+      jobType, workMode, description,
+      requiredSkills: skills,
+      country, city,
+      minSalary: minS, maxSalary: maxS, currency, benefits,
+      applicationDeadline: applicationDeadline || null,
+      positions: positions ? Number(positions) : 1,
+      applicationInstructions, contactEmail,
+      categoryId: primaryCategoryId,
+      subcategoryId: primarySubcategoryId,
+      status: status || "published",
+      postedByUserId: req.user.id,
+    });
+
+    // attach audience sets (include the primary ones if arrays were empty)
+
+   // console.log({identityIds,categoryIds,subcategoryIds,subsubCategoryIds})
+    await setJobAudience(job, {
+      identityIds,
+      categoryIds: categoryIds.length ? categoryIds : [primaryCategoryId],
+      subcategoryIds: subcategoryIds.length ? subcategoryIds : (primarySubcategoryId ? [primarySubcategoryId] : []),
+      subsubCategoryIds,
+    });
+    
+    res.status(201).json({ job });
+  } catch (err) {
+    console.error("createJob error", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
+
 
 const parseSkills = (s) => {
   if (!s) return [];
@@ -19,50 +105,8 @@ const validateCategoryPair = async (categoryId, subcategoryId) => {
   }
 };
 
-exports.createJob = async (req, res) => {
-  try {
-    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
 
-    const {
-      title, companyName, department, experienceLevel,
-      jobType, workMode, description, requiredSkills,
-      country, city, minSalary, maxSalary, currency, benefits,
-      applicationDeadline, positions, applicationInstructions, contactEmail,
-      categoryId, subcategoryId, status,
-    } = req.body;
 
-    await validateCategoryPair(categoryId, subcategoryId);
-
-    // salary checks
-    const minS = (minSalary !== undefined && minSalary !== null && minSalary !== "") ? Number(minSalary) : null;
-    const maxS = (maxSalary !== undefined && maxSalary !== null && maxSalary !== "") ? Number(maxSalary) : null;
-    if ((minS && Number.isNaN(minS)) || (maxS && Number.isNaN(maxS))) {
-      return res.status(400).json({ message: "minSalary/maxSalary must be numbers" });
-    }
-    if (minS !== null && maxS !== null && minS > maxS) {
-      return res.status(400).json({ message: "minSalary cannot be greater than maxSalary" });
-    }
-
-    const job = await Job.create({
-      title, companyName, department, experienceLevel,
-      jobType, workMode, description,
-      requiredSkills: parseSkills(requiredSkills),
-      country, city,
-      minSalary: minS, maxSalary: maxS, currency, benefits,
-      applicationDeadline: applicationDeadline || null,
-      positions: positions ? Number(positions) : 1,
-      applicationInstructions, contactEmail,
-      categoryId, subcategoryId: subcategoryId || null,
-      status: status || "published",
-      postedByUserId: req.user.id,
-    });
-
-    res.status(201).json({ job });
-  } catch (err) {
-    console.error("createJob error", err);
-    res.status(400).json({ message: err.message });
-  }
-};
 
 exports.updateJob = async (req, res) => {
   try {
@@ -75,10 +119,6 @@ exports.updateJob = async (req, res) => {
 
     const data = { ...req.body };
 
-    if (data.categoryId) {
-      await validateCategoryPair(data.categoryId, data.subcategoryId || job.subcategoryId);
-    }
-
     // normalize skills/salary
     if (data.requiredSkills !== undefined) data.requiredSkills = parseSkills(data.requiredSkills);
     if (data.minSalary !== undefined) data.minSalary = data.minSalary === "" ? null : Number(data.minSalary);
@@ -87,7 +127,38 @@ exports.updateJob = async (req, res) => {
       return res.status(400).json({ message: "minSalary cannot be greater than maxSalary" });
     }
 
+    // primary pair validation (legacy)
+    const nextCategoryId = data.categoryId ?? job.categoryId;
+    const nextSubcategoryId = data.subcategoryId ?? job.subcategoryId;
+    if (data.categoryId || data.subcategoryId) {
+      await validateCategoryPair(nextCategoryId, nextSubcategoryId);
+    }
+
+    // NEW: optional audience arrays
+    const identityIds        = data.identityIds        !== undefined ? toIdArray(data.identityIds)        : null;
+    const categoryIds        = data.categoryIds        !== undefined ? toIdArray(data.categoryIds)        : null;
+    const subcategoryIds     = data.subcategoryIds     !== undefined ? toIdArray(data.subcategoryIds)     : null;
+    const subsubCategoryIds  = data.subsubCategoryIds  !== undefined ? toIdArray(data.subsubCategoryIds)  : null;
+
+    // Validate hierarchy if any of the arrays was provided
+    if (categoryIds || subcategoryIds || subsubCategoryIds) {
+      await validateAudienceHierarchy({
+        categoryIds: categoryIds ?? [nextCategoryId],
+        subcategoryIds: subcategoryIds ?? (nextSubcategoryId ? [nextSubcategoryId] : []),
+        subsubCategoryIds: subsubCategoryIds ?? [],
+      });
+    }
+
     await job.update(data);
+
+    // Update audience sets (only those provided)
+    await setJobAudience(job, {
+      identityIds: identityIds ?? undefined,
+      categoryIds: categoryIds ?? undefined,
+      subcategoryIds: subcategoryIds ?? undefined,
+      subsubCategoryIds: subsubCategoryIds ?? undefined,
+    });
+
     res.json({ job });
   } catch (err) {
     console.error("updateJob error", err);
@@ -95,17 +166,26 @@ exports.updateJob = async (req, res) => {
   }
 };
 
+
+
 exports.getJob = async (req, res) => {
   const job = await Job.findByPk(req.params.id, {
     include: [
       { association: "category" },
       { association: "subcategory" },
-      { association: "postedBy", attributes: ["id","name","email","role"] },
+      { association: "postedBy", attributes: ["id","name","email","accountType"] },
+
+      // NEW
+      { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
+      { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
+      { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
+      { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
     ],
   });
   if (!job) return res.status(404).json({ message: "Job not found" });
   res.json({ job });
 };
+
 
 exports.listJobs = async (req, res) => {
   const { categoryId, subcategoryId, country, q } = req.query;

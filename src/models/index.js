@@ -125,6 +125,67 @@ Event.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCateg
 Identity.hasMany(Category, { foreignKey: "identityId", as: "categories", onDelete: "RESTRICT" });
 Category.belongsTo(Identity, { foreignKey: "identityId", as: "identity" });
 
+
+
+const JobIdentity       = require("./jobIdentity")(sequelize, DataTypes);
+const JobCategory       = require("./JobCategory")(sequelize, DataTypes);
+const JobSubcategory    = require("./JobSubcategory")(sequelize, DataTypes);
+const JobSubsubCategory = require("./jobSubsubCategory")(sequelize, DataTypes);
+
+
+Job.belongsToMany(Identity, {
+  through: "job_identities",
+  foreignKey: "jobId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Job, {
+  through: "job_identities",
+  foreignKey: "identityId",
+  otherKey: "jobId",
+  as: "jobs",
+});
+
+Job.belongsToMany(Category, {
+  through: "job_categories",
+  foreignKey: "jobId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Job, {
+  through: "job_categories",
+  foreignKey: "categoryId",
+  otherKey: "jobId",
+  as: "jobs",
+});
+
+Job.belongsToMany(Subcategory, {
+  through: "job_subcategories",
+  foreignKey: "jobId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Job, {
+  through: "job_subcategories",
+  foreignKey: "subcategoryId",
+  otherKey: "jobId",
+  as: "jobs",
+});
+
+Job.belongsToMany(SubsubCategory, {
+  through: "job_subsubcategories",
+  foreignKey: "jobId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Job, {
+  through: "job_subsubcategories",
+  foreignKey: "subsubCategoryId",
+  otherKey: "jobId",
+  as: "jobs",
+});
+
+
 module.exports = {
   UserSubcategory, UserSubsubCategory,
   Identity, UserIdentity,
