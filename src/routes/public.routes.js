@@ -18,4 +18,9 @@ router.get("/goals", async (req, res) => {
   res.json(goals.map(g => ({ id: g.id, name: g.name })));
 });
 
+const { getIdentityCatalog } = require("../controllers/public.controller");
+
+router.get("/identities", getIdentityCatalog);
+
+
 module.exports = router;

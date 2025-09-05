@@ -1,20 +1,19 @@
 const { body } = require("express-validator");
 
-const setProfileType = [
-  body("primaryIdentity").isIn([
-    "Entrepreneur","Seller","Buyer","Job Seeker","Professional","Partnership",
-    "Investor","Event Organizer","Government Official","Traveler","NGO",
-    "Support Role","Freelancer","Student"
-  ])
+// multiple identities (UUIDs)
+const setIdentities = [
+  body("primaryIdentity").isArray({ min: 1 }),
+  body("primaryIdentity.*").isUUID().withMessage("identityIds must be UUIDs"),
 ];
 
 const setCategories = [
   body("categoryIds").isArray({ min: 1 }),
-  body("subcategoryIds").isArray({ min: 1 }), // ≥ 2 subcategories total
+  body("subcategoryIds").isArray({ min: 1 }),
+  body("subsubCategoryIds").optional().isArray(),
 ];
 
 const setGoals = [
-  body("goalIds").isArray().custom(a => a.length > 0 && a.length <= 3),
+  body("goalIds").isArray().custom((a) => Array.isArray(a) && a.length > 0 && a.length <= 3),
 ];
 
-module.exports = { setProfileType, setCategories, setGoals };
+module.exports = { setIdentities, setCategories, setGoals };

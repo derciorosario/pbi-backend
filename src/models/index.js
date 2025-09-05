@@ -74,8 +74,64 @@ Event.belongsTo(User, { foreignKey: "organizerUserId", as: "organizer" });
 Event.belongsTo(Category,    { foreignKey: "categoryId",    as: "category" });
 Event.belongsTo(Subcategory, { foreignKey: "subcategoryId", as: "subcategory" });
 
-/* ============ Exports ============ */
+
+const Connection        = require("./connection")(sequelize, DataTypes);
+const ConnectionRequest = require("./connectionRequest")(sequelize, DataTypes);
+const Notification      = require("./notification")(sequelize, DataTypes);
+
+
+User.hasMany(ConnectionRequest, { foreignKey: "fromUserId", as: "sentRequests" });
+User.hasMany(ConnectionRequest, { foreignKey: "toUserId",   as: "receivedRequests" });
+
+User.hasMany(Connection, { foreignKey: "userOneId", as: "connectionsAsOne" });
+User.hasMany(Connection, { foreignKey: "userTwoId", as: "connectionsAsTwo" });
+
+Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Notification,   { foreignKey: "userId", as: "notifications" });
+
+
+// For requests preview includes
+ConnectionRequest.belongsTo(User, { as: "from", foreignKey: "fromUserId" });
+ConnectionRequest.belongsTo(User, { as: "to", foreignKey: "toUserId" });
+User.hasMany(ConnectionRequest, { as: "incomingRequests", foreignKey: "toUserId" });
+User.hasMany(ConnectionRequest, { as: "outgoingRequests", foreignKey: "fromUserId" });
+
+// For connections
+// (no strict includes needed; we query by ids)
+const Identity           = require("./identity")(sequelize, DataTypes);
+const UserIdentity       = require("./userIdentity")(sequelize, DataTypes);
+const SubsubCategory     = require("./subsubCategory")(sequelize, DataTypes);
+const UserSubsubCategory = require("./userSubsubCategory")(sequelize, DataTypes);
+
+// Identities (M:N)
+User.belongsToMany(Identity, { through: UserIdentity, as: "identities", foreignKey: "userId", otherKey: "identityId" });
+Identity.belongsToMany(User, { through: UserIdentity, as: "users", foreignKey: "identityId", otherKey: "userId" });
+
+// Level-3 taxonomy
+Subcategory.hasMany(SubsubCategory, { as: "subsubs", foreignKey: "subcategoryId", onDelete: "CASCADE" });
+SubsubCategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
+
+//Category.hasMany(SubsubCategory, { as: "subsubs", foreignKey: "categoryId", onDelete: "CASCADE" });
+//SubsubCategory.belongsTo(Category, { as: "category", foreignKey: "categoryId" });
+
+// User ↔ SubsubCategory (M:N)
+User.belongsToMany(SubsubCategory, { through: UserSubsubCategory, as: "subsubcategories", foreignKey: "userId", otherKey: "subsubCategoryId" });
+SubsubCategory.belongsToMany(User, { through: UserSubsubCategory, as: "users", foreignKey: "subsubCategoryId", otherKey: "userId" });
+
+// Jobs / Events (optional level-3 link)
+Job.belongsTo(SubsubCategory,   { as: "subsubCategory", foreignKey: "subsubCategoryId" });
+Event.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
+
+Identity.hasMany(Category, { foreignKey: "identityId", as: "categories", onDelete: "RESTRICT" });
+Category.belongsTo(Identity, { foreignKey: "identityId", as: "identity" });
+
 module.exports = {
+  UserSubcategory, UserSubsubCategory,
+  Identity, UserIdentity,
+  Connection,
+  ConnectionRequest,
+  Notification,
+  SubsubCategory,
   sequelize,
   User,
   Profile,

@@ -1,6 +1,6 @@
 const { User, NewsArticle } = require("../models");
-const seedUsers = require("./seedUsers");
-const seedNews = require("./seedNews");
+//const seedUsers = require("./seedUsers");
+//const seedNews = require("./seedNews");
 
 async function seedAll() {
     return

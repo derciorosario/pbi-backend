@@ -1,70 +1,157 @@
-const { User, Profile, Category, Subcategory, Goal,
-        UserCategory, UserSubcategory, UserGoal } = require("../models");
+const {
+  User,
+  Profile,
+  Identity,
+  UserIdentity,
+  Category,
+  Subcategory,
+  SubsubCategory,
+  UserCategory,
+  UserSubcategory,
+  UserSubsubCategory,
+  Goal,
+  UserGoal,
+} = require("../models");
+
+function clampInt(v, d) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
 
 async function getState(userId) {
-  const profile = await Profile.findOne({ where: { userId } });
-
-  const [catsCount, subsCount, goalsCount] = await Promise.all([
+  const [identCount, catCount, subCount, subsubCount, goalsCount, profile] = await Promise.all([
+    UserIdentity.count({ where: { userId } }),
     UserCategory.count({ where: { userId } }),
     UserSubcategory.count({ where: { userId } }),
+    UserSubsubCategory.count({ where: { userId } }),
     UserGoal.count({ where: { userId } }),
+    Profile.findOne({ where: { userId } }),
   ]);
 
-  const profileTypeDone = Boolean(profile?.primaryIdentity);
-  const categoriesDone  = catsCount >= 1 && subsCount >= 2; // rule
-  const goalsDone       = goalsCount >= 1;                  // at least 1, cap enforced at 3 elsewhere
+  // We no longer rely on profile.primaryIdentity to gate progress,
+  // but we keep it if you want to show legacy UI. Progress uses new steps.
+  const identitiesDone = identCount >= 1;
+  const categoriesDone = catCount >= 1 && subCount >= 2; // level-3 optional for completion
+  const goalsDone = goalsCount >= 1;
 
   let nextStep = null;
-  if (!profileTypeDone) nextStep = "profileType";
+  if (!identitiesDone) nextStep = "identities";
   else if (!categoriesDone) nextStep = "industry";
   else if (!goalsDone) nextStep = "goals";
 
+  const doneCount = (identitiesDone ? 1 : 0) + (categoriesDone ? 1 : 0) + (goalsDone ? 1 : 0);
+  const progress = Math.round((doneCount / 3) * 100);
+
   return {
-    profileTypeDone, categoriesDone, goalsDone, nextStep,
-    progress: Math.round(((profileTypeDone + categoriesDone + goalsDone) / 3) * 100),
+    identitiesDone,
+    categoriesDone,
+    goalsDone,
+    nextStep,
+    progress,
+    legacyPrimaryIdentity: profile?.primaryIdentity ?? null,
   };
 }
 
-async function setProfileType(userId, primaryIdentity) {
+async function setIdentities(userId, identityIds = []) {
+  const ids = Array.isArray(identityIds) ? identityIds.filter(Boolean) : [];
+  if (ids.length < 1) {
+    const err = new Error("Select at least 1 identity");
+    err.status = 400;
+    throw err;
+  }
+
+  const found = await Identity.findAll({ where: { id: ids } });
+  if (found.length !== ids.length) {
+    const err = new Error("Some identities are invalid");
+    err.status = 400;
+    throw err;
+  }
+
+  await UserIdentity.destroy({ where: { userId } });
+  await Promise.all(ids.map((identityId) => UserIdentity.create({ userId, identityId })));
+
+  // Optional: clear legacy single choice to avoid confusion
   const profile = await Profile.findOne({ where: { userId } });
-  if (!profile) throw Object.assign(new Error("Profile not found"), { status: 404 });
-  profile.primaryIdentity = primaryIdentity;
-  await profile.save();
+  if (profile) {
+    profile.primaryIdentity = null;
+    await profile.save();
+  }
+
   return getState(userId);
 }
 
-async function setCategories(userId, categoryIds = [], subcategoryIds = []) {
-  // validate categories / subs exist
-  const [cats, subs] = await Promise.all([
-    Category.findAll({ where: { id: categoryIds } }),
-    Subcategory.findAll({ where: { id: subcategoryIds } }),
-  ]);
-  if (cats.length < 1)  throw Object.assign(new Error("At least 1 industry category required"), { status: 400 });
-  if (subs.length < 1)  throw Object.assign(new Error("Select at least 1 subcategories"), { status: 400 });
+async function setCategories(userId, categoryIds = [], subcategoryIds = [], subsubCategoryIds = []) {
+  const catIds = Array.isArray(categoryIds) ? categoryIds.filter(Boolean) : [];
+  const subIds = Array.isArray(subcategoryIds) ? subcategoryIds.filter(Boolean) : [];
+  const subsubIds = Array.isArray(subsubCategoryIds) ? subsubCategoryIds.filter(Boolean) : [];
 
-  // replace selections (idempotent)
-  await UserCategory.destroy({ where: { userId } });
-  await UserSubcategory.destroy({ where: { userId } });
+  if (catIds.length < 1) {
+    const err = new Error("At least 1 category required");
+    err.status = 400;
+    throw err;
+  }
+  if (subIds.length < 1) {
+    const err = new Error("Select at least 1 subcategory (recommend 2+)");
+    err.status = 400;
+    throw err;
+  }
+
+  const [cats, subs, subsubs] = await Promise.all([
+    Category.findAll({ where: { id: catIds } }),
+    Subcategory.findAll({ where: { id: subIds } }),
+    subsubIds.length ? SubsubCategory.findAll({ where: { id: subsubIds } }) : [],
+  ]);
+
+  if (cats.length !== catIds.length) {
+    const err = new Error("Some categories are invalid");
+    err.status = 400;
+    throw err;
+  }
+  if (subs.length !== subIds.length) {
+    const err = new Error("Some subcategories are invalid");
+    err.status = 400;
+    throw err;
+  }
+  if (subsubIds.length && subsubs.length !== subsubIds.length) {
+    const err = new Error("Some level-3 subcategories are invalid");
+    err.status = 400;
+    throw err;
+  }
+
+  // Replace selections (idempotent)
   await Promise.all([
-    ...categoryIds.map(categoryId => UserCategory.create({ userId, categoryId })),
-    ...subcategoryIds.map(subcategoryId => UserSubcategory.create({ userId, subcategoryId })),
+    UserCategory.destroy({ where: { userId } }),
+    UserSubcategory.destroy({ where: { userId } }),
+    UserSubsubCategory.destroy({ where: { userId } }),
+  ]);
+
+  await Promise.all([
+    ...catIds.map((categoryId) => UserCategory.create({ userId, categoryId })),
+    ...subIds.map((subcategoryId) => UserSubcategory.create({ userId, subcategoryId })),
+    ...subsubIds.map((subsubCategoryId) => UserSubsubCategory.create({ userId, subsubCategoryId })),
   ]);
 
   return getState(userId);
 }
 
 async function setGoals(userId, goalIds = []) {
-  if (goalIds.length === 0 || goalIds.length > 3) {
-    throw Object.assign(new Error("Choose between 1 and 3 goals"), { status: 400 });
+  const ids = Array.isArray(goalIds) ? goalIds.filter(Boolean) : [];
+  if (ids.length === 0 || ids.length > 3) {
+    const err = new Error("Choose between 1 and 3 goals");
+    err.status = 400;
+    throw err;
   }
-  // validate exist
-  const found = await Goal.findAll({ where: { id: goalIds } });
-  if (found.length !== goalIds.length) throw Object.assign(new Error("Invalid goals"), { status: 400 });
+  const found = await Goal.findAll({ where: { id: ids } });
+  if (found.length !== ids.length) {
+    const err = new Error("Invalid goals");
+    err.status = 400;
+    throw err;
+  }
 
   await UserGoal.destroy({ where: { userId } });
-  await Promise.all(goalIds.map(goalId => UserGoal.create({ userId, goalId })));
+  await Promise.all(ids.map((goalId) => UserGoal.create({ userId, goalId })));
 
   return getState(userId);
 }
 
-module.exports = { getState, setProfileType, setCategories, setGoals };
+module.exports = { getState, setIdentities, setCategories, setGoals };

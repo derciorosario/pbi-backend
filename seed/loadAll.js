@@ -20,6 +20,8 @@ for (const g of goals) {
   }
 }
 
+
+/*
   
     // categories
   const cats = JSON.parse(fs.readFileSync(path.join(__dirname, "categories.full.json")));
@@ -47,5 +49,6 @@ for (const g of goals) {
 
     console.log("✅ Seeded categories, subcategories, goals");
     process.exit(0);
+    */
   } catch (e) { console.error(e); process.exit(1); }
 })();

@@ -27,6 +27,8 @@ module.exports = (sequelize, DataTypes) => {
       categoryId:    { type: DataTypes.UUID, allowNull: true },
       subcategoryId: { type: DataTypes.UUID, allowNull: true },
 
+      onboardingDone:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+
       // Onboarding flags
       onboardingProfileTypeDone: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
       onboardingCategoriesDone:  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

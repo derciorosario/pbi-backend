@@ -82,7 +82,7 @@ const JOB_SEEDS = [
     postedByEmail: "naija-fintech@pbi.africa",
     categoryName: "Technology",
     subcategoryName: "Software Development",
-    coverImageBase64: TRANSPARENT_PNG_BASE64,
+    coverImageBase64: 'https://img.freepik.com/free-photo/business-executives-participating-business-meeting_107420-63841.jpg',
     createdAtDaysAgo: 3,
   },
   {
@@ -108,7 +108,7 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@pbi.africa",
     categoryName: "Technology",
     subcategoryName: "Data Analysis",
-    coverImageBase64: null,
+    coverImageBase64: 'https://img.freepik.com/free-photo/advisory-board-members-team-leaders-gathering-review-project-outcomes_482257-122887.jpg',
     createdAtDaysAgo: 8,
   },
   {
@@ -134,7 +134,7 @@ const JOB_SEEDS = [
     postedByEmail: "kenya-logistics@pbi.africa",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Branding & Creative Strategy",
-    coverImageBase64: null,
+    coverImageBase64: 'https://img.freepik.com/free-photo/representations-user-experience-interface-design_23-2150038909.jpg',
     createdAtDaysAgo: 12,
   },
   {
@@ -238,7 +238,7 @@ const EVENT_SEEDS = [
     capacity: 200,
     registrationDeadline: daysAgo(-4),
     organizerEmail: "naija-fintech@pbi.africa",
-    coverImageBase64: null,
+    coverImageBase64: 'https://img.freepik.com/free-photo/professional-team-analyzing-archived-data-financial-file-meeting_482257-114412.jpg',
     createdAtDaysAgo: 1,
   },
   {
@@ -261,7 +261,7 @@ const EVENT_SEEDS = [
     capacity: 500,
     registrationDeadline: daysAgo(-12),
     organizerEmail: "afri-agro@pbi.africa",
-    coverImageBase64: TRANSPARENT_PNG_BASE64,
+    coverImageBase64: 'https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg',
     createdAtDaysAgo: 7,
   },
   {
@@ -284,7 +284,7 @@ const EVENT_SEEDS = [
     capacity: 1000,
     registrationDeadline: daysAgo(-16),
     organizerEmail: "sa-renew@pbi.africa",
-    coverImageBase64: null,
+    coverImageBase64: 'https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg',
     createdAtDaysAgo: 9,
   },
   {
@@ -307,7 +307,7 @@ const EVENT_SEEDS = [
     capacity: 150,
     registrationDeadline: daysAgo(-7),
     organizerEmail: "kenya-logistics@pbi.africa",
-    coverImageBase64: TRANSPARENT_PNG_BASE64,
+    coverImageBase64: 'https://img.freepik.com/free-photo/logistics-department-managers-planning-stock-supply-schedule-warehouse-counter-desk-all-black-storehouse-employees-team-managing-parcel-registration-dispatching-process_482257-71414.jpg',
     createdAtDaysAgo: 4,
   },
   {
@@ -331,7 +331,7 @@ const EVENT_SEEDS = [
     capacity: 80,
     registrationDeadline: daysAgo(-2),
     organizerEmail: "kenya-logistics@pbi.africa",
-    coverImageBase64: null,
+    coverImageBase64: 'https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg',
     createdAtDaysAgo: 0,
   },
 ];

@@ -48,7 +48,6 @@ async function me(req, res, next) {
 
 
 async function googleSignIn(req, res, next) {
-  console.log('0000000000000000000000',req.body)
   try {
     const { idToken, accountType,accessToken } = req.body;
     const { user, token } = await loginWithGoogle({ idToken, accountType,accessToken });
@@ -92,4 +91,4 @@ async function confirmResetPassword(req, res, next) {
 
 
 module.exports = { forgotPassword,
-  confirmResetPassword,register, verify, resend, signIn, me , googleSignIn};
+confirmResetPassword,register, verify, resend, signIn, me , googleSignIn};

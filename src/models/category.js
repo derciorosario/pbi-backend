@@ -1,13 +1,24 @@
-// category.js
 const { v4: uuidv4 } = require("uuid");
+
 module.exports = (sequelize, DataTypes) => {
   const Category = sequelize.define(
     "Category",
     {
       id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
-      name: { type: DataTypes.STRING, allowNull: false },
+      identityId: { type: DataTypes.UUID, allowNull: true }, // ← can be null
+      name: { type: DataTypes.STRING(160), allowNull: false },
+      sort: { type: DataTypes.INTEGER, defaultValue: 0 },
+      meta: { type: DataTypes.JSON, allowNull: true },
     },
-    { tableName: "categories", timestamps: true, }
+    {
+      tableName: "categories",
+      timestamps: true,
+      indexes: [
+        { fields: ["identityId"] },
+        { fields: ["name"] },
+      ],
+    }
   );
+
   return Category;
 };

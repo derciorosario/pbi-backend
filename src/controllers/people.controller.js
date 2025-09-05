@@ -1,3 +1,4 @@
+// src/controllers/people.controller.js
 const { Op } = require("sequelize");
 const {
   User,
@@ -7,6 +8,8 @@ const {
   Goal,
   UserCategory,
   UserGoal,
+  Connection,
+  ConnectionRequest,
 } = require("../models");
 
 function like(v) {
@@ -32,19 +35,22 @@ exports.searchPeople = async (req, res) => {
       country,
       city,
       categoryId,
-      cats, // múltiplas categorias (comma-separated)
+      cats, // multiple category ids (comma-separated)
       subcategoryId,
       goalId,
+      connectionStatus, // NEW: filter (comma-separated): connected,incoming_pending,outgoing_pending,none
       limit = 20,
       offset = 0,
     } = req.query;
+
+    console.log(connectionStatus)
 
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
 
     const currentUserId = req.user?.id || null;
 
-    // Carrega preferências do user logado (para priorização)
+    // ---- Load viewer defaults to prioritize if NO explicit filters ----
     let myCategoryIds = [];
     let mySubcategoryIds = [];
     let myGoalIds = [];
@@ -68,13 +74,13 @@ exports.searchPeople = async (req, res) => {
       }
     }
 
-    // Filtros de interesse vindos do cliente
+    // ---- Effective interest filters from client ----
     const catsList = ensureArray(cats);
     const effCategoryIds = ensureArray(categoryId).concat(catsList).filter(Boolean);
     const effSubcategoryIds = ensureArray(subcategoryId).filter(Boolean);
     const effGoalIds = ensureArray(goalId).filter(Boolean);
 
-    // WHERE base: não mostrar admin e nem o próprio usuário
+    // ---- Base WHERE: hide admins and (if logged in) self ----
     const whereUser = {
       accountType: { [Op.ne]: "admin" },
       ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {}),
@@ -91,16 +97,11 @@ exports.searchPeople = async (req, res) => {
       ];
     }
 
-    // include interests
+    // ---- Include for interests (categories/subcategories) ----
     const interestsWhere = {};
     if (effCategoryIds.length) interestsWhere.categoryId = { [Op.in]: effCategoryIds };
     if (effSubcategoryIds.length) interestsWhere.subcategoryId = { [Op.in]: effSubcategoryIds };
 
-    const goalsWhere = {};
-    if (effGoalIds.length) goalsWhere.id = { [Op.in]: effGoalIds };
-
-    // Se o cliente passou algum filtro de interesse/goal, tornamos required para filtrar;
-    // se não passou, deixamos livre (priorização depois).
     const interestsInclude = {
       model: UserCategory,
       as: "interests",
@@ -112,6 +113,10 @@ exports.searchPeople = async (req, res) => {
       ],
     };
 
+    // ---- Include for goals ----
+    const goalsWhere = {};
+    if (effGoalIds.length) goalsWhere.id = { [Op.in]: effGoalIds };
+
     const goalsInclude = {
       model: Goal,
       as: "goals",
@@ -120,7 +125,7 @@ exports.searchPeople = async (req, res) => {
       through: { attributes: [] },
     };
 
-    // Buscamos mais que o limit para poder aplicar a priorização e depois paginar
+    // ---- Fetch more than limit to allow prioritization and post filtering ----
     const fetchLimit = lim * 3 + off;
 
     const rows = await User.findAll({
@@ -134,12 +139,40 @@ exports.searchPeople = async (req, res) => {
       limit: fetchLimit,
     });
 
-    // Scoring para priorização quando NÃO há filtros explícitos:
-    //  - goal em comum: +100 cada
-    //  - categoria em comum: +10 cada
-    //  - subcategoria em comum: +5 cada
-    //  - mesmo país: +2
-    //  - mesma cidade (prefix match): +3
+    // ---- Compute connection sets (connected/pending) for the viewer ----
+    const filterStatuses = ensureArray(connectionStatus).map((s) => s.toLowerCase());
+    let connectedSet = new Set();
+    let outgoingPendingSet = new Set();
+    let incomingPendingSet = new Set();
+
+    if (currentUserId) {
+      // Accepted connections
+      const cons = await Connection.findAll({
+        where: { [Op.or]: [{ userOneId: currentUserId }, { userTwoId: currentUserId }] },
+        attributes: ["userOneId", "userTwoId"],
+      });
+      cons.forEach((c) => {
+        const other =
+          String(c.userOneId) === String(currentUserId) ? String(c.userTwoId) : String(c.userOneId);
+        connectedSet.add(other);
+      });
+
+      // Pending requests (outgoing / incoming)
+      const [outgoingReqs, incomingReqs] = await Promise.all([
+        ConnectionRequest.findAll({
+          where: { fromUserId: currentUserId, status: "pending" },
+          attributes: ["toUserId"],
+        }),
+        ConnectionRequest.findAll({
+          where: { toUserId: currentUserId, status: "pending" },
+          attributes: ["fromUserId"],
+        }),
+      ]);
+      outgoingReqs.forEach((r) => outgoingPendingSet.add(String(r.toUserId)));
+      incomingReqs.forEach((r) => incomingPendingSet.add(String(r.fromUserId)));
+    }
+
+    // ---- Scoring for prioritization when NO explicit filters ----
     const hasExplicitFilter =
       !!(effGoalIds.length || effCategoryIds.length || effSubcategoryIds.length || country || city || q);
 
@@ -167,18 +200,23 @@ exports.searchPeople = async (req, res) => {
           score += 3;
       }
 
-      // lookingFor/tag = goals do usuário, separados por vírgula
+      // Connection status relative to viewer
+      let cStatus = "none";
+      if (currentUserId) {
+        const uid = String(u.id);
+        if (connectedSet.has(uid)) cStatus = "connected";
+        else if (outgoingPendingSet.has(uid)) cStatus = "outgoing_pending";
+        else if (incomingPendingSet.has(uid)) cStatus = "incoming_pending";
+      }
+
       const goalNames = (u.goals || []).map((g) => g.name).filter(Boolean);
-      const catsOut = (u.interests || [])
-        .map((i) => i.category?.name)
-        .filter(Boolean);
-      const subsOut = (u.interests || [])
-        .map((i) => i.subcategory?.name)
-        .filter(Boolean);
+      const catsOut = (u.interests || []).map((i) => i.category?.name).filter(Boolean);
+      const subsOut = (u.interests || []).map((i) => i.subcategory?.name).filter(Boolean);
 
       return {
         raw: u,
         score,
+        connectionStatus: cStatus,
         out: {
           id: u.id,
           name: u.name,
@@ -190,15 +228,15 @@ exports.searchPeople = async (req, res) => {
           lookingFor: goalNames.join(", "),
           goals: goalNames,
           cats: catsOut,
-          about: u.profile?.about|| null,
           subcats: subsOut,
+          about: u.profile?.about || null,
           createdAt: u.createdAt,
+          connectionStatus: cStatus,
         },
       };
     });
 
-    // Ordenação: se teve filtro explícito, manter createdAt desc;
-    // senão, ordenar por score desc e em seguida createdAt desc
+    // ---- Order (score desc when no explicit filters, otherwise createdAt desc) ----
     let ordered;
     if (hasExplicitFilter) {
       ordered = scored.sort((a, b) => new Date(b.raw.createdAt) - new Date(a.raw.createdAt));
@@ -209,10 +247,17 @@ exports.searchPeople = async (req, res) => {
       });
     }
 
-    const windowed = ordered.slice(off, off + lim).map((x) => x.out);
+    // ---- Optional filter by connectionStatus (works only meaningfully if logged in) ----
+    let filtered = ordered;
+    if (filterStatuses.length) {
+      const allow = new Set(filterStatuses);
+      filtered = ordered.filter((x) => allow.has(x.connectionStatus));
+    }
+
+    const windowed = filtered.slice(off, off + lim).map((x) => x.out);
 
     res.json({
-      count: ordered.length,
+      count: filtered.length,
       items: windowed,
     });
   } catch (err) {

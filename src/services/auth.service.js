@@ -30,10 +30,10 @@ async function createUserAndSendVerification({
   
   await sendTemplatedEmail({
   to: user.email,
-  subject: "Your verification link (updated)",
+  subject: "Your verification link",
   template: "verify-email",
   context: {
-    subject: "Your verification link (updated)",
+    subject: "Your verification link",
     preheader: "Here’s a fresh link to verify your PBI account.",
     name: user.name,
     link,
@@ -80,10 +80,10 @@ async function resendVerification(email) {
  
   await sendTemplatedEmail({
   to: user.email,
-  subject: "Your verification link (updated)",
+  subject: "Your verification link",
   template: "verify-email",
   context: {
-    subject: "Your verification link (updated)",
+    subject: "Your verification link",
     preheader: "Here’s a fresh link to verify your PBI account.",
     name: user.name,
     link,
