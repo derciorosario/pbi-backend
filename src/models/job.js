@@ -9,6 +9,7 @@ module.exports = (sequelize, DataTypes) => {
       // Basic
       title:          { type: DataTypes.STRING(180), allowNull: false },
       companyName:    { type: DataTypes.STRING(180), allowNull: false },
+      make_company_name_private: { type: DataTypes.BOOLEAN, defaultValue: false },
       department:     { type: DataTypes.STRING(120) },
       experienceLevel:{ type: DataTypes.ENUM("Junior","Mid-level","Senior","Lead"), allowNull: true },
 

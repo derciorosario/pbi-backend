@@ -28,7 +28,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js",
     "seed": "node seed/loadAll.js",
-    "jobs-events": "node src/seeds/seedJobsAndEvents.js"
+    "jobs-events": "node src/seeds/seedJobsAndEvents.js",
+    "migrate:add-company-private": "node scripts/add_make_company_name_private.js"
   },
   "keywords": [],
   "author": "",

@@ -100,6 +100,7 @@ function timeAgo(date) {
 const includeCategoryRefs = [
   { model: Category, as: "category", attributes: ["id", "name"] },
   { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
+  { model: User, as: "postedBy", attributes: ["id", "name"] },
 ];
 
 exports.getFeed = async (req, res) => {
@@ -237,7 +238,8 @@ exports.getFeed = async (req, res) => {
     salaryMax: j.salaryMax,
     createdAt: j.createdAt,
     timeAgo: timeAgo(j.createdAt),
-    postedByUserId: j.postedByUserId || null,        // <—
+    postedByUserId: j.postedByUserId || null,
+    postedByUserName: j.postedBy?.name || null,
     });
 
     const mapEvent = (e) => ({
