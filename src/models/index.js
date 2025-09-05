@@ -135,7 +135,7 @@ Identity.hasMany(Category, { foreignKey: "identityId", as: "categories", onDelet
 Category.belongsTo(Identity, { foreignKey: "identityId", as: "identity" });
 
 
-const JobIdentity       = require("./jobIdentity")(sequelize, DataTypes);
+const JobIdentity       = require("./JobIdentity")(sequelize, DataTypes);
 const JobCategory       = require("./JobCategory")(sequelize, DataTypes);
 const JobSubcategory    = require("./JobSubcategory")(sequelize, DataTypes);
 const JobSubsubCategory = require("./jobSubsubCategory")(sequelize, DataTypes);
