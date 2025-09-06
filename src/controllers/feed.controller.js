@@ -12,7 +12,10 @@ const {
   Connection,
   ConnectionRequest,
   Identity,
-  Service, // [SERVICE] import
+  Service,
+  Product,
+  Tourism,
+  Funding, // [FUNDING] import
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 
@@ -104,11 +107,18 @@ function timeAgo(date) {
   return d.toLocaleDateString();
 }
 
-// Includes
+// Includes (jobs & events)
 const includeCategoryRefs = [
   { model: Category, as: "category", attributes: ["id", "name"] },
   { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
-  { model: User, as: "postedBy", attributes: ["id", "name"] },
+  {
+    model: User,
+    as: "postedBy",
+    attributes: ["id", "name", "avatarUrl"],
+    include: [
+      { model: Profile, as: "profile", attributes: ["avatarUrl"] }
+    ]
+  },
 ];
 
 const includeEventRefs = [
@@ -117,7 +127,7 @@ const includeEventRefs = [
   { model: User, as: "organizer", attributes: ["id", "name"] },
 ];
 
-// [SERVICE] dynamic include for services → provider + provider.interests(+category/subcategory)
+// [SERVICE] include → provider + interests(+category/subcategory)
 function makeServiceInclude({ categoryId, subcategoryId }) {
   const interestsWhere = {};
   if (categoryId) interestsWhere.categoryId = categoryId;
@@ -134,7 +144,7 @@ function makeServiceInclude({ categoryId, subcategoryId }) {
         {
           model: UserCategory,
           as: "interests",
-          required: needInterests, // only enforce join when filtering by cat/subcat
+          required: needInterests,
           where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
           include: [
             { model: Category, as: "category", attributes: ["id", "name"], required: false },
@@ -144,6 +154,84 @@ function makeServiceInclude({ categoryId, subcategoryId }) {
       ],
     },
   ];
+}
+
+// [PRODUCT] include → seller + audience M2M
+function makeProductInclude({ categoryId, subcategoryId }) {
+  const include = [
+    { model: User, as: "seller", attributes: ["id", "name"] },
+    {
+      model: Category,
+      as: "audienceCategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: Subcategory,
+      as: "audienceSubcategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+  ];
+
+  if (categoryId) include[1] = { ...include[1], required: true, where: { id: categoryId } };
+  if (subcategoryId) include[2] = { ...include[2], required: true, where: { id: subcategoryId } };
+
+  return include;
+}
+
+// [TOURISM] include → author + audience M2M
+function makeTourismInclude({ categoryId, subcategoryId }) {
+  const include = [
+    { model: User, as: "author", attributes: ["id", "name"] },
+    {
+      model: Category,
+      as: "audienceCategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: Subcategory,
+      as: "audienceSubcategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+  ];
+
+  if (categoryId) include[1] = { ...include[1], required: true, where: { id: categoryId } };
+  if (subcategoryId) include[2] = { ...include[2], required: true, where: { id: subcategoryId } };
+
+  return include;
+}
+
+// [FUNDING] include → creator + direct category + audience M2M
+function makeFundingInclude({ categoryId, subcategoryId }) {
+  const include = [
+    { model: User, as: "creator", attributes: ["id", "name"] },
+    { model: Category, as: "category", attributes: ["id", "name"], required: false },
+    {
+      model: Category,
+      as: "audienceCategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: Subcategory,
+      as: "audienceSubcategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+  ];
+
+  // We’ll filter with a WHERE using `$audienceCategories.id$` / `$audienceSubcategories.id$` OR direct `categoryId`
+  // so includes can remain not-required here.
+  return include;
 }
 
 exports.getFeed = async (req, res) => {
@@ -218,17 +306,33 @@ exports.getFeed = async (req, res) => {
 
     const whereJob = { ...whereCommon };
     const whereEvent = { ...whereCommon };
-    const whereService = { ...whereCommon }; // [SERVICE]
+    const whereService = { ...whereCommon };
+
+    // Products: country only
+    const whereProduct = {};
+    if (country) whereProduct.country = country;
+
+    // Tourism: country + location (uses ?city)
+    const whereTourism = {};
+    if (country) whereTourism.country = country;
+    if (city) whereTourism.location = like(city);
+
+    // Funding: country + city, optional status/visibility if you want (left open)
+    const whereFunding = {};
+    if (country) whereFunding.country = country;
+    if (city) whereFunding.city = like(city);
 
     if (categoryId) {
       whereJob.categoryId = categoryId;
       whereEvent.categoryId = categoryId;
-      // [SERVICE] handled via include(User -> interests) not directly on services table
+      // services via include(User->interests)
+      // products/tourism via M2M includes
+      // funding supports BOTH direct categoryId and audience M2M (handled below with $paths)
     }
     if (subcategoryId) {
       whereJob.subcategoryId = subcategoryId;
       whereEvent.subcategoryId = subcategoryId;
-      // [SERVICE] same as above (via interests)
+      // products/tourism/funding via M2M
     }
 
     if (q) {
@@ -242,11 +346,40 @@ exports.getFeed = async (req, res) => {
         { description: like(q) },
         { city: like(q) },
       ];
-      // [SERVICE]
       whereService[Op.or] = [
         { title: like(q) },
         { description: like(q) },
         { city: like(q) },
+      ];
+      whereProduct[Op.or] = [
+        { title: like(q) },
+        { description: like(q) },
+      ];
+      whereTourism[Op.or] = [
+        { title: like(q) },
+        { description: like(q) },
+        { location: like(q) },
+      ];
+      whereFunding[Op.or] = [
+        { title: like(q) },
+        { pitch: like(q) },
+        { city: like(q) },
+      ];
+    }
+
+    // Add OR filters for Funding audience (and direct category)
+    // Use subQuery:false in queries where these $paths are used.
+    if (categoryId) {
+      whereFunding[Op.or] = [
+        ...(whereFunding[Op.or] || []),
+        { categoryId }, // direct
+        { "$audienceCategories.id$": categoryId }, // M2M
+      ];
+    }
+    if (subcategoryId) {
+      whereFunding[Op.or] = [
+        ...(whereFunding[Op.or] || []),
+        { "$audienceSubcategories.id$": subcategoryId },
       ];
     }
 
@@ -261,6 +394,12 @@ exports.getFeed = async (req, res) => {
             ? it.organizerUserId
             : it.kind === "service"
             ? it.providerUserId
+            : it.kind === "product"
+            ? it.sellerUserId
+            : it.kind === "tourism"
+            ? it.authorUserId
+            : it.kind === "funding"
+            ? it.creatorUserId
             : null
         )
         .filter(Boolean);
@@ -278,6 +417,12 @@ exports.getFeed = async (req, res) => {
             ? it.organizerUserId
             : it.kind === "service"
             ? it.providerUserId
+            : it.kind === "product"
+            ? it.sellerUserId
+            : it.kind === "tourism"
+            ? it.authorUserId
+            : it.kind === "funding"
+            ? it.creatorUserId
             : null;
 
         return {
@@ -315,6 +460,7 @@ exports.getFeed = async (req, res) => {
       timeAgo: timeAgo(j.createdAt),
       postedByUserId: j.postedByUserId || null,
       postedByUserName: j.postedBy?.name || null,
+      postedByUserAvatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
     });
 
     const mapEvent = (e) => ({
@@ -339,11 +485,10 @@ exports.getFeed = async (req, res) => {
       organizerUserName: e.organizer?.name || null,
     });
 
-    // [SERVICE] choose a representative category/subcategory from provider's interests
+    // [SERVICE] representative cat/subcat from provider interests
     function pickServiceCatSub(svc, preferredCatId, preferredSubId) {
       const ints = svc.provider?.interests || [];
       if (!ints.length) return {};
-      // try match subcat, then cat, else first
       let hit =
         (preferredSubId &&
           ints.find((i) => String(i.subcategoryId) === String(preferredSubId))) ||
@@ -372,7 +517,6 @@ exports.getFeed = async (req, res) => {
         deliveryTime: s.deliveryTime,
         locationType: s.locationType,
         experienceLevel: s.experienceLevel,
-        // derived cat/subcat (from provider interests)
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
@@ -386,6 +530,205 @@ exports.getFeed = async (req, res) => {
       };
     };
 
+    // [PRODUCT] pick representative category/subcategory from audience M2M
+    function pickProductCatSub(prod, preferredCatId, preferredSubId) {
+      const cats = prod.audienceCategories || [];
+      const subs = prod.audienceSubcategories || [];
+
+      const subHit =
+        (preferredSubId &&
+          subs.find((s) => String(s.id) === String(preferredSubId))) ||
+        subs[0];
+
+      if (subHit) {
+        return {
+          categoryId: null,
+          categoryName: "",
+          subcategoryId: subHit.id,
+          subcategoryName: subHit.name,
+        };
+      }
+
+      const catHit =
+        (preferredCatId &&
+          cats.find((c) => String(c.id) === String(preferredCatId))) ||
+        cats[0];
+
+      if (catHit) {
+        return {
+          categoryId: catHit.id,
+          categoryName: catHit.name,
+          subcategoryId: null,
+          subcategoryName: "",
+        };
+      }
+
+      return {};
+    }
+
+    const mapProduct = (p) => {
+      const picked = pickProductCatSub(p, categoryId, subcategoryId);
+      return {
+        kind: "product",
+        id: p.id,
+        title: p.title,
+        description: p.description,
+        price: p.price,
+        quantity: p.quantity,
+        tags: Array.isArray(p.tags) ? p.tags : [],
+        images: Array.isArray(p.images) ? p.images : [],
+        categoryId: picked.categoryId ? String(picked.categoryId) : "",
+        categoryName: picked.categoryName || "",
+        subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
+        subcategoryName: picked.subcategoryName || "",
+        country: p.country || null,
+        createdAt: p.createdAt,
+        timeAgo: timeAgo(p.createdAt),
+        sellerUserId: p.sellerUserId || null,
+        sellerUserName: p.seller?.name || null,
+      };
+    };
+
+    // [TOURISM] pick representative category/subcategory from audience M2M
+    function pickTourismCatSub(t, preferredCatId, preferredSubId) {
+      const cats = t.audienceCategories || [];
+      const subs = t.audienceSubcategories || [];
+
+      const subHit =
+        (preferredSubId &&
+          subs.find((s) => String(s.id) === String(preferredSubId))) ||
+        subs[0];
+      if (subHit) {
+        return {
+          categoryId: null,
+          categoryName: "",
+          subcategoryId: subHit.id,
+          subcategoryName: subHit.name,
+        };
+      }
+
+      const catHit =
+        (preferredCatId &&
+          cats.find((c) => String(c.id) === String(preferredCatId))) ||
+        cats[0];
+      if (catHit) {
+        return {
+          categoryId: catHit.id,
+          categoryName: catHit.name,
+          subcategoryId: null,
+          subcategoryName: "",
+        };
+      }
+
+      return {};
+    }
+
+    const mapTourism = (t) => {
+      const picked = pickTourismCatSub(t, categoryId, subcategoryId);
+      return {
+        kind: "tourism",
+        id: t.id,
+        postType: t.postType, // Destination | Experience | Culture
+        title: t.title,
+        description: t.description,
+        season: t.season || null,
+        budgetRange: t.budgetRange || null,
+        tags: Array.isArray(t.tags) ? t.tags : [],
+        images: Array.isArray(t.images) ? t.images : [],
+        categoryId: picked.categoryId ? String(picked.categoryId) : "",
+        categoryName: picked.categoryName || "",
+        subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
+        subcategoryName: picked.subcategoryName || "",
+        location: t.location || null,
+        country: t.country || null,
+        createdAt: t.createdAt,
+        timeAgo: timeAgo(t.createdAt),
+        authorUserId: t.authorUserId || null,
+        authorUserName: t.author?.name || null,
+      };
+    };
+
+    // [FUNDING] pick representative category/subcategory from audience; prefer direct category if present
+    function pickFundingCatSub(f, preferredCatId, preferredSubId) {
+      // Prefer the direct category if set
+      if (f.category) {
+        return {
+          categoryId: f.category.id,
+          categoryName: f.category.name,
+          subcategoryId: null,
+          subcategoryName: "",
+        };
+      }
+
+      // Fallback to audience sets
+      const cats = f.audienceCategories || [];
+      const subs = f.audienceSubcategories || [];
+
+      const subHit =
+        (preferredSubId &&
+          subs.find((s) => String(s.id) === String(preferredSubId))) ||
+        subs[0];
+
+      if (subHit) {
+        return {
+          categoryId: null,
+          categoryName: "",
+          subcategoryId: subHit.id,
+          subcategoryName: subHit.name,
+        };
+      }
+
+      const catHit =
+        (preferredCatId &&
+          cats.find((c) => String(c.id) === String(preferredCatId))) ||
+        cats[0];
+
+      if (catHit) {
+        return {
+          categoryId: catHit.id,
+          categoryName: catHit.name,
+          subcategoryId: null,
+          subcategoryName: "",
+        };
+      }
+
+      return {};
+    }
+
+    const mapFunding = (f) => {
+      const picked = pickFundingCatSub(f, categoryId, subcategoryId);
+      return {
+        kind: "funding",
+        id: f.id,
+        title: f.title,
+        pitch: f.pitch,
+        goal: f.goal,
+        currency: f.currency,
+        deadline: f.deadline, // YYYY-MM-DD
+        rewards: f.rewards || null,
+        team: f.team || null,
+        email: f.email || null,
+        phone: f.phone || null,
+        status: f.status,
+        visibility: f.visibility,
+        tags: Array.isArray(f.tags) ? f.tags : [],
+        links: Array.isArray(f.links) ? f.links : [],
+        images: Array.isArray(f.images) ? f.images : [],
+        // derived category/subcategory (prefers direct category)
+        categoryId: picked.categoryId ? String(picked.categoryId) : "",
+        categoryName: picked.categoryName || "",
+        subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
+        subcategoryName: picked.subcategoryName || "",
+        // location
+        city: f.city || null,
+        country: f.country || null,
+        createdAt: f.createdAt,
+        timeAgo: timeAgo(f.createdAt),
+        creatorUserId: f.creatorUserId || null,
+        creatorUserName: f.creator?.name || null,
+      };
+    };
+
     // ---------------- Scoring ----------------
     const userCatSet = new Set(userDefaults.categoryIds || []);
     const userSubSet = new Set(userDefaults.subcategoryIds || []);
@@ -394,13 +737,14 @@ exports.getFeed = async (req, res) => {
 
     const scoreItem = (x) => {
       let s = 0;
-      // NOTE: categoryId/subcategoryId on services are derived from provider interests
       const subId = Number(x.subcategoryId || 0);
       const catId = Number(x.categoryId || 0);
       if (subId && userSubSet.has(subId)) s += 4;
       else if (catId && userCatSet.has(catId)) s += 3;
 
-      if (userCity && x.city && x.city.toLowerCase() === userCity) s += 2;
+      const itemCity = (x.city || x.location || "").toLowerCase();
+      if (userCity && itemCity && itemCity === userCity) s += 2;
+
       if (userCountry && x.country === userCountry) s += 1;
       return s;
     };
@@ -430,7 +774,6 @@ exports.getFeed = async (req, res) => {
         return res.json({ items: await getConStatusItems(jobs.map(mapJob)) });
       }
 
-      // [SERVICE] services tab
       if (tab === "services") {
         const services = await Service.findAll({
           where: whereService,
@@ -442,8 +785,43 @@ exports.getFeed = async (req, res) => {
         return res.json({ items: await getConStatusItems(services.map(mapService)) });
       }
 
+      if (tab === "products") {
+        const products = await Product.findAll({
+          where: whereProduct,
+          include: makeProductInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        return res.json({ items: await getConStatusItems(products.map(mapProduct)) });
+      }
+
+      if (tab === "tourism") {
+        const tourism = await Tourism.findAll({
+          where: whereTourism,
+          include: makeTourismInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        return res.json({ items: await getConStatusItems(tourism.map(mapTourism)) });
+      }
+
+      // [FUNDING] tab
+      if (tab === "funding") {
+        const funding = await Funding.findAll({
+          subQuery: Boolean(categoryId || subcategoryId), // needed for $audience...$ filtering
+          where: whereFunding,
+          include: makeFundingInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        return res.json({ items: await getConStatusItems(funding.map(mapFunding)) });
+      }
+
       // “All”
-      const [jobsAll, eventsAll, servicesAll] = await Promise.all([
+      const [jobsAll, eventsAll, servicesAll, productsAll, tourismAll, fundingAll] = await Promise.all([
         Job.findAll({
           where: whereJob,
           include: includeCategoryRefs,
@@ -462,12 +840,34 @@ exports.getFeed = async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
+        Product.findAll({
+          where: whereProduct,
+          include: makeProductInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Tourism.findAll({
+          where: whereTourism,
+          include: makeTourismInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Funding.findAll({
+          subQuery: Boolean(categoryId || subcategoryId),
+          where: whereFunding,
+          include: makeFundingInclude({ categoryId, subcategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
       ]);
 
       const merged = [
         ...jobsAll.map(mapJob),
         ...eventsAll.map(mapEvent),
-        ...servicesAll.map(mapService), // [SERVICE]
+        ...servicesAll.map(mapService),
+        ...productsAll.map(mapProduct),
+        ...tourismAll.map(mapTourism),
+        ...fundingAll.map(mapFunding),
       ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       const windowed = merged.slice(off, off + lim);
@@ -514,7 +914,6 @@ exports.getFeed = async (req, res) => {
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
-    // [SERVICE] prioritized services tab
     if (tab === "services") {
       const services = await Service.findAll({
         include: makeServiceInclude({ categoryId: null, subcategoryId: null }),
@@ -533,8 +932,63 @@ exports.getFeed = async (req, res) => {
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
+    if (tab === "products") {
+      const products = await Product.findAll({
+        include: makeProductInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+      const scored = products
+        .map(mapProduct)
+        .map((x) => ({ ...x, _score: scoreItem(x) }));
+      scored.sort(
+        (a, b) =>
+          b._score - a._score ||
+          new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
+    if (tab === "tourism") {
+      const tourism = await Tourism.findAll({
+        include: makeTourismInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+      const scored = tourism
+        .map(mapTourism)
+        .map((x) => ({ ...x, _score: scoreItem(x) }));
+      scored.sort(
+        (a, b) =>
+          b._score - a._score ||
+          new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
+    // [FUNDING] prioritized
+    if (tab === "funding") {
+      const funding = await Funding.findAll({
+        include: makeFundingInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+      const scored = funding
+        .map(mapFunding)
+        .map((x) => ({ ...x, _score: scoreItem(x) }));
+      scored.sort(
+        (a, b) =>
+          b._score - a._score ||
+          new Date(b.createdAt) - new Date(a.createdAt)
+      );
+      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
     // “All” prioritized
-    const [jobsBuf, eventsBuf, servicesBuf] = await Promise.all([
+    const [jobsBuf, eventsBuf, servicesBuf, productsBuf, tourismBuf, fundingBuf] = await Promise.all([
       Job.findAll({
         include: includeCategoryRefs,
         order: [["createdAt", "DESC"]],
@@ -550,12 +1004,30 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
+      Product.findAll({
+        include: makeProductInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Tourism.findAll({
+        include: makeTourismInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Funding.findAll({
+        include: makeFundingInclude({ categoryId: null, subcategoryId: null }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
     ]);
 
     const mergedScored = [
       ...jobsBuf.map(mapJob),
       ...eventsBuf.map(mapEvent),
-      ...servicesBuf.map(mapService), // [SERVICE]
+      ...servicesBuf.map(mapService),
+      ...productsBuf.map(mapProduct),
+      ...tourismBuf.map(mapTourism),
+      ...fundingBuf.map(mapFunding),
     ].map((x) => ({ ...x, _score: scoreItem(x) }));
 
     mergedScored.sort(

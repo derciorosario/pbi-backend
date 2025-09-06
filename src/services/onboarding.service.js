@@ -136,8 +136,8 @@ async function setCategories(userId, categoryIds = [], subcategoryIds = [], subs
 
 async function setGoals(userId, goalIds = []) {
   const ids = Array.isArray(goalIds) ? goalIds.filter(Boolean) : [];
-  if (ids.length === 0 || ids.length > 3) {
-    const err = new Error("Choose between 1 and 3 goals");
+  if (ids.length === 0) {
+    const err = new Error("Choose at least 1 goal");
     err.status = 400;
     throw err;
   }

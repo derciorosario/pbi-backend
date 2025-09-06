@@ -33,8 +33,35 @@ module.exports = (sequelize, DataTypes) => {
 
   Product.associate = (models) => {
     Product.belongsTo(models.User, { foreignKey: "sellerUserId", as: "seller" });
-    Product.belongsTo(models.Category, { foreignKey: "categoryId", as: "category" });
-    Product.belongsTo(models.Subcategory, { foreignKey: "subcategoryId", as: "subcategory" });
+
+    // Many-to-many audience associations
+    Product.belongsToMany(models.Identity, {
+      through: "product_identities",
+      foreignKey: "productId",
+      otherKey: "identityId",
+      as: "audienceIdentities",
+    });
+    
+    Product.belongsToMany(models.Category, {
+      through: "product_categories",
+      foreignKey: "productId",
+      otherKey: "categoryId",
+      as: "audienceCategories",
+    });
+    
+    Product.belongsToMany(models.Subcategory, {
+      through: "product_subcategories",
+      foreignKey: "productId",
+      otherKey: "subcategoryId",
+      as: "audienceSubcategories",
+    });
+    
+    Product.belongsToMany(models.SubsubCategory, {
+      through: "product_subsubcategories",
+      foreignKey: "productId",
+      otherKey: "subsubCategoryId",
+      as: "audienceSubsubs",
+    });
   };
 
   return Product;

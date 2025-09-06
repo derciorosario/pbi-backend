@@ -1,6 +1,6 @@
-const { Product, Category, Subcategory, SubsubCategory, User } = require("../models");
+const { Tourism, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
-const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setProductAudience } = require("./_productAudienceHelpers");
+const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setTourismAudience } = require("./_tourismAudienceHelpers");
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -8,19 +8,15 @@ exports.getMeta = async (req, res) => {
     include: [{ model: Subcategory, as: "subcategories", order: [["name", "ASC"]] }],
   });
 
-  const productTypes = ["Physical Product", "Digital Product", "Service"];
-  const priceTypes = ["Fixed Price", "Negotiable"];
-  const deliveryTimes = ["Immediate", "1-3 Days", "1 Week", "2 Weeks", "Custom"];
-  const locationTypes = ["Local Pickup", "Shipping", "Digital Delivery"];
-  const conditionTypes = ["New", "Used", "Refurbished"];
+  const postTypes = ["Destination", "Experience", "Culture"];
+  const seasons = ["Summer", "Winter", "All Year", "Rainy Season", "Dry Season"];
+  const budgetRanges = ["$100 - $500", "$500 - $2000", "$2000+"];
 
   res.json({
     categories,
-    productTypes,
-    priceTypes,
-    deliveryTimes,
-    locationTypes,
-    conditionTypes
+    postTypes,
+    seasons,
+    budgetRanges
   });
 };
 
@@ -30,13 +26,13 @@ exports.create = async (req, res) => {
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
     const {
+      postType,
       title,
-      categoryId,
-      subcategoryId,
-      price,
-      quantity,
-      description,
       country,
+      location,
+      description,
+      season,
+      budgetRange,
       tags,
       images,
 
@@ -49,8 +45,9 @@ exports.create = async (req, res) => {
 
     // Basic validation
     if (!title || !description) return res.status(400).json({ message: "Title and description are required" });
+    if (!country) return res.status(400).json({ message: "Country is required" });
     if (!images || !Array.isArray(images) || images.length === 0) {
-      return res.status(400).json({ message: "At least one product image is required" });
+      return res.status(400).json({ message: "At least one image is required" });
     }
 
     // Normalize audience arrays
@@ -72,29 +69,31 @@ exports.create = async (req, res) => {
       }
     }
 
-    // Create product
-    const product = await Product.create({
-      sellerUserId: uid,
+    // Create tourism post
+    const tourism = await Tourism.create({
+      authorUserId: uid,
+      postType: postType || "Destination",
       title,
-      price: price ? Number(price) : null,
-      quantity: quantity ? Number(quantity) : null,
       description,
       country,
+      location: location || null,
+      season: season || null,
+      budgetRange: budgetRange || null,
       tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
       images: Array.isArray(images) ? images : [],
     });
 
     // Set audience associations
-    await setProductAudience(product, {
+    await setTourismAudience(tourism, {
       identityIds,
       categoryIds,
       subcategoryIds,
       subsubCategoryIds
     });
 
-    const created = await Product.findByPk(product.id, {
+    const created = await Tourism.findByPk(tourism.id, {
       include: [
-        { model: User, as: "seller", attributes: ["id", "name", "email"] },
+        { model: User, as: "author", attributes: ["id", "name", "email"] },
         // Include audience associations
         { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
         { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -105,8 +104,8 @@ exports.create = async (req, res) => {
 
     res.status(201).json(created);
   } catch (err) {
-    console.error("createProduct error:", err);
-    res.status(400).json({ message: err.message || "Could not create product" });
+    console.error("createTourism error:", err);
+    res.status(400).json({ message: err.message || "Could not create tourism post" });
   }
 };
 
@@ -116,9 +115,9 @@ exports.update = async (req, res) => {
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
     const { id } = req.params;
-    const product = await Product.findByPk(id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.sellerUserId !== uid && req.user?.accountType !== "admin") {
+    const tourism = await Tourism.findByPk(id);
+    if (!tourism) return res.status(404).json({ message: "Tourism post not found" });
+    if (tourism.authorUserId !== uid && req.user?.accountType !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -150,7 +149,7 @@ exports.update = async (req, res) => {
     }
 
     // Handle tags array
-    let tags = product.tags;
+    let tags = tourism.tags;
     if (body.tags !== undefined) {
       tags = Array.isArray(body.tags)
         ? body.tags
@@ -158,29 +157,29 @@ exports.update = async (req, res) => {
     }
 
     // Handle images array
-    let images = product.images;
+    let images = tourism.images;
     if (body.images !== undefined) {
       images = Array.isArray(body.images) ? body.images : [];
     }
 
     // Simple update
-    Object.assign(product, {
-      title: body.title ?? product.title,
-      categoryId: body.categoryId ?? product.categoryId,
-      subcategoryId: body.subcategoryId ?? product.subcategoryId,
-      price: body.price !== undefined ? (body.price ? Number(body.price) : null) : product.price,
-      quantity: body.quantity !== undefined ? (body.quantity ? Number(body.quantity) : null) : product.quantity,
-      description: body.description ?? product.description,
-      country: body.country ?? product.country,
+    Object.assign(tourism, {
+      postType: body.postType ?? tourism.postType,
+      title: body.title ?? tourism.title,
+      country: body.country ?? tourism.country,
+      location: body.location ?? tourism.location,
+      description: body.description ?? tourism.description,
+      season: body.season ?? tourism.season,
+      budgetRange: body.budgetRange ?? tourism.budgetRange,
       tags,
       images,
     });
 
-    await product.save();
+    await tourism.save();
 
     // Update audience associations if provided
     if (identityIds !== null || categoryIds !== null || subcategoryIds !== null || subsubCategoryIds !== null) {
-      await setProductAudience(product, {
+      await setTourismAudience(tourism, {
         identityIds: identityIds ?? undefined,
         categoryIds: categoryIds ?? undefined,
         subcategoryIds: subcategoryIds ?? undefined,
@@ -188,11 +187,9 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Product.findByPk(product.id, {
+    const updated = await Tourism.findByPk(tourism.id, {
       include: [
-        { model: User, as: "seller", attributes: ["id", "name", "email"] },
-        { model: Category, as: "category" },
-        { model: Subcategory, as: "subcategory" },
+        { model: User, as: "author", attributes: ["id", "name", "email"] },
         // Include audience associations
         { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
         { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -203,18 +200,16 @@ exports.update = async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error("updateProduct error:", err);
-    res.status(400).json({ message: err.message || "Could not update product" });
+    console.error("updateTourism error:", err);
+    res.status(400).json({ message: err.message || "Could not update tourism post" });
   }
 };
 
 exports.getOne = async (req, res) => {
   const { id } = req.params;
-  const product = await Product.findByPk(id, {
+  const tourism = await Tourism.findByPk(id, {
     include: [
-      { model: User, as: "seller", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
+      { model: User, as: "author", attributes: ["id", "name", "email"] },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -222,15 +217,16 @@ exports.getOne = async (req, res) => {
       { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
     ],
   });
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json(product);
+  if (!tourism) return res.status(404).json({ message: "Tourism post not found" });
+  res.json(tourism);
 };
 
 exports.list = async (req, res) => {
-  const { q , country } = req.query;
+  const { q, country, postType } = req.query;
   const where = {};
 
   if (country) where.country = country;
+  if (postType) where.postType = postType;
 
   if (q) {
     where[Op.or] = [
@@ -240,13 +236,11 @@ exports.list = async (req, res) => {
     ];
   }
 
-  const rows = await Product.findAll({
+  const rows = await Tourism.findAll({
     where,
     order: [["createdAt", "DESC"]],
     include: [
-      { model: User, as: "seller", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
+      { model: User, as: "author", attributes: ["id", "name", "email"] },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -258,17 +252,15 @@ exports.list = async (req, res) => {
   res.json(rows);
 };
 
-// Get products sold by the current user
-exports.getMyProducts = async (req, res) => {
+// Get tourism posts created by the current user
+exports.getMyPosts = async (req, res) => {
   const uid = req.user?.id;
   if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
-  const products = await Product.findAll({
-    where: { sellerUserId: uid },
+  const posts = await Tourism.findAll({
+    where: { authorUserId: uid },
     order: [["createdAt", "DESC"]],
     include: [
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -277,5 +269,5 @@ exports.getMyProducts = async (req, res) => {
     ],
   });
 
-  res.json(products);
+  res.json(posts);
 };

@@ -23,6 +23,10 @@ const Job = require("./job")(sequelize, DataTypes);
 const Event = require("./event")(sequelize, DataTypes);
 const Service = require("./service")(sequelize, DataTypes);
 const Product = require("./product")(sequelize, DataTypes);
+const Tourism = require("./tourism")(sequelize, DataTypes);
+const Funding = require("./funding")(sequelize, DataTypes);
+const Message = require("./message")(sequelize, DataTypes);
+const Conversation = require("./conversation")(sequelize, DataTypes);
 
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
@@ -87,10 +91,31 @@ Service.belongsTo(Subcategory, { foreignKey: "subcategoryId", as: "subcategory" 
 User.hasMany(Product, { foreignKey: "sellerUserId", as: "products" });
 Product.belongsTo(User, { foreignKey: "sellerUserId", as: "seller" });
 
+// Tourism
+User.hasMany(Tourism, { foreignKey: "authorUserId", as: "tourismPosts" });
+Tourism.belongsTo(User, { foreignKey: "authorUserId", as: "author" });
+
+// Funding
+User.hasMany(Funding, { foreignKey: "creatorUserId", as: "fundingProjects" });
+Funding.belongsTo(User, { foreignKey: "creatorUserId", as: "creator" });
+Funding.belongsTo(Category, { foreignKey: "categoryId", as: "category" });
+
 
 const Connection        = require("./connection")(sequelize, DataTypes);
 const ConnectionRequest = require("./connectionRequest")(sequelize, DataTypes);
 const Notification      = require("./notification")(sequelize, DataTypes);
+
+// Message associations
+Message.belongsTo(User, { as: "sender", foreignKey: "senderId" });
+Message.belongsTo(User, { as: "receiver", foreignKey: "receiverId" });
+User.hasMany(Message, { as: "sentMessages", foreignKey: "senderId" });
+User.hasMany(Message, { as: "receivedMessages", foreignKey: "receiverId" });
+
+// Conversation associations
+Conversation.belongsTo(User, { as: "user1", foreignKey: "user1Id" });
+Conversation.belongsTo(User, { as: "user2", foreignKey: "user2Id" });
+User.hasMany(Conversation, { as: "conversationsAsUser1", foreignKey: "user1Id" });
+User.hasMany(Conversation, { as: "conversationsAsUser2", foreignKey: "user2Id" });
 
 
 User.hasMany(ConnectionRequest, { foreignKey: "fromUserId", as: "sentRequests" });
@@ -162,6 +187,18 @@ const ProductIdentity       = require("./ProductIdentity")(sequelize, DataTypes)
 const ProductCategory       = require("./ProductCategory")(sequelize, DataTypes);
 const ProductSubcategory    = require("./ProductSubcategory")(sequelize, DataTypes);
 const ProductSubsubCategory = require("./ProductSubsubCategory")(sequelize, DataTypes);
+
+// Tourism audience association models
+const TourismIdentity       = require("./TourismIdentity")(sequelize, DataTypes);
+const TourismCategory       = require("./TourismCategory")(sequelize, DataTypes);
+const TourismSubcategory    = require("./TourismSubcategory")(sequelize, DataTypes);
+const TourismSubsubCategory = require("./TourismSubsubCategory")(sequelize, DataTypes);
+
+// Funding audience association models
+const FundingIdentity       = require("./FundingIdentity")(sequelize, DataTypes);
+const FundingCategory       = require("./FundingCategory")(sequelize, DataTypes);
+const FundingSubcategory    = require("./FundingSubcategory")(sequelize, DataTypes);
+const FundingSubsubCategory = require("./FundingSubsubCategory")(sequelize, DataTypes);
 
 
 Job.belongsToMany(Identity, {
@@ -376,6 +413,160 @@ SubsubCategory.belongsToMany(Product, {
 });
 
 
+// Tourism audience associations
+Tourism.belongsToMany(Identity, {
+  through: {
+    model: "tourism_identities",
+    timestamps: false
+  },
+  foreignKey: "tourismId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Tourism, {
+  through: {
+    model: "tourism_identities",
+    timestamps: false
+  },
+  foreignKey: "identityId",
+  otherKey: "tourismId",
+  as: "tourismPosts",
+});
+
+Tourism.belongsToMany(Category, {
+  through: {
+    model: "tourism_categories",
+    timestamps: false
+  },
+  foreignKey: "tourismId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Tourism, {
+  through: {
+    model: "tourism_categories",
+    timestamps: false
+  },
+  foreignKey: "categoryId",
+  otherKey: "tourismId",
+  as: "tourismPosts",
+});
+
+Tourism.belongsToMany(Subcategory, {
+  through: {
+    model: "tourism_subcategories",
+    timestamps: false
+  },
+  foreignKey: "tourismId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Tourism, {
+  through: {
+    model: "tourism_subcategories",
+    timestamps: false
+  },
+  foreignKey: "subcategoryId",
+  otherKey: "tourismId",
+  as: "tourismPosts",
+});
+
+Tourism.belongsToMany(SubsubCategory, {
+  through: {
+    model: "tourism_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "tourismId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Tourism, {
+  through: {
+    model: "tourism_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "subsubCategoryId",
+  otherKey: "tourismId",
+  as: "tourismPosts",
+});
+
+// Funding audience associations
+Funding.belongsToMany(Identity, {
+  through: {
+    model: "funding_identities",
+    timestamps: false
+  },
+  foreignKey: "fundingId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Funding, {
+  through: {
+    model: "funding_identities",
+    timestamps: false
+  },
+  foreignKey: "identityId",
+  otherKey: "fundingId",
+  as: "fundingProjects",
+});
+
+Funding.belongsToMany(Category, {
+  through: {
+    model: "funding_categories",
+    timestamps: false
+  },
+  foreignKey: "fundingId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Funding, {
+  through: {
+    model: "funding_categories",
+    timestamps: false
+  },
+  foreignKey: "categoryId",
+  otherKey: "fundingId",
+  as: "fundingProjects",
+});
+
+Funding.belongsToMany(Subcategory, {
+  through: {
+    model: "funding_subcategories",
+    timestamps: false
+  },
+  foreignKey: "fundingId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Funding, {
+  through: {
+    model: "funding_subcategories",
+    timestamps: false
+  },
+  foreignKey: "subcategoryId",
+  otherKey: "fundingId",
+  as: "fundingProjects",
+});
+
+Funding.belongsToMany(SubsubCategory, {
+  through: {
+    model: "funding_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "fundingId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Funding, {
+  through: {
+    model: "funding_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "subsubCategoryId",
+  otherKey: "fundingId",
+  as: "fundingProjects",
+});
+
 module.exports = {
   UserSubcategory, UserSubsubCategory,
   Identity, UserIdentity,
@@ -396,6 +587,8 @@ module.exports = {
   UserGoal,
   Event,
   Job,
+  Message,
+  Conversation,
   // Export event audience association models
   EventIdentity,
   EventCategory,
@@ -413,4 +606,16 @@ module.exports = {
   ProductCategory,
   ProductSubcategory,
   ProductSubsubCategory,
+  // Export tourism model and audience association models
+  Tourism,
+  TourismIdentity,
+  TourismCategory,
+  TourismSubcategory,
+  TourismSubsubCategory,
+  // Export funding model and audience association models
+  Funding,
+  FundingIdentity,
+  FundingCategory,
+  FundingSubcategory,
+  FundingSubsubCategory,
 };

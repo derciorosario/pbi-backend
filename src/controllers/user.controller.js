@@ -284,3 +284,55 @@ exports.getPublicProfile = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch profile" });
   }
 };
+
+/**
+ * Search for users by name or email
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+exports.searchUsers = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    const currentUserId = req.user.sub;
+    
+    if (!q || q.length < 3) {
+      return res.json([]);
+    }
+    
+    const users = await User.findAll({
+      where: {
+        [Op.or]: [
+          { name: { [Op.like]: `%${q}%` } },
+          { email: { [Op.like]: `%${q}%` } }
+        ],
+        id: { [Op.ne]: currentUserId }, // Exclude current user
+        accountType: { [Op.ne]: "admin" } // Exclude admin users
+      },
+      include: [
+        {
+          model: Profile,
+          as: "profile",
+          attributes: ["professionalTitle", "avatarUrl"],
+          required: false
+        }
+      ],
+      attributes: ["id", "name", "email", "avatarUrl", "city", "country"],
+      limit: 10
+    });
+    
+    const formattedUsers = users.map(user => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.profile?.avatarUrl || user.avatarUrl,
+      professionalTitle: user.profile?.professionalTitle || null,
+      city: user.city || null,
+      country: user.country || null
+    }));
+    
+    res.json(formattedUsers);
+  } catch (error) {
+    next(error);
+  }
+};

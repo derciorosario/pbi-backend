@@ -1,6 +1,6 @@
-const { Product, Category, Subcategory, SubsubCategory, User } = require("../models");
+const { Funding, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
-const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setProductAudience } = require("./_productAudienceHelpers");
+const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setFundingAudience } = require("./_fundingAudienceHelpers");
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -8,19 +8,15 @@ exports.getMeta = async (req, res) => {
     include: [{ model: Subcategory, as: "subcategories", order: [["name", "ASC"]] }],
   });
 
-  const productTypes = ["Physical Product", "Digital Product", "Service"];
-  const priceTypes = ["Fixed Price", "Negotiable"];
-  const deliveryTimes = ["Immediate", "1-3 Days", "1 Week", "2 Weeks", "Custom"];
-  const locationTypes = ["Local Pickup", "Shipping", "Digital Delivery"];
-  const conditionTypes = ["New", "Used", "Refurbished"];
+  const currencies = ["USD", "EUR", "GBP", "NGN", "GHS", "ZAR", "KES", "UGX", "TZS", "XOF", "XAF", "MAD", "DZD", "TND", "EGP", "ETB", "NAD", "BWP", "MZN", "ZMW", "RWF", "BIF", "SOS", "SDG", "CDF"];
+  const statuses = ["draft", "published", "funded", "closed"];
+  const visibilities = ["public", "private"];
 
   res.json({
     categories,
-    productTypes,
-    priceTypes,
-    deliveryTimes,
-    locationTypes,
-    conditionTypes
+    currencies,
+    statuses,
+    visibilities
   });
 };
 
@@ -32,13 +28,21 @@ exports.create = async (req, res) => {
     const {
       title,
       categoryId,
-      subcategoryId,
-      price,
-      quantity,
-      description,
       country,
+      city,
+      goal,
+      currency,
+      deadline,
+      pitch,
+      rewards,
+      team,
+      email,
+      phone,
+      links,
       tags,
       images,
+      status,
+      visibility,
 
       // Audience selection
       identityIds: _identityIds,
@@ -48,9 +52,14 @@ exports.create = async (req, res) => {
     } = req.body;
 
     // Basic validation
-    if (!title || !description) return res.status(400).json({ message: "Title and description are required" });
+    if (!title || !pitch) return res.status(400).json({ message: "Title and pitch are required" });
+    if (!country) return res.status(400).json({ message: "Country is required" });
+    if (!goal || isNaN(Number(goal)) || Number(goal) <= 0) {
+      return res.status(400).json({ message: "Funding goal must be a positive number" });
+    }
+    if (!deadline) return res.status(400).json({ message: "Deadline is required" });
     if (!images || !Array.isArray(images) || images.length === 0) {
-      return res.status(400).json({ message: "At least one product image is required" });
+      return res.status(400).json({ message: "At least one image is required" });
     }
 
     // Normalize audience arrays
@@ -72,29 +81,41 @@ exports.create = async (req, res) => {
       }
     }
 
-    // Create product
-    const product = await Product.create({
-      sellerUserId: uid,
+    // Create funding project
+    const funding = await Funding.create({
+      creatorUserId: uid,
       title,
-      price: price ? Number(price) : null,
-      quantity: quantity ? Number(quantity) : null,
-      description,
+      categoryId: categoryId || null,
       country,
-      tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
+      city: city || null,
+      goal: Number(goal),
+      raised: req.body.raised ? Number(req.body.raised) : 0,
+      currency: currency || "USD",
+      deadline,
+      pitch,
+      rewards: rewards || null,
+      team: team || null,
+      email: email || null,
+      phone: phone || null,
+      links: Array.isArray(links) ? links : [],
+      tags: Array.isArray(tags) ? tags : [],
       images: Array.isArray(images) ? images : [],
+      status: status || "draft",
+      visibility: visibility || "public",
     });
 
     // Set audience associations
-    await setProductAudience(product, {
+    await setFundingAudience(funding, {
       identityIds,
       categoryIds,
       subcategoryIds,
       subsubCategoryIds
     });
 
-    const created = await Product.findByPk(product.id, {
+    const created = await Funding.findByPk(funding.id, {
       include: [
-        { model: User, as: "seller", attributes: ["id", "name", "email"] },
+        { model: User, as: "creator", attributes: ["id", "name", "email"] },
+        { model: Category, as: "category" },
         // Include audience associations
         { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
         { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -105,8 +126,8 @@ exports.create = async (req, res) => {
 
     res.status(201).json(created);
   } catch (err) {
-    console.error("createProduct error:", err);
-    res.status(400).json({ message: err.message || "Could not create product" });
+    console.error("createFunding error:", err);
+    res.status(400).json({ message: err.message || "Could not create funding project" });
   }
 };
 
@@ -116,9 +137,9 @@ exports.update = async (req, res) => {
     if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
     const { id } = req.params;
-    const product = await Product.findByPk(id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    if (product.sellerUserId !== uid && req.user?.accountType !== "admin") {
+    const funding = await Funding.findByPk(id);
+    if (!funding) return res.status(404).json({ message: "Funding project not found" });
+    if (funding.creatorUserId !== uid && req.user?.accountType !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -150,37 +171,50 @@ exports.update = async (req, res) => {
     }
 
     // Handle tags array
-    let tags = product.tags;
+    let tags = funding.tags;
     if (body.tags !== undefined) {
-      tags = Array.isArray(body.tags)
-        ? body.tags
-        : (typeof body.tags === 'string' ? body.tags.split(',').map(s => s.trim()) : []);
+      tags = Array.isArray(body.tags) ? body.tags : [];
+    }
+
+    // Handle links array
+    let links = funding.links;
+    if (body.links !== undefined) {
+      links = Array.isArray(body.links) ? body.links : [];
     }
 
     // Handle images array
-    let images = product.images;
+    let images = funding.images;
     if (body.images !== undefined) {
       images = Array.isArray(body.images) ? body.images : [];
     }
 
     // Simple update
-    Object.assign(product, {
-      title: body.title ?? product.title,
-      categoryId: body.categoryId ?? product.categoryId,
-      subcategoryId: body.subcategoryId ?? product.subcategoryId,
-      price: body.price !== undefined ? (body.price ? Number(body.price) : null) : product.price,
-      quantity: body.quantity !== undefined ? (body.quantity ? Number(body.quantity) : null) : product.quantity,
-      description: body.description ?? product.description,
-      country: body.country ?? product.country,
+    Object.assign(funding, {
+      title: body.title ?? funding.title,
+      categoryId: body.categoryId ?? funding.categoryId,
+      country: body.country ?? funding.country,
+      city: body.city ?? funding.city,
+      goal: body.goal !== undefined ? Number(body.goal) : funding.goal,
+      raised: body.raised !== undefined ? Number(body.raised) : funding.raised,
+      currency: body.currency ?? funding.currency,
+      deadline: body.deadline ?? funding.deadline,
+      pitch: body.pitch ?? funding.pitch,
+      rewards: body.rewards ?? funding.rewards,
+      team: body.team ?? funding.team,
+      email: body.email ?? funding.email,
+      phone: body.phone ?? funding.phone,
+      status: body.status ?? funding.status,
+      visibility: body.visibility ?? funding.visibility,
       tags,
+      links,
       images,
     });
 
-    await product.save();
+    await funding.save();
 
     // Update audience associations if provided
     if (identityIds !== null || categoryIds !== null || subcategoryIds !== null || subsubCategoryIds !== null) {
-      await setProductAudience(product, {
+      await setFundingAudience(funding, {
         identityIds: identityIds ?? undefined,
         categoryIds: categoryIds ?? undefined,
         subcategoryIds: subcategoryIds ?? undefined,
@@ -188,11 +222,10 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Product.findByPk(product.id, {
+    const updated = await Funding.findByPk(funding.id, {
       include: [
-        { model: User, as: "seller", attributes: ["id", "name", "email"] },
+        { model: User, as: "creator", attributes: ["id", "name", "email"] },
         { model: Category, as: "category" },
-        { model: Subcategory, as: "subcategory" },
         // Include audience associations
         { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
         { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -203,18 +236,17 @@ exports.update = async (req, res) => {
 
     res.json(updated);
   } catch (err) {
-    console.error("updateProduct error:", err);
-    res.status(400).json({ message: err.message || "Could not update product" });
+    console.error("updateFunding error:", err);
+    res.status(400).json({ message: err.message || "Could not update funding project" });
   }
 };
 
 exports.getOne = async (req, res) => {
   const { id } = req.params;
-  const product = await Product.findByPk(id, {
+  const funding = await Funding.findByPk(id, {
     include: [
-      { model: User, as: "seller", attributes: ["id", "name", "email"] },
+      { model: User, as: "creator", attributes: ["id", "name", "email"] },
       { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -222,31 +254,38 @@ exports.getOne = async (req, res) => {
       { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
     ],
   });
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json(product);
+  if (!funding) return res.status(404).json({ message: "Funding project not found" });
+  res.json(funding);
 };
 
 exports.list = async (req, res) => {
-  const { q , country } = req.query;
+  const { q, country, status, categoryId } = req.query;
   const where = {};
 
   if (country) where.country = country;
+  if (status) where.status = status;
+  if (categoryId) where.categoryId = categoryId;
+
+  // Default to only showing published projects
+  if (!status) where.status = "published";
+  
+  // Default to public visibility
+  where.visibility = "public";
 
   if (q) {
     where[Op.or] = [
       { title: { [Op.like]: `%${q}%` } },
-      { description: { [Op.like]: `%${q}%` } },
+      { pitch: { [Op.like]: `%${q}%` } },
       { tags: { [Op.contains]: [q] } },
     ];
   }
 
-  const rows = await Product.findAll({
+  const rows = await Funding.findAll({
     where,
     order: [["createdAt", "DESC"]],
     include: [
-      { model: User, as: "seller", attributes: ["id", "name", "email"] },
+      { model: User, as: "creator", attributes: ["id", "name", "email"] },
       { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -258,17 +297,16 @@ exports.list = async (req, res) => {
   res.json(rows);
 };
 
-// Get products sold by the current user
-exports.getMyProducts = async (req, res) => {
+// Get funding projects created by the current user
+exports.getMyProjects = async (req, res) => {
   const uid = req.user?.id;
   if (!uid) return res.status(401).json({ message: "Unauthorized" });
 
-  const products = await Product.findAll({
-    where: { sellerUserId: uid },
+  const projects = await Funding.findAll({
+    where: { creatorUserId: uid },
     order: [["createdAt", "DESC"]],
     include: [
       { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -277,5 +315,5 @@ exports.getMyProducts = async (req, res) => {
     ],
   });
 
-  res.json(products);
+  res.json(projects);
 };

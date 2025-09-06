@@ -1,10 +1,13 @@
 
-const express=require('express')
+const express = require('express')
 const router = express.Router();
 const C = require("../controllers/user.controller");
 const auth = require("../middleware/auth");
 
-// perfil público (auth opcional: não bloqueia visitantes)
+// Public profile (optional auth: doesn't block visitors)
 router.get("/users/:id/public", auth(false), C.getPublicProfile);
+
+// Search users (requires authentication)
+router.get("/users/search", auth(), C.searchUsers);
 
 module.exports = router;

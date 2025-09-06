@@ -156,7 +156,7 @@ async function updateInterests(req, res, next) {
     const { goalIds = [] } = req.body;
 
     await UserGoal.destroy({ where: { userId } });
-    for (const gid of goalIds.slice(0, 3)) {
+    for (const gid of goalIds) {
       await UserGoal.create({ userId, goalId: gid });
     }
 

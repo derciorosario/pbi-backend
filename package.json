@@ -18,18 +18,20 @@
     "pino": "^9.9.0",
     "pino-pretty": "^13.1.1",
     "sequelize": "^6.37.7",
+    "socket.io": "^4.8.1",
     "uuid": "^11.1.0"
   },
   "name": "54links-backend",
   "version": "1.0.0",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon index.js",
     "seed": "node seed/loadAll.js",
     "jobs-events": "node src/seeds/seedJobsAndEvents.js",
-    "migrate:add-company-private": "node scripts/add_make_company_name_private.js"
+    "migrate:add-company-private": "node scripts/add_make_company_name_private.js",
+    "migrate:add-raised-field": "node scripts/add_raised_field_to_funding.js",
+    "seed-more":"node src/seeds/seedProductsServicesTourismFunding.js"
   },
   "keywords": [],
   "author": "",
