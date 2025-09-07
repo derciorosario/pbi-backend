@@ -1,6 +1,6 @@
+// src/controllers/onboarding.controller.js
 const {
   sequelize,
-  User,
   Profile,
   Identity,
   Goal,
@@ -12,9 +12,13 @@ const {
   UserSubcategory,
   UserSubsubCategory,
   UserGoal,
+  // interests
+  UserIdentityInterest,
+  UserCategoryInterest,
+  UserSubcategoryInterest,
+  UserSubsubCategoryInterest,
 } = require("../models");
 
-// Helper to normalize & uniq arrays
 function arr(val) {
   if (!val) return [];
   if (Array.isArray(val)) return [...new Set(val.filter(Boolean))];
@@ -22,60 +26,123 @@ function arr(val) {
 }
 
 exports.saveOneShot = async (req, res) => {
-  const userId = req.user?.id || req.user?.sub; // whichever you're using
+  const userId = req.user?.id || req.user?.sub;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   const {
-    identityIds = [],         // optional (array of identity IDs)
-    categoryIds = [],         // optional (array of category IDs)
-    subcategoryIds = [],      // optional (array of subcategory IDs)
-    subsubCategoryIds = [],   // optional (array of subsub IDs)
-    goalIds = [],             // optional (array of goal IDs)
+    // what the user DOES
+    identityIds = [],
+    categoryIds = [],
+    subcategoryIds = [],
+    subsubCategoryIds = [],
+    goalIds = [],
+
+    // what the user is LOOKING FOR
+    interestIdentityIds = [],
+    interestCategoryIds = [],
+    interestSubcategoryIds = [],
+    interestSubsubCategoryIds = [],
   } = req.body || {};
 
   const t = await sequelize.transaction();
   try {
-    // Validate existence (ignore invalids gracefully)
-    const validIdentityIds = (await Identity.findAll({ where: { id: arr(identityIds) }, attributes: ["id"] })).map(r => r.id);
-    const validCategoryIds  = (await Category.findAll({ where: { id: arr(categoryIds) }, attributes: ["id"] })).map(r => r.id);
-    const validSubcatIds    = (await Subcategory.findAll({ where: { id: arr(subcategoryIds) }, attributes: ["id"] })).map(r => r.id);
-    const validSubsubIds    = (await SubsubCategory.findAll({ where: { id: arr(subsubCategoryIds) }, attributes: ["id"] })).map(r => r.id);
-    const validGoalIds      = (await Goal.findAll({ where: { id: arr(goalIds) }, attributes: ["id"] })).map(r => r.id);
+    // --- Validate existence (drop invalid IDs) ---
+    const [validIdentityIds, validCategoryIds, validSubcatIds, validSubsubIds, validGoalIds] =
+      await Promise.all([
+        Identity.findAll({ where: { id: arr(identityIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        Category.findAll({ where: { id: arr(categoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        Subcategory.findAll({ where: { id: arr(subcategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        SubsubCategory.findAll({ where: { id: arr(subsubCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        Goal.findAll({ where: { id: arr(goalIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+      ]);
 
-    // Replace selections idempotently
-    await Promise.all([
-      UserIdentity.destroy({ where: { userId }, transaction: t }),
-      UserCategory.destroy({ where: { userId }, transaction: t }),
-      UserSubcategory.destroy({ where: { userId }, transaction: t }),
-      UserSubsubCategory.destroy({ where: { userId }, transaction: t }),
-      UserGoal.destroy({ where: { userId }, transaction: t }),
-    ]);
+    const [validInterestIdentityIds, validInterestCategoryIds, validInterestSubcatIds, validInterestSubsubIds] =
+      await Promise.all([
+        Identity.findAll({ where: { id: arr(interestIdentityIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        Category.findAll({ where: { id: arr(interestCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        Subcategory.findAll({ where: { id: arr(interestSubcategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        SubsubCategory.findAll({ where: { id: arr(interestSubsubCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+      ]);
 
-    await Promise.all([
-      ...validIdentityIds.map(identityId =>
-        UserIdentity.create({ userId, identityId }, { transaction: t })
-      ),
-      ...validCategoryIds.map(categoryId =>
-        UserCategory.create({ userId, categoryId }, { transaction: t })
-      ),
-      ...validSubcatIds.map(subcategoryId =>
-        UserSubcategory.create({ userId, subcategoryId }, { transaction: t })
-      ),
-      ...validSubsubIds.map(subsubCategoryId =>
-        UserSubsubCategory.create({ userId, subsubCategoryId }, { transaction: t })
-      ),
-      ...validGoalIds.map(goalId =>
-        UserGoal.create({ userId, goalId }, { transaction: t })
-      ),
-    ]);
+    // --- CLEAR previous selections (SEQUENTIAL: avoid Promise.all with same tx) ---
+    await UserIdentity.destroy({ where: { userId }, transaction: t });
+    await UserCategory.destroy({ where: { userId }, transaction: t });
+    await UserSubcategory.destroy({ where: { userId }, transaction: t });
+    await UserSubsubCategory.destroy({ where: { userId }, transaction: t });
+    await UserGoal.destroy({ where: { userId }, transaction: t });
 
-    // Mark onboardingDone = true
+    await UserIdentityInterest.destroy({ where: { userId }, transaction: t });
+    await UserCategoryInterest.destroy({ where: { userId }, transaction: t });
+    await UserSubcategoryInterest.destroy({ where: { userId }, transaction: t });
+    await UserSubsubCategoryInterest.destroy({ where: { userId }, transaction: t });
+
+    // --- CREATE new selections (bulkCreate per table) ---
+    if (validIdentityIds.length) {
+      await UserIdentity.bulkCreate(
+        validIdentityIds.map(identityId => ({ userId, identityId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validCategoryIds.length) {
+      await UserCategory.bulkCreate(
+        validCategoryIds.map(categoryId => ({ userId, categoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validSubcatIds.length) {
+      await UserSubcategory.bulkCreate(
+        validSubcatIds.map(subcategoryId => ({ userId, subcategoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validSubsubIds.length) {
+      await UserSubsubCategory.bulkCreate(
+        validSubsubIds.map(subsubCategoryId => ({ userId, subsubCategoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validGoalIds.length) {
+      await UserGoal.bulkCreate(
+        validGoalIds.map(goalId => ({ userId, goalId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+
+    // interests
+    if (validInterestIdentityIds.length) {
+      await UserIdentityInterest.bulkCreate(
+        validInterestIdentityIds.map(identityId => ({ userId, identityId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validInterestCategoryIds.length) {
+      await UserCategoryInterest.bulkCreate(
+        validInterestCategoryIds.map(categoryId => ({ userId, categoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validInterestSubcatIds.length) {
+      await UserSubcategoryInterest.bulkCreate(
+        validInterestSubcatIds.map(subcategoryId => ({ userId, subcategoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+    if (validInterestSubsubIds.length) {
+      await UserSubsubCategoryInterest.bulkCreate(
+        validInterestSubsubIds.map(subsubCategoryId => ({ userId, subsubCategoryId })),
+        { transaction: t /*, ignoreDuplicates: true*/ }
+      );
+    }
+
+    // --- Profile flags (optional if fields exist) ---
     const prof = await Profile.findOne({ where: { userId }, transaction: t });
     if (prof) {
       prof.onboardingDone = true;
       prof.onboardingProfileTypeDone = true;
       prof.onboardingCategoriesDone  = true;
       prof.onboardingGoalsDone       = true;
+      if ("onboardingLookingIdentitiesDone" in prof) prof.onboardingLookingIdentitiesDone = true;
+      if ("onboardingLookingCategoriesDone"  in prof) prof.onboardingLookingCategoriesDone  = true;
       await prof.save({ transaction: t });
     }
 
@@ -88,11 +155,21 @@ exports.saveOneShot = async (req, res) => {
         subcategoryIds: validSubcatIds,
         subsubCategoryIds: validSubsubIds,
         goalIds: validGoalIds,
+        interestIdentityIds: validInterestIdentityIds,
+        interestCategoryIds: validInterestCategoryIds,
+        interestSubcategoryIds: validInterestSubcatIds,
+        interestSubsubCategoryIds: validInterestSubsubIds,
       },
     });
   } catch (e) {
-    await t.rollback();
-    console.error(e);
-    return res.status(500).json({ message: "Failed to save onboarding data" });
+    // only rollback if still active
+    try { if (!t.finished) await t.rollback(); } catch {}
+    console.error("saveOneShot error:", e);
+    return res.status(500).json({
+      message: "Failed to save onboarding data",
+      // Uncomment in dev to see original SQL that failed:
+      // sql: e?.sql,
+      // original: e?.original?.sql,
+    });
   }
 };

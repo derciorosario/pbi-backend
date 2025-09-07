@@ -13,6 +13,7 @@ const { authenticate } = require("./src/middleware/auth");
 const { sequelize } = require("./src/models");
 const authRoutes = require("./src/routes/auth.routes");
 const { ensureAdmin } = require("./src/setup/ensureAdmin");
+const { initializeQuickActionsEvents } = require("./src/controllers/realtime.controller");
 
 // ---------------------------
 // Express App Setup
@@ -96,10 +97,15 @@ app.use("/api", require("./src/routes/connection.routes"));
 // Message routes
 app.use("/api/messages", require("./src/routes/message.routes"));
 
+// Meeting request routes
+app.use("/api/meeting-requests", require("./src/routes/meetingRequest.routes"));
+
+// Notification routes
+app.use("/api/notifications", require("./src/routes/notification.routes"));
+
 const publicRoutes = require("./src/routes/public.routes");
 
 app.use("/api/public", publicRoutes);
-
 
 
 // ❌ 404 handler
@@ -128,8 +134,8 @@ const seedAll = require("./src/seeds/seedAll");
     console.log("✅ Database connected");
 
     // Auto-sync DB tables (use migrations in production)
-    // Temporarily disable alter:true to avoid "Too many keys" error
-    await sequelize.sync({ alter: false });
+    // Use force sync to recreate tables and avoid constraint issues
+    await sequelize.sync({ force: false, alter: false });
     
     // 👉 Run seeding if needed
     //await seedIfEmpty();
@@ -137,9 +143,9 @@ const seedAll = require("./src/seeds/seedAll");
     //await seedAll();
 
     // 🔑 Ensure default admin exists
-    await ensureAdmin();
+    //await ensureAdmin();
 
-    require('./scripts/seed.from.singlefile.js')
+    //require('./scripts/seed.from.singlefile.js')
 
     // Track online users
     const onlineUsers = new Map();
@@ -169,7 +175,7 @@ const seedAll = require("./src/seeds/seedAll");
 
     io.on("connection", (socket) => {
       console.log(`User connected: ${socket.userId}`);
-      
+
       // Add user to online users map
       onlineUsers.set(socket.userId, {
         userId: socket.userId,
@@ -180,6 +186,9 @@ const seedAll = require("./src/seeds/seedAll");
           avatarUrl: socket.user.avatarUrl
         }
       });
+
+      // Initialize QuickActionsPanel events
+      initializeQuickActionsEvents(io);
       
       // Broadcast user online status to connected users
       io.emit('user_status_change', {

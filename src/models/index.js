@@ -27,6 +27,7 @@ const Tourism = require("./tourism")(sequelize, DataTypes);
 const Funding = require("./funding")(sequelize, DataTypes);
 const Message = require("./message")(sequelize, DataTypes);
 const Conversation = require("./conversation")(sequelize, DataTypes);
+const MeetingRequest = require("./meetingRequest")(sequelize, DataTypes);
 
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
@@ -127,6 +128,12 @@ User.hasMany(Connection, { foreignKey: "userTwoId", as: "connectionsAsTwo" });
 Notification.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(Notification,   { foreignKey: "userId", as: "notifications" });
 
+// Meeting Request associations
+MeetingRequest.belongsTo(User, { foreignKey: "fromUserId", as: "requester" });
+MeetingRequest.belongsTo(User, { foreignKey: "toUserId", as: "recipient" });
+User.hasMany(MeetingRequest, { foreignKey: "fromUserId", as: "sentMeetingRequests" });
+User.hasMany(MeetingRequest, { foreignKey: "toUserId", as: "receivedMeetingRequests" });
+
 
 // For requests preview includes
 ConnectionRequest.belongsTo(User, { as: "from", foreignKey: "fromUserId" });
@@ -199,6 +206,15 @@ const FundingIdentity       = require("./FundingIdentity")(sequelize, DataTypes)
 const FundingCategory       = require("./FundingCategory")(sequelize, DataTypes);
 const FundingSubcategory    = require("./FundingSubcategory")(sequelize, DataTypes);
 const FundingSubsubCategory = require("./FundingSubsubCategory")(sequelize, DataTypes);
+
+
+// Interest join-tables (what the user is looking for)
+const UserIdentityInterest       = require("./userIdentityInterest")(sequelize, DataTypes);
+const UserCategoryInterest       = require("./userCategoryInterest")(sequelize, DataTypes);
+const UserSubcategoryInterest    = require("./userSubcategoryInterest")(sequelize, DataTypes);
+const UserSubsubCategoryInterest = require("./userSubsubCategoryInterest")(sequelize, DataTypes);
+
+
 
 
 Job.belongsToMany(Identity, {
@@ -567,7 +583,35 @@ SubsubCategory.belongsToMany(Funding, {
   as: "fundingProjects",
 });
 
+
+
+
+
+// --- Interest associations (optional but nice to have) ---
+User.hasMany(UserIdentityInterest, { as: "identityInterests", foreignKey: "userId", onDelete: "CASCADE" });
+UserIdentityInterest.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserIdentityInterest.belongsTo(Identity, { as: "identity", foreignKey: "identityId" });
+
+User.hasMany(UserCategoryInterest, { as: "categoryInterests", foreignKey: "userId", onDelete: "CASCADE" });
+UserCategoryInterest.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserCategoryInterest.belongsTo(Category, { as: "category", foreignKey: "categoryId" });
+
+User.hasMany(UserSubcategoryInterest, { as: "subcategoryInterests", foreignKey: "userId", onDelete: "CASCADE" });
+UserSubcategoryInterest.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserSubcategoryInterest.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
+
+User.hasMany(UserSubsubCategoryInterest, { as: "subsubInterests", foreignKey: "userId", onDelete: "CASCADE" });
+UserSubsubCategoryInterest.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserSubsubCategoryInterest.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
+
+
 module.exports = {
+   UserIdentityInterest,
+  UserCategoryInterest,
+  UserSubcategoryInterest,
+  UserSubsubCategoryInterest,
+
+
   UserSubcategory, UserSubsubCategory,
   Identity, UserIdentity,
   Connection,
@@ -581,7 +625,6 @@ module.exports = {
   Category,
   Subcategory,
   UserCategory,
-  UserSubcategory,
   NewsArticle,
   Goal,
   UserGoal,
@@ -618,4 +661,6 @@ module.exports = {
   FundingCategory,
   FundingSubcategory,
   FundingSubsubCategory,
+  // Export meeting request model
+  MeetingRequest,
 };

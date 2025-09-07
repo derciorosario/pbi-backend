@@ -104,6 +104,8 @@ exports.respond = async (req, res) => {
     const { id } = req.params;
     const { action } = req.body; // "accept" | "reject"
 
+    
+
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     const row = await ConnectionRequest.findByPk(id);
     if (!row || row.toUserId !== userId) return res.status(404).json({ message: "Request not found" });
