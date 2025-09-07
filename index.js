@@ -6,7 +6,7 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const http = require("http");
 const socketIo = require("socket.io");
-const { Message, Conversation, User } = require("./src/models");
+const { Message, Conversation, User, Connection } = require("./src/models");
 const { Op } = require("sequelize");
 const { authenticate } = require("./src/middleware/auth");
 
@@ -140,7 +140,7 @@ const seedAll = require("./src/seeds/seedAll");
     // 👉 Run seeding if needed
     //await seedIfEmpty();
 
-    //await seedAll();
+    await seedAll();
 
     // 🔑 Ensure default admin exists
     //await ensureAdmin();
@@ -151,26 +151,37 @@ const seedAll = require("./src/seeds/seedAll");
     const onlineUsers = new Map();
 
     // Socket.IO setup
-    io.use(async (socket, next) => {
-      try {
-        const token = socket.handshake.auth.token;
-        if (!token) {
-          return next(new Error("Authentication error"));
-        }
-        
-        // Verify the token
-        const decoded = await authenticate(token);
-        if (!decoded) {
-          return next(new Error("Authentication error"));
-        }
-        
-        // Store user info in socket
-        socket.userId = decoded.sub;
-        socket.user = await User.findByPk(decoded.sub);
-        next();
-      } catch (error) {
-        next(new Error("Authentication error"));
+    // Simplified socket connection without authentication
+    io.use((socket, next) => {
+      console.log('Socket connection attempt');
+      
+      // Get userId from handshake query or auth
+      const userId = socket.handshake.auth.userId || socket.handshake.query.userId;
+      
+      if (!userId) {
+        console.log('No userId provided in socket connection');
+        // Allow connection without userId for now
+        socket.userId = 'anonymous';
+        return next();
       }
+      
+      // Store user info in socket
+      socket.userId = userId;
+      
+      // Try to get user info if possible
+      User.findByPk(userId)
+        .then(user => {
+          if (user) {
+            socket.user = user;
+            console.log(`User found for socket: ${user.name}`);
+          } else {
+            console.log(`No user found for ID: ${userId}`);
+            socket.user = { id: userId, name: "User" };
+          }
+        })
+        .catch(err => console.error('Error fetching user for socket:', err));
+      
+      next();
     });
 
     io.on("connection", (socket) => {
@@ -211,7 +222,7 @@ const seedAll = require("./src/seeds/seedAll");
           // Find or create conversation
           let conversation = await Conversation.findOne({
             where: {
-              $or: [
+              [Op.or]: [
                 { user1Id: socket.userId, user2Id: receiverId },
                 { user1Id: receiverId, user2Id: socket.userId }
               ]

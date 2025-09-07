@@ -1,5 +1,6 @@
 const { MeetingRequest, User, Profile, Notification } = require("../models");
 const { Op } = require("sequelize");
+const { sendTemplatedEmail } = require("../utils/email");
 
 // Create a new meeting request
 exports.createMeetingRequest = async (req, res) => {
@@ -90,6 +91,35 @@ exports.createMeetingRequest = async (req, res) => {
         mode
       }
     });
+
+    // Send email notification
+    try {
+      const recipient = await User.findByPk(toUserId, { attributes: ["id", "name", "email"] });
+      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
+      const link = `${baseUrl}/notifications?tab=Meetings`;
+
+      await sendTemplatedEmail({
+        to: recipient.email,
+        subject: `New Meeting Request from ${requester.name || requester.email}`,
+        template: "meeting-request",
+        context: {
+          name: recipient.name,
+          fromName: requester.name || requester.email,
+          title,
+          agenda: agenda || null,
+          scheduledAt: new Date(scheduledAt),
+          duration,
+          timezone,
+          mode,
+          location: mode === "in_person" ? location : null,
+          link: mode === "video" ? link : null,
+          link: link
+        }
+      });
+    } catch (emailErr) {
+      console.error("Failed to send meeting request email:", emailErr);
+      // Continue even if email fails
+    }
 
     // Return the created meeting request with requester info
     const result = await MeetingRequest.findByPk(meetingRequest.id, {
@@ -184,7 +214,7 @@ exports.respondToMeetingRequest = async (req, res) => {
     });
 
     // Create notification for requester
-    const notificationMessage = action === "accept" 
+    const notificationMessage = action === "accept"
       ? `${meetingRequest.recipient.name || meetingRequest.recipient.email} accepted your meeting request: "${meetingRequest.title}"`
       : `${meetingRequest.recipient.name || meetingRequest.recipient.email} declined your meeting request: "${meetingRequest.title}"`;
 
@@ -201,6 +231,33 @@ exports.respondToMeetingRequest = async (req, res) => {
         rejectionReason
       }
     });
+
+    // Send email notification
+    try {
+      const requester = await User.findByPk(meetingRequest.fromUserId, { attributes: ["id", "name", "email"] });
+      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
+      const profileLink = `${baseUrl}/profile/${meetingRequest.toUserId}`;
+
+      await sendTemplatedEmail({
+        to: requester.email,
+        subject: action === "accept"
+          ? `${meetingRequest.recipient.name || meetingRequest.recipient.email} Accepted Your Meeting Request`
+          : `${meetingRequest.recipient.name || meetingRequest.recipient.email} Declined Your Meeting Request`,
+        template: "meeting-response",
+        context: {
+          name: requester.name,
+          responderName: meetingRequest.recipient.name || meetingRequest.recipient.email,
+          accepted: action === "accept",
+          title: meetingRequest.title,
+          scheduledAt: meetingRequest.scheduledAt,
+          rejectionReason: action === "reject" ? rejectionReason : null,
+          profileLink
+        }
+      });
+    } catch (emailErr) {
+      console.error("Failed to send meeting response email:", emailErr);
+      // Continue even if email fails
+    }
 
     res.json(meetingRequest);
   } catch (error) {
@@ -279,6 +336,26 @@ exports.cancelMeetingRequest = async (req, res) => {
           scheduledAt: meetingRequest.scheduledAt
         }
       });
+
+      // Send email notification
+      try {
+        const recipient = await User.findByPk(meetingRequest.toUserId, { attributes: ["id", "name", "email"] });
+
+        await sendTemplatedEmail({
+          to: recipient.email,
+          subject: `${meetingRequest.requester.name || meetingRequest.requester.email} Cancelled Meeting Request`,
+          template: "meeting-cancelled",
+          context: {
+            name: recipient.name,
+            requesterName: meetingRequest.requester.name || meetingRequest.requester.email,
+            title: meetingRequest.title,
+            scheduledAt: meetingRequest.scheduledAt
+          }
+        });
+      } catch (emailErr) {
+        console.error("Failed to send meeting cancellation email:", emailErr);
+        // Continue even if email fails
+      }
     }
 
     res.json(meetingRequest);

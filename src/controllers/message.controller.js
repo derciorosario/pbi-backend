@@ -1,6 +1,7 @@
 // src/controllers/message.controller.js
 const { Op } = require("sequelize");
 const { Message, Conversation, User, Profile } = require("../models");
+const { sendTemplatedEmail } = require("../utils/email");
 
 // Get all conversations for the current user
 async function getConversations(req, res, next) {
@@ -294,6 +295,28 @@ async function sendMessage(req, res, next) {
         }
       ]
     });
+
+    // Send email notification to receiver
+    try {
+      const sender = await User.findByPk(senderId, { attributes: ["id", "name", "email"] });
+      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
+      const messagesLink = `${baseUrl}/messages?userId=${sender.id}`;
+
+      await sendTemplatedEmail({
+        to: receiver.email,
+        subject: `New Message from ${sender.name}`,
+        template: "new-message",
+        context: {
+          name: receiver.name,
+          senderName: sender.name,
+          message: content,
+          messagesLink
+        }
+      });
+    } catch (emailErr) {
+      console.error("Failed to send message notification email:", emailErr);
+      // Continue even if email fails
+    }
 
     res.status(201).json(messageWithSender);
   } catch (error) {

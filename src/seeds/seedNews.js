@@ -1,7 +1,7 @@
 // src/seeds/seedNews.js
 require("dotenv").config();
 
-const { sequelize, User, Profile, NewsArticle } = require("../models");
+const { sequelize, User, Profile } = require("../models");
 
 async function getUser(email) {
   return User.findOne({ where: { email } });
@@ -11,15 +11,7 @@ async function getProfile(userId) {
 }
 
 async function upsertArticle(whereFields, payload) {
-  const found = await NewsArticle.findOne({ where: whereFields });
-  if (found) {
-    await found.update(payload);
-    console.log(`ℹ️  Updated article: ${payload.title}`);
-    return found;
-  }
-  const created = await NewsArticle.create(payload);
-  console.log(`✅ Created article: ${payload.title}`);
-  return created;
+
 }
 
 

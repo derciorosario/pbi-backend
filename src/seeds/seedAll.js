@@ -1,11 +1,9 @@
-const { User, NewsArticle } = require("../models");
 const seedUsers = require("./seedUsers");
 //const seedNews = require("./seedNews");
 
 async function seedAll() {
     return
   const userCount = await User.count();
-  const newsCount = await NewsArticle.count();
 
   if (userCount === 0) {
     console.log("🌱 No users found → Seeding users...");

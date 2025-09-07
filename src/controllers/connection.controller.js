@@ -5,6 +5,7 @@ const {
   ConnectionRequest,
   Notification,
 } = require("../models");
+const { sendTemplatedEmail } = require("../utils/email");
 
 // normaliza par (userOneId < userTwoId) para conexão única
 function normalizePair(a, b) {
@@ -44,11 +45,36 @@ exports.createRequest = async (req, res) => {
 
     // notifica destinatário
     const fromUser = await User.findByPk(fromUserId, { attributes: ["id", "name", "email"] });
+    const toUser = await User.findByPk(toUserId, { attributes: ["id", "name", "email"] });
+    
+    // Create notification
     await Notification.create({
       userId: toUserId,
       type: "connection.request",
       payload: { requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
     });
+    
+    // Send email notification
+    try {
+      const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+      const link = `${baseUrl}/people`;
+      
+      await sendTemplatedEmail({
+        to: toUser.email,
+        subject: `New Connection Request from ${fromUser?.name || "Someone"}`,
+        template: "connection-request",
+        context: {
+          name: toUser.name,
+          fromName: fromUser?.name || "Someone",
+          message: message || null,
+          reason: reason || null,
+          link
+        }
+      });
+    } catch (emailErr) {
+      console.error("Failed to send connection request email:", emailErr);
+      // Continue even if email fails
+    }
 
     return res.json({ ok: true, requestId: reqRow.id });
   } catch (err) {
@@ -120,11 +146,39 @@ exports.respond = async (req, res) => {
       row.respondedAt = new Date();
       await row.save();
 
+      // Get user details for email
+      const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
+      const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
+      
+      // Create notification
       await Notification.create({
         userId: row.fromUserId,
         type: "connection.accepted",
         payload: { byUserId: userId, requestId: row.id },
       });
+      
+      // Send email notification
+      try {
+        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const profileLink = `${baseUrl}/profile/${userId}`;
+        
+        await sendTemplatedEmail({
+          to: requester.email,
+          subject: `${responder?.name || "Someone"} Accepted Your Connection Request`,
+          template: "connection-response",
+          context: {
+            name: requester.name,
+            responderName: responder?.name || "Someone",
+            accepted: true,
+            profileLink
+          }
+        });
+
+        console.log('-----------')
+      } catch (emailErr) {
+        console.error("Failed to send connection acceptance email:", emailErr);
+        // Continue even if email fails
+      }
 
       return res.json({ ok: true, status: "accepted" });
     }
@@ -134,11 +188,33 @@ exports.respond = async (req, res) => {
       row.respondedAt = new Date();
       await row.save();
 
+      // Get user details for email
+      const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
+      const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
+      
+      // Create notification
       await Notification.create({
         userId: row.fromUserId,
         type: "connection.rejected",
         payload: { byUserId: userId, requestId: row.id },
       });
+      
+      // Send email notification
+      try {
+        await sendTemplatedEmail({
+          to: requester.email,
+          subject: `${responder?.name || "Someone"} Declined Your Connection Request`,
+          template: "connection-response",
+          context: {
+            name: requester.name,
+            responderName: responder?.name || "Someone",
+            accepted: false
+          }
+        });
+      } catch (emailErr) {
+        console.error("Failed to send connection rejection email:", emailErr);
+        // Continue even if email fails
+      }
 
       return res.json({ ok: true, status: "rejected" });
     }

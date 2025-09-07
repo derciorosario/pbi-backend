@@ -1,4 +1,3 @@
-
 // src/seeds/seedProductsServicesTourismFunding.js
 require("dotenv").config();
 
@@ -7,10 +6,38 @@ const {
   User,
   Category,
   Subcategory,
+  SubsubCategory,
+  Identity,
   Product,
   Service,
   Tourism,
   Funding,
+  Event,
+  Job,
+  ProductCategory,
+  ProductSubcategory,
+  ProductSubsubCategory,
+  ProductIdentity,
+  ServiceCategory,
+  ServiceSubcategory,
+  ServiceSubsubCategory,
+  ServiceIdentity,
+  TourismCategory,
+  TourismSubcategory,
+  TourismSubsubCategory,
+  TourismIdentity,
+  FundingCategory,
+  FundingSubcategory,
+  FundingSubsubCategory,
+  FundingIdentity,
+  EventCategory,
+  EventSubcategory,
+  EventSubsubCategory,
+  EventIdentity,
+  JobCategory,
+  JobSubcategory,
+  JobSubsubCategory,
+  JobIdentity,
 } = require("../models");
 
 /** ------------------------- Helpers ------------------------- **/
@@ -48,10 +75,176 @@ async function upsertSubcategoryByName(categoryName, subName) {
   return sub;
 }
 
+async function upsertSubsubCategoryByName(categoryName, subcategoryName, subsubName) {
+  if (!categoryName || !subcategoryName || !subsubName) return null;
+  const sub = await upsertSubcategoryByName(categoryName, subcategoryName);
+  let subsub = await SubsubCategory.findOne({
+    where: { name: subsubName, subcategoryId: sub.id },
+  });
+  if (!subsub) {
+    subsub = await SubsubCategory.create({ name: subsubName, subcategoryId: sub.id });
+    console.log(`      ↳ SubsubCategory created: ${categoryName} > ${subcategoryName} > ${subsubName}`);
+  }
+  return subsub;
+}
+
+async function upsertIdentityByName(name) {
+  if (!name) return null;
+  let identity = await Identity.findOne({ where: { name } });
+  if (!identity) {
+    identity = await Identity.create({ name });
+    console.log(`➕ Identity created: ${name}`);
+  }
+  return identity;
+}
+
 async function getUserIdByEmail(email) {
   const u = await User.findOne({ where: { email } });
   if (!u) throw new Error(`User not found for email: ${email}`);
   return u.id;
+}
+
+// Generic function to associate entities with audience
+async function associateWithAudience(entity, entityType, audienceData) {
+  if (!audienceData) return;
+  
+  const { categories, subcategories, subsubcategories, identities } = audienceData;
+  
+  // Associate with categories
+  if (categories && categories.length > 0) {
+    const categoryIds = [];
+    for (const catName of categories) {
+      const cat = await upsertCategoryByName(catName);
+      if (cat) categoryIds.push(cat.id);
+    }
+    
+    switch (entityType) {
+      case 'product':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+      case 'service':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+      case 'tourism':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+      case 'funding':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+      case 'event':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+      case 'job':
+        await entity.setAudienceCategories(categoryIds);
+        break;
+    }
+  }
+  
+  // Associate with subcategories
+  if (subcategories && subcategories.length > 0) {
+    const subcategoryIds = [];
+    for (const sub of subcategories) {
+      if (typeof sub === 'string') {
+        // Format: "categoryName > subcategoryName"
+        const [catName, subName] = sub.split(' > ').map(s => s.trim());
+        const subcat = await upsertSubcategoryByName(catName, subName);
+        if (subcat) subcategoryIds.push(subcat.id);
+      } else if (typeof sub === 'object') {
+        // Format: { category: "categoryName", subcategory: "subcategoryName" }
+        const subcat = await upsertSubcategoryByName(sub.category, sub.subcategory);
+        if (subcat) subcategoryIds.push(subcat.id);
+      }
+    }
+    
+    switch (entityType) {
+      case 'product':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+      case 'service':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+      case 'tourism':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+      case 'funding':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+      case 'event':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+      case 'job':
+        await entity.setAudienceSubcategories(subcategoryIds);
+        break;
+    }
+  }
+  
+  // Associate with subsubcategories
+  if (subsubcategories && subsubcategories.length > 0) {
+    const subsubcategoryIds = [];
+    for (const subsub of subsubcategories) {
+      if (typeof subsub === 'string') {
+        // Format: "categoryName > subcategoryName > subsubcategoryName"
+        const [catName, subName, subsubName] = subsub.split(' > ').map(s => s.trim());
+        const subsubcat = await upsertSubsubCategoryByName(catName, subName, subsubName);
+        if (subsubcat) subsubcategoryIds.push(subsubcat.id);
+      } else if (typeof subsub === 'object') {
+        // Format: { category: "categoryName", subcategory: "subcategoryName", subsubcategory: "subsubcategoryName" }
+        const subsubcat = await upsertSubsubCategoryByName(subsub.category, subsub.subcategory, subsub.subsubcategory);
+        if (subsubcat) subsubcategoryIds.push(subsubcat.id);
+      }
+    }
+    
+    switch (entityType) {
+      case 'product':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+      case 'service':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+      case 'tourism':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+      case 'funding':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+      case 'event':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+      case 'job':
+        await entity.setAudienceSubsubs(subsubcategoryIds);
+        break;
+    }
+  }
+  
+  // Associate with identities
+  if (identities && identities.length > 0) {
+    const identityIds = [];
+    for (const idName of identities) {
+      const identity = await upsertIdentityByName(idName);
+      if (identity) identityIds.push(identity.id);
+    }
+    
+    switch (entityType) {
+      case 'product':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+      case 'service':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+      case 'tourism':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+      case 'funding':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+      case 'event':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+      case 'job':
+        await entity.setAudienceIdentities(identityIds);
+        break;
+    }
+  }
 }
 
 /** ------------------------- Seed Data ------------------------- **/
@@ -73,6 +266,17 @@ const PRODUCT_SEEDS = [
     categoryName: "Fashion & Apparel",
     subcategoryName: "Accessories",
     createdAtDaysAgo: 5,
+    audience: {
+      categories: ["Fashion & Apparel", "Trade"],
+      subcategories: [
+        "Fashion & Apparel > Accessories",
+        { category: "Trade", subcategory: "Fashion" }
+      ],
+      subsubcategories: [
+        "Trade > Fashion > Accessories"
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses"]
+    }
   },
   {
     title: "African Print Fabric - 6 Yards",
@@ -89,6 +293,14 @@ const PRODUCT_SEEDS = [
     categoryName: "Fashion & Apparel",
     subcategoryName: "Textiles",
     createdAtDaysAgo: 10,
+    audience: {
+      categories: ["Fashion & Apparel", "Trade"],
+      subcategories: [
+        "Fashion & Apparel > Textiles",
+        { category: "Trade", subcategory: "Fashion" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Creative & Artist"]
+    }
   },
   {
     title: "Solar Powered Phone Charger",
@@ -105,6 +317,14 @@ const PRODUCT_SEEDS = [
     categoryName: "Technology",
     subcategoryName: "Gadgets & Accessories",
     createdAtDaysAgo: 15,
+    audience: {
+      categories: ["Technology", "Energy"],
+      subcategories: [
+        "Technology > Hardware & Devices",
+        { category: "Energy", subcategory: "Renewable Energy" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Students", "Professional"]
+    }
   },
   {
     title: "Organic Shea Butter - 250g",
@@ -121,6 +341,16 @@ const PRODUCT_SEEDS = [
     categoryName: "Health & Beauty",
     subcategoryName: "Skincare",
     createdAtDaysAgo: 8,
+    audience: {
+      categories: ["Health & Beauty", "Trade"],
+      subcategories: [
+        { category: "Trade", subcategory: "Beauty & Cosmetics" }
+      ],
+      subsubcategories: [
+        "Trade > Beauty & Cosmetics > Skincare"
+      ],
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs"]
+    }
   },
   {
     title: "Handwoven Basket Set",
@@ -137,6 +367,14 @@ const PRODUCT_SEEDS = [
     categoryName: "Home & Living",
     subcategoryName: "Home Decor",
     createdAtDaysAgo: 12,
+    audience: {
+      categories: ["Home & Living", "Trade"],
+      subcategories: [
+        "Home & Living > Home Decor",
+        { category: "Trade", subcategory: "Home Goods" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist"]
+    }
   }
 ];
 
@@ -162,6 +400,14 @@ const SERVICE_SEEDS = [
     categoryName: "Technology",
     subcategoryName: "Web Development",
     createdAtDaysAgo: 3,
+    audience: {
+      categories: ["Technology", "Service Providers"],
+      subcategories: [
+        "Technology > Software Development",
+        { category: "Service Providers", subcategory: "Consulting" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
+    }
   },
   {
     title: "Business Plan Development & Consulting",
@@ -183,6 +429,14 @@ const SERVICE_SEEDS = [
     categoryName: "Business",
     subcategoryName: "Consulting & Strategy",
     createdAtDaysAgo: 7,
+    audience: {
+      categories: ["Business", "Service Providers"],
+      subcategories: [
+        "Business > Consulting & Strategy",
+        { category: "Service Providers", subcategory: "Consulting" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs"]
+    }
   },
   {
     title: "Logo & Brand Identity Design",
@@ -204,6 +458,14 @@ const SERVICE_SEEDS = [
     categoryName: "Marketing & Advertising",
     subcategoryName: "Branding & Creative Strategy",
     createdAtDaysAgo: 10,
+    audience: {
+      categories: ["Marketing & Advertising", "Service Providers"],
+      subcategories: [
+        "Marketing & Advertising > Branding & Creative Strategy",
+        { category: "Service Providers", subcategory: "Creative & Design Services" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist"]
+    }
   },
   {
     title: "Agricultural Consulting & Farm Management",
@@ -225,6 +487,14 @@ const SERVICE_SEEDS = [
     categoryName: "Agriculture",
     subcategoryName: "Farming & Crop Production",
     createdAtDaysAgo: 5,
+    audience: {
+      categories: ["Agriculture", "Service Providers"],
+      subcategories: [
+        "Agriculture > Crop Production",
+        { category: "Service Providers", subcategory: "Consulting" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials"]
+    }
   },
   {
     title: "Social Media Marketing & Management",
@@ -246,6 +516,14 @@ const SERVICE_SEEDS = [
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
     createdAtDaysAgo: 8,
+    audience: {
+      categories: ["Marketing & Advertising", "Service Providers"],
+      subcategories: [
+        "Marketing & Advertising > Digital Marketing",
+        { category: "Service Providers", subcategory: "Marketing & Advertising" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
+    }
   }
 ];
 
@@ -269,6 +547,13 @@ const TOURISM_SEEDS = [
     categoryName: "Tourism & Travel",
     subcategoryName: "Wildlife & Safari",
     createdAtDaysAgo: 4,
+    audience: {
+      categories: ["Tourism & Travel"],
+      subcategories: [
+        "Tourism & Travel > Wildlife & Safari"
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
+    }
   },
   {
     postType: "Experience",
@@ -288,6 +573,13 @@ const TOURISM_SEEDS = [
     categoryName: "Tourism & Travel",
     subcategoryName: "Food & Wine",
     createdAtDaysAgo: 7,
+    audience: {
+      categories: ["Tourism & Travel"],
+      subcategories: [
+        "Tourism & Travel > Food & Wine"
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Creative & Artist"]
+    }
   },
   {
     postType: "Culture",
@@ -307,6 +599,13 @@ const TOURISM_SEEDS = [
     categoryName: "Tourism & Travel",
     subcategoryName: "Cultural Tourism",
     createdAtDaysAgo: 10,
+    audience: {
+      categories: ["Tourism & Travel"],
+      subcategories: [
+        "Tourism & Travel > Cultural Tourism"
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs", "Creative & Artist"]
+    }
   },
   {
     postType: "Destination",
@@ -326,6 +625,13 @@ const TOURISM_SEEDS = [
     categoryName: "Tourism & Travel",
     subcategoryName: "Natural Wonders",
     createdAtDaysAgo: 15,
+    audience: {
+      categories: ["Tourism & Travel"],
+      subcategories: [
+        "Tourism & Travel > Natural Wonders"
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Students"]
+    }
   },
   {
     postType: "Experience",
@@ -345,6 +651,13 @@ const TOURISM_SEEDS = [
     categoryName: "Tourism & Travel",
     subcategoryName: "Adventure Tourism",
     createdAtDaysAgo: 9,
+    audience: {
+      categories: ["Tourism & Travel"],
+      subcategories: [
+        "Tourism & Travel > Adventure Tourism"
+      ],
+      identities: ["Entrepreneur (Startups)", "Professional", "Students", "Sports Professionals"]
+    }
   }
 ];
 
@@ -356,7 +669,7 @@ const FUNDING_SEEDS = [
     goal: 50000.00,
     raised: 15000.00,
     currency: "USD",
-    deadline: daysAgo(-60), // 60 days in the future
+    deadline: daysAgo(-60),
     country: "Kenya",
     city: "Nairobi",
     rewards: "Backers will receive regular impact reports, recognition on our website, and early access to our technology depending on contribution level.",
@@ -375,6 +688,14 @@ const FUNDING_SEEDS = [
     creatorEmail: "afri-agro@pbi.africa",
     categoryName: "Agriculture",
     createdAtDaysAgo: 5,
+    audience: {
+      categories: ["Agriculture", "Energy"],
+      subcategories: [
+        "Agriculture > Crop Production",
+        { category: "Energy", subcategory: "Renewable Energy" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Social Entrepreneurs"]
+    }
   },
   {
     title: "Mobile Health Clinic for Rural Communities",
@@ -382,7 +703,7 @@ const FUNDING_SEEDS = [
     goal: 75000.00,
     raised: 25000.00,
     currency: "USD",
-    deadline: daysAgo(-90), // 90 days in the future
+    deadline: daysAgo(-90),
     country: "Nigeria",
     city: "Lagos",
     rewards: "Backers will receive impact reports, recognition on our clinic vehicles, and invitations to our launch events based on contribution level.",
@@ -401,6 +722,13 @@ const FUNDING_SEEDS = [
     creatorEmail: "naija-fintech@pbi.africa",
     categoryName: "Healthcare",
     createdAtDaysAgo: 10,
+    audience: {
+      categories: ["Healthcare"],
+      subcategories: [
+        { category: "Healthcare", subcategory: "Health & Wellbeing" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
+    }
   },
   {
     title: "Renewable Energy Microgrids for Off-Grid Communities",
@@ -408,7 +736,7 @@ const FUNDING_SEEDS = [
     goal: 100000.00,
     raised: 40000.00,
     currency: "USD",
-    deadline: daysAgo(-120), // 120 days in the future
+    deadline: daysAgo(-120),
     country: "South Africa",
     city: "Cape Town",
     rewards: "Backers will receive regular project updates, recognition on our installations, and community impact reports based on contribution level.",
@@ -428,6 +756,13 @@ const FUNDING_SEEDS = [
     categoryName: "Energy",
     subcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
     createdAtDaysAgo: 15,
+    audience: {
+      categories: ["Energy"],
+      subcategories: [
+        { category: "Energy", subcategory: "Renewable Energy" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
+    }
   },
   {
     title: "Educational Technology for Rural Schools",
@@ -435,7 +770,7 @@ const FUNDING_SEEDS = [
     goal: 60000.00,
     raised: 20000.00,
     currency: "USD",
-    deadline: daysAgo(-75), // 75 days in the future
+    deadline: daysAgo(-75),
     country: "Ghana",
     city: "Accra",
     rewards: "Backers will receive impact reports, recognition in our materials, and opportunities to connect with beneficiary schools based on contribution level.",
@@ -454,6 +789,14 @@ const FUNDING_SEEDS = [
     creatorEmail: "afri-agro@pbi.africa",
     categoryName: "Education",
     createdAtDaysAgo: 8,
+    audience: {
+      categories: ["Education", "Technology"],
+      subcategories: [
+        { category: "Education", subcategory: "Education & Skill Development" },
+        { category: "Technology", subcategory: "Software Development" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
+    }
   },
   {
     title: "Sustainable Fashion Brand Using African Textiles",
@@ -461,7 +804,7 @@ const FUNDING_SEEDS = [
     goal: 40000.00,
     raised: 15000.00,
     currency: "USD",
-    deadline: daysAgo(-45), // 45 days in the future
+    deadline: daysAgo(-45),
     country: "Kenya",
     city: "Nairobi",
     rewards: "Backers will receive limited edition products, behind-the-scenes access, and recognition on our website based on contribution level.",
@@ -480,14 +823,349 @@ const FUNDING_SEEDS = [
     creatorEmail: "kenya-logistics@pbi.africa",
     categoryName: "Fashion & Apparel",
     createdAtDaysAgo: 12,
+    audience: {
+      categories: ["Fashion & Apparel", "Trade"],
+      subcategories: [
+        { category: "Fashion & Apparel", subcategory: "Textiles" },
+        { category: "Trade", subcategory: "Fashion" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist", "Investor"]
+    }
+  }
+];
+
+// Event Seeds
+const EVENT_SEEDS = [
+  {
+    title: "African Tech Summit",
+    eventType: "Conference",
+    description: "Annual conference bringing together tech leaders, startups, and investors from across Africa to discuss innovation, investment, and growth in the African tech ecosystem.",
+    startDate: daysAgo(-30),
+    endDate: daysAgo(-32),
+    location: "Kigali Convention Center",
+    address: "KG 2 Roundabout, Kigali, Rwanda",
+    country: "Rwanda",
+    city: "Kigali",
+    virtual: false,
+    price: 250.00,
+    currency: "USD",
+    startAt: new Date().toISOString().split('T')[0],
+    endAt: new Date().toISOString().split('T')[0],
+    locationType: 'Virtual',
+    capacity: 500,
+    tags: ["technology", "innovation", "startups", "investment"],
+    images: [
+      "https://images.unsplash.com/photo-1540575467063-178a50c2df87",
+      "https://images.unsplash.com/photo-1515187029135-18ee286d815b"
+    ],
+    organizerEmail: "kenya-logistics@pbi.africa",
+    categoryName: "Technology",
+    subcategoryName: "Tech Events",
+    createdAtDaysAgo: 60,
+    audience: {
+      categories: ["Technology", "Business"],
+      subcategories: [
+        { category: "Technology", subcategory: "Software Development" },
+        { category: "Business", subcategory: "Entrepreneurship" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Professional"]
+    },
+    coverImageUrl: "https://img.freepik.com/free-photo/professional-team-analyzing-archived-data-financial-file-meeting_482257-114412.jpg"
+  },
+  {
+    title: "Pan-African Agricultural Innovation Forum",
+    eventType: "Forum",
+    description: "A forum focused on agricultural innovation, sustainable farming practices, and technology adoption in African agriculture. Connect with experts, policymakers, and agribusiness leaders.",
+    startDate: daysAgo(-45),
+    endDate: daysAgo(-47),
+    location: "Radisson Blu Hotel",
+    address: "Elgon Avenue, Upper Hill, Nairobi, Kenya",
+    country: "Kenya",
+    city: "Nairobi",
+    startAt: new Date().toISOString().split('T')[0],
+    endAt: new Date().toISOString().split('T')[0],
+    locationType: 'Virtual',
+    virtual: false,
+    price: 150.00,
+    currency: "USD",
+    capacity: 300,
+    tags: ["agriculture", "innovation", "sustainability", "agritech"],
+    images: [
+      "https://images.unsplash.com/photo-1592982537447-7440770cbfc9",
+      "https://images.unsplash.com/photo-1625246333195-78d9c38ad449"
+    ],
+    organizerEmail: "afri-agro@pbi.africa",
+    categoryName: "Agriculture",
+    subcategoryName: "Agricultural Technology",
+    createdAtDaysAgo: 75,
+    audience: {
+      categories: ["Agriculture", "Technology"],
+      subcategories: [
+        { category: "Agriculture", subcategory: "Crop Production" },
+        { category: "Technology", subcategory: "AgriTech" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials", "Investor"]
+    },
+    coverImageUrl: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
+  },
+  {
+    title: "African Renewable Energy Summit",
+    eventType: "Summit",
+    description: "Summit focused on renewable energy development in Africa. Discuss policy, investment, and technology for solar, wind, hydro, and other renewable energy sources.",
+    startDate: daysAgo(-60),
+    endDate: daysAgo(-62),
+    location: "Cape Town International Convention Centre",
+    address: "Convention Square, 1 Lower Long Street, Cape Town, South Africa",
+    country: "South Africa",
+    city: "Cape Town",
+    virtual: true,
+    price: 200.00,
+    currency: "USD",
+    startAt: new Date().toISOString().split('T')[0],
+    endAt: new Date().toISOString().split('T')[0],
+    locationType: 'Virtual',
+    capacity: 400,
+    tags: ["renewable energy", "solar", "wind", "sustainability"],
+    images: [
+      "https://images.unsplash.com/photo-1509391366360-2e959784a276",
+      "https://images.unsplash.com/photo-1497440001374-f26997328c1b"
+    ],
+    organizerEmail: "sa-renew@pbi.africa",
+    categoryName: "Energy",
+    subcategoryName: "Renewable Energy",
+    createdAtDaysAgo: 90,
+    audience: {
+      categories: ["Energy", "Business"],
+      subcategories: [
+        { category: "Energy", subcategory: "Renewable Energy" },
+        { category: "Business", subcategory: "Investment" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
+    },
+    coverImageUrl: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
+  },
+  {
+    title: "African Fashion Week",
+    eventType: "Exhibition",
+    description: "Showcase of African fashion, textiles, and design. Connect with designers, retailers, and fashion industry professionals from across the continent.",
+    startDate: daysAgo(-20),
+    endDate: daysAgo(-26),
+    location: "Eko Hotel & Suites",
+    address: "Plot 1415 Adetokunbo Ademola Street, Victoria Island, Lagos, Nigeria",
+    country: "Nigeria",
+    city: "Lagos",
+    startAt: new Date().toISOString().split('T')[0],
+    endAt: new Date().toISOString().split('T')[0],
+    locationType: 'Virtual',
+    virtual: false,
+    price: 100.00,
+    currency: "USD",
+    capacity: 1000,
+    tags: ["fashion", "design", "textiles", "culture"],
+    images: [
+      "https://images.unsplash.com/photo-1534137667199-675a46e143f3",
+      "https://images.unsplash.com/photo-1589891685391-c1c1a2c4f1df"
+    ],
+    organizerEmail: "naija-fintech@pbi.africa",
+    categoryName: "Fashion & Apparel",
+    subcategoryName: "Fashion Events",
+    createdAtDaysAgo: 120,
+    audience: {
+      categories: ["Fashion & Apparel", "Trade"],
+      subcategories: [
+        { category: "Fashion & Apparel", subcategory: "Textiles" },
+        { category: "Trade", subcategory: "Fashion" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist", "Investor"]
+    },
+    coverImageUrl: "https://img.freepik.com/stock-photo/representations-user-experience-interface-design_23-2150038909.jpg"
+  },
+  {
+    title: "African Healthcare Innovation Conference",
+    eventType: "Conference",
+    description: "Conference focused on healthcare innovation, telemedicine, and medical technology in Africa. Connect with healthcare professionals, startups, and investors.",
+    startDate: daysAgo(-75),
+    endDate: daysAgo(-77),
+    location: "Accra International Conference Centre",
+    address: "Castle Road, Accra, Ghana",
+    country: "Ghana",
+    startAt: new Date().toISOString().split('T')[0],
+    endAt: new Date().toISOString().split('T')[0],
+    locationType: 'Virtual',
+    city: "Accra",
+    virtual: true,
+    price: 180.00,
+    currency: "USD",
+    capacity: 350,
+    tags: ["healthcare", "innovation", "telemedicine", "medical technology"],
+    images: [
+      "https://images.unsplash.com/photo-1584982751601-97dcc096659c",
+      "https://images.unsplash.com/photo-1576091160550-2173dba999ef"
+    ],
+    organizerEmail: "afri-agro@pbi.africa",
+    categoryName: "Healthcare",
+    subcategoryName: "Health Technology",
+    createdAtDaysAgo: 100,
+    audience: {
+      categories: ["Healthcare", "Technology"],
+      subcategories: [
+        { category: "Healthcare", subcategory: "Health & Wellbeing" },
+        { category: "Technology", subcategory: "Health Tech" }
+      ],
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
+    },
+    coverImageUrl: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
+  }
+];
+
+// Job Seeds
+const JOB_SEEDS = [
+  {
+    title: "Senior Software Engineer - Fintech",
+    workMode:'Hybrid',
+    jobType: "Full-time",
+    description: "We're looking for a Senior Software Engineer to join our fintech team in Lagos. You'll be responsible for developing and maintaining our payment processing platform, working with modern technologies like Node.js, React, and AWS.",
+    requirements: "5+ years of experience in software development, strong knowledge of JavaScript/TypeScript, experience with Node.js and React, familiarity with AWS services, understanding of payment systems.",
+    responsibilities: "Design and implement new features, maintain existing codebase, collaborate with product and design teams, mentor junior developers, participate in code reviews.",
+    salary: "Competitive",
+    location: "Lagos, Nigeria",
+    remote: true,
+    country:'Nigeria',
+    companyName: "AfriPay Solutions", 
+    applicationDeadline: daysAgo(-30),
+    tags: ["software engineering", "fintech", "node.js", "react", "aws"],
+    postedByEmail: "naija-fintech@pbi.africa",
+    categoryName: "Technology",
+    subcategoryName: "Software Development",
+    createdAtDaysAgo: 5,
+    audience: {
+      categories: ["Technology", "Finance"],
+      subcategories: [
+        { category: "Technology", subcategory: "Software Development" },
+        { category: "Finance", subcategory: "Financial Technology" }
+      ],
+      identities: ["Professional", "Freelancers", "Students"]
+    },
+    coverImageBase64: "https://img.freepik.com/free-photo/business-executives-participating-business-meeting_107420-63841.jpg"
+  },
+  {
+    title: "Agricultural Project Manager",
+    jobType: "Full-time",
+    workMode:'Hybrid',
+    description: "We're seeking an experienced Agricultural Project Manager to oversee our sustainable farming initiatives across East Africa. You'll be responsible for planning, implementing, and monitoring agricultural projects, working with local farmers and stakeholders.",
+    requirements: "Bachelor's degree in Agriculture, Project Management, or related field, 3+ years of experience in agricultural project management, knowledge of sustainable farming practices, excellent communication and leadership skills.",
+    responsibilities: "Develop project plans, coordinate with local farmers and stakeholders, monitor project progress, prepare reports, ensure compliance with regulations and standards.",
+    salary: "$40,000 - $60,000 per year",
+    location: "Nairobi, Kenya",
+    country:'Kenya',
+    remote: false,
+    companyName: "EastAfrica AgriDev",
+    applicationDeadline: daysAgo(-45),
+    tags: ["agriculture", "project management", "sustainable farming", "east africa"],
+    postedByEmail: "afri-agro@pbi.africa",
+    categoryName: "Agriculture",
+    subcategoryName: "Agricultural Management",
+    createdAtDaysAgo: 10,
+    audience: {
+      categories: ["Agriculture", "Project Management"],
+      subcategories: [
+        { category: "Agriculture", subcategory: "Crop Production" },
+        { category: "Project Management", subcategory: "Agricultural Projects" }
+      ],
+      identities: ["Professional", "Established Entrepreneurs / Businesses", "Government Officials"]
+    },
+    coverImageBase64: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
+  },
+  {
+    title: "Renewable Energy Engineer",
+    jobType: "Full-time",
+    workMode:'Hybrid',
+    country: "South Africa",
+    description: "We're looking for a Renewable Energy Engineer to join our team in Cape Town. You'll be responsible for designing, implementing, and maintaining solar and wind energy systems for off-grid communities across Southern Africa.",
+    requirements: "Bachelor's degree in Electrical Engineering, Renewable Energy, or related field, 2+ years of experience in renewable energy projects, knowledge of solar and wind energy systems, experience with energy storage solutions.",
+    responsibilities: "Design renewable energy systems, conduct site assessments, oversee installation and maintenance, train local technicians, prepare technical reports.",
+    salary: "R400,000 - R600,000 per year",
+    location: "Cape Town, South Africa",
+    remote: false,
+    companyName: "SolarWindAfrica",
+    applicationDeadline: daysAgo(-60),
+    tags: ["renewable energy", "solar", "wind", "engineering", "off-grid"],
+    postedByEmail: "sa-renew@pbi.africa",
+    categoryName: "Energy",
+    subcategoryName: "Renewable Energy",
+    createdAtDaysAgo: 15,
+    audience: {
+      categories: ["Energy", "Engineering"],
+      subcategories: [
+        { category: "Energy", subcategory: "Renewable Energy" },
+        { category: "Engineering", subcategory: "Electrical Engineering" }
+      ],
+      identities: ["Professional", "Students", "Established Entrepreneurs / Businesses"]
+    },
+    coverImageBase64: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
+  },
+  {
+    title: "Marketing Manager - Fashion Brand",
+    jobType: "Full-time",
+    workMode:'Hybrid',
+    description: "We're seeking a creative and strategic Marketing Manager to lead our marketing efforts for our sustainable fashion brand. You'll be responsible for developing and implementing marketing strategies to increase brand awareness and drive sales across Africa.",
+    requirements: "Bachelor's degree in Marketing, Business, or related field, 3+ years of experience in fashion marketing, knowledge of digital marketing channels, experience with social media marketing, understanding of the African fashion market.",
+    responsibilities: "Develop marketing strategies, manage social media presence, coordinate with influencers and partners, analyze marketing performance, manage marketing budget.",
+    salary: "Competitive",
+    location: "Nairobi, Kenya",
+    country: "South Kenya",
+    remote: true,
+    companyName: "AfriStyle Collective",
+    applicationDeadline: daysAgo(-30),
+    tags: ["marketing", "fashion", "social media", "digital marketing"],
+    postedByEmail: "kenya-logistics@pbi.africa",
+    categoryName: "Marketing & Advertising",
+    subcategoryName: "Digital Marketing",
+    createdAtDaysAgo: 7,
+    audience: {
+      categories: ["Marketing & Advertising", "Fashion & Apparel"],
+      subcategories: [
+        { category: "Marketing & Advertising", subcategory: "Digital Marketing" },
+        { category: "Fashion & Apparel", subcategory: "Fashion Marketing" }
+      ],
+      identities: ["Professional", "Creative & Artist", "Freelancers"]
+    },
+    coverImageBase64: "https://img.freepik.com/free-photo/representations-user-experience-interface-design_23-2150038909.jpg"
+  },
+  {
+    title: "Healthcare Technology Consultant",
+    jobType: "Contract",
+    workMode:'Hybrid',
+    description: "We're looking for a Healthcare Technology Consultant to help healthcare providers across West Africa implement telemedicine and electronic health record systems. You'll work with hospitals, clinics, and healthcare startups to improve their technology infrastructure.",
+    requirements: "Bachelor's degree in Healthcare Administration, Information Technology, or related field, 3+ years of experience in healthcare technology, knowledge of telemedicine platforms and EHR systems, excellent consulting and communication skills.",
+    responsibilities: "Assess client needs, recommend technology solutions, develop implementation plans, train staff, provide ongoing support and guidance.",
+    salary: "$300 - $500 per day",
+    location: "Accra, Ghana",
+    remote: true,
+    country: "Ghana",
+    companyName: "WestAfrica HealthTech Consulting",
+    applicationDeadline: daysAgo(-45),
+    tags: ["healthcare", "technology", "telemedicine", "consulting", "EHR"],
+    postedByEmail: "afri-agro@pbi.africa",
+    categoryName: "Healthcare",
+    subcategoryName: "Health Technology",
+    createdAtDaysAgo: 12,
+    audience: {
+      categories: ["Healthcare", "Technology"],
+      subcategories: [
+        { category: "Healthcare", subcategory: "Health & Wellbeing" },
+        { category: "Technology", subcategory: "Health Tech" }
+      ],
+      identities: ["Professional", "Freelancers", "Established Entrepreneurs / Businesses"]
+    },
+    coverImageBase64: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
   }
 ];
 
 /** ------------------------- Main ------------------------- **/
 
-
 async function run(){
-     try {
+  try {
     await sequelize.authenticate();
     console.log("🔌 DB connected (seed products/services/tourism/funding).");
 
@@ -506,8 +1184,7 @@ async function run(){
         ? await upsertSubcategoryByName(p.categoryName, p.subcategoryName)
         : null;
 
-      // Avoid duplicates by (title + sellerUserId)
-      const [row, created] = await Product.findOrCreate({
+      const [product, created] = await Product.findOrCreate({
         where: {
           title: p.title,
           sellerUserId: sellerUserId,
@@ -526,6 +1203,11 @@ async function run(){
       });
 
       console.log(`${created ? "✅" : "↺"} Product: ${p.title}`);
+      
+      if (created && p.audience) {
+        await associateWithAudience(product, 'product', p.audience);
+        console.log(`   ↳ Associated product with audience data`);
+      }
     }
 
     // --- Seed Services ---
@@ -543,8 +1225,7 @@ async function run(){
         ? await upsertSubcategoryByName(s.categoryName, s.subcategoryName)
         : null;
 
-      // Avoid duplicates by (title + providerUserId)
-      const [row, created] = await Service.findOrCreate({
+      const [service, created] = await Service.findOrCreate({
         where: {
           title: s.title,
           providerUserId: providerUserId,
@@ -569,6 +1250,11 @@ async function run(){
       });
 
       console.log(`${created ? "✅" : "↺"} Service: ${s.title}`);
+      
+      if (created && s.audience) {
+        await associateWithAudience(service, 'service', s.audience);
+        console.log(`   ↳ Associated service with audience data`);
+      }
     }
 
     // --- Seed Tourism ---
@@ -586,8 +1272,7 @@ async function run(){
         ? await upsertSubcategoryByName(t.categoryName, t.subcategoryName)
         : null;
 
-      // Avoid duplicates by (title + authorUserId)
-      const [row, created] = await Tourism.findOrCreate({
+      const [tourism, created] = await Tourism.findOrCreate({
         where: {
           title: t.title,
           authorUserId: authorUserId,
@@ -607,6 +1292,11 @@ async function run(){
       });
 
       console.log(`${created ? "✅" : "↺"} Tourism: ${t.title}`);
+      
+      if (created && t.audience) {
+        await associateWithAudience(tourism, 'tourism', t.audience);
+        console.log(`   ↳ Associated tourism with audience data`);
+      }
     }
 
     // --- Seed Funding ---
@@ -624,8 +1314,7 @@ async function run(){
         ? await upsertSubcategoryByName(f.categoryName, f.subcategoryName)
         : null;
 
-      // Avoid duplicates by (title + creatorUserId)
-      const [row, created] = await Funding.findOrCreate({
+      const [funding, created] = await Funding.findOrCreate({
         where: {
           title: f.title,
           creatorUserId: creatorUserId,
@@ -654,12 +1343,122 @@ async function run(){
       });
 
       console.log(`${created ? "✅" : "↺"} Funding: ${f.title}`);
+      
+      if (created && f.audience) {
+        await associateWithAudience(funding, 'funding', f.audience);
+        console.log(`   ↳ Associated funding with audience data`);
+      }
     }
 
-    console.log("🎉 Products, Services, Tourism, and Funding seeding done.");
-    // process.exit(0);
+    // --- Seed Events ---
+    const eventCount = await Event.count();
+    
+    for (const e of EVENT_SEEDS) {
+      if (eventCount > 0) {
+        console.log(`👥 Events already exist (${eventCount}), skipping event seed.`);
+        break;
+      }
+      
+      const organizerUserId = await getUserIdByEmail(e.organizerEmail);
+      const cat = await upsertCategoryByName(e.categoryName);
+      const sub = e.subcategoryName
+        ? await upsertSubcategoryByName(e.categoryName, e.subcategoryName)
+        : null;
+
+      const [event, created] = await Event.findOrCreate({
+        where: {
+          title: e.title,
+          organizerUserId: organizerUserId,
+        },
+        defaults: {
+          eventType: e.eventType,
+          description: e.description,
+          startAt: e.startAt,
+          endAt: e.endAt,
+          locationType: e.locationType,
+          address: e.address,
+          country: e.country,
+          city: e.city,
+          onlineUrl: e.onlineUrl || null,
+          registrationType: e.registrationType,
+          price: e.price || null,
+          currency: e.currency,
+          capacity: e.capacity || null,
+          coverImageUrl: e.coverImageUrl || null,
+          categoryId: cat ? cat.id : null,
+          subcategoryId: sub ? sub.id : null,
+          createdAt: daysAgo(e.createdAtDaysAgo ?? randBetween(1, 25)),
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log(`${created ? "✅" : "↺"} Event: ${e.title}`);
+      
+      if (created && e.audience) {
+        await associateWithAudience(event, 'event', e.audience);
+        console.log(`   ↳ Associated event with audience data`);
+      }
+    }
+
+    // --- Seed Jobs ---
+    const jobCount = await Job.count();
+    
+    for (const j of JOB_SEEDS) {
+      if (jobCount > 0) {
+        console.log(`👥 Jobs already exist (${jobCount}), skipping job seed.`);
+        break;
+      }
+      
+      const postedByUserId = await getUserIdByEmail(j.postedByEmail);
+      const cat = await upsertCategoryByName(j.categoryName);
+      const sub = j.subcategoryName
+        ? await upsertSubcategoryByName(j.categoryName, j.subcategoryName)
+        : null;
+
+      const [job, created] = await Job.findOrCreate({
+        where: {
+          title: j.title,
+          postedByUserId: postedByUserId,
+        },
+        defaults: {
+          jobType: j.jobType,
+          description: j.description,
+          companyName: j.companyName,
+          make_company_name_private: j.make_company_name_private || false,
+          department: j.department || null,
+          experienceLevel: j.experienceLevel || null,
+          workMode: j.workMode,
+          requiredSkills: j.requiredSkills || [],
+          country: j.country,
+          city: j.city || null,
+          minSalary: 10000 || null,
+          maxSalary: 40000 || null,
+          currency: j.currency || null,
+          benefits: j.benefits || null,
+          applicationDeadline: j.applicationDeadline,
+          positions: j.positions || 1,
+          applicationInstructions: j.applicationInstructions || null,
+          contactEmail: j.contactEmail || null,
+          categoryId: cat ? cat.id : null,
+          subcategoryId: sub ? sub.id : null,
+          status: "published",
+          createdAt: daysAgo(j.createdAtDaysAgo ?? randBetween(1, 25)),
+          updatedAt: new Date(),
+          coverImageBase64: j.coverImageBase64 || null,
+        },
+      });
+
+      console.log(`${created ? "✅" : "↺"} Job: ${j.title}`);
+      
+      if (created && j.audience) {
+        await associateWithAudience(job, 'job', j.audience);
+        console.log(`   ↳ Associated job with audience data`);
+      }
+    }
+
+    console.log("🎉 Products, Services, Tourism, Funding, Events, and Jobs seeding done.");
   } catch (err) {
     console.error("❌ Seed failed:", err);
+  }
 }
-}
-run()
+run();

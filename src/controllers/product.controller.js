@@ -191,8 +191,8 @@ exports.update = async (req, res) => {
     const updated = await Product.findByPk(product.id, {
       include: [
         { model: User, as: "seller", attributes: ["id", "name", "email"] },
-        { model: Category, as: "category" },
-        { model: Subcategory, as: "subcategory" },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
         // Include audience associations
         { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
         { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -213,8 +213,8 @@ exports.getOne = async (req, res) => {
   const product = await Product.findByPk(id, {
     include: [
       { model: User, as: "seller", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
+      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -245,8 +245,8 @@ exports.list = async (req, res) => {
     order: [["createdAt", "DESC"]],
     include: [
       { model: User, as: "seller", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
+      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
@@ -267,8 +267,8 @@ exports.getMyProducts = async (req, res) => {
     where: { sellerUserId: uid },
     order: [["createdAt", "DESC"]],
     include: [
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
+      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
       // Include audience associations
       { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
       { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },

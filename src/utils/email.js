@@ -1,11 +1,12 @@
 const nodemailer = require("nodemailer");
 const path = require("path");
+const { registerEmailHelpers } = require("./emailHelpers");
 
 const BRAND = {
-  name: "PBI",
-  website: process.env.WEBSITE_URL || "https://pbi.africa",
-  supportEmail: process.env.SUPPORT_EMAIL || "support@pbi.africa",
-  primary: "#8a358a",
+  name: "55Links",
+  website: process.env.WEBSITE_URL || "https://55links.com",
+  supportEmail: process.env.SUPPORT_EMAIL || "support@55links.com",
+  primary: "#034ea2",
   text: "#202124",
   muted: "#5f6368",
   bg: "#f6f7fb",
@@ -30,19 +31,23 @@ async function getTransport() {
   const hbsMod = await import("nodemailer-express-handlebars");
   const hbs = hbsMod.default || hbsMod; // handle default export
 
-  transport.use(
-    "compile",
-    hbs({
-      viewEngine: {
-        extname: ".hbs",
-        layoutsDir: path.resolve(__dirname, "../emails/layouts"),
-        partialsDir: path.resolve(__dirname, "../emails/partials"),
-        defaultLayout: "main",
-      },
-      viewPath: path.resolve(__dirname, "../emails"),
-      extName: ".hbs",
-    })
-  );
+  // Create handlebars options
+  const hbsOptions = {
+  viewEngine: {
+    extname: ".hbs",
+    layoutsDir: path.resolve(__dirname, "../emails/layouts"),
+    partialsDir: path.resolve(__dirname, "../emails/partials"),
+    defaultLayout: "main",
+    helpers: {}
+  },
+  viewPath: path.resolve(__dirname, "../emails"),
+  extName: ".hbs",
+};
+
+  // Register our custom helpers
+  registerEmailHelpers(hbsOptions.viewEngine.helpers);
+
+  transport.use("compile", hbs(hbsOptions));
 
   return transport;
 }
@@ -56,8 +61,10 @@ async function getTransport() {
  * @param {object} opts.context - handlebars variables available to template
  */
 async function sendTemplatedEmail({ to, subject, template, context = {} }) {
-  const from = process.env.EMAIL_FROM || "PBI <no-reply@pbi.africa>";
+  const from = process.env.EMAIL_FROM || "55Links <no-reply@pbi.africa>";
   const transport = await getTransport();
+
+  console.log({ to, subject,context,transport })
 
   // DEV fallback: log to console if SMTP not configured
   if (!transport) {

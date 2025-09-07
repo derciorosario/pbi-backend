@@ -17,8 +17,6 @@ const UserGoal = require("./userGoal")(sequelize, DataTypes);
 const UserCategory = require("./userCategory")(sequelize, DataTypes);
 const UserSubcategory = require("./userSubcategory")(sequelize, DataTypes);
 
-const NewsArticle = require("./newsArticle")(sequelize, DataTypes);
-
 const Job = require("./job")(sequelize, DataTypes);
 const Event = require("./event")(sequelize, DataTypes);
 const Service = require("./service")(sequelize, DataTypes);
@@ -60,12 +58,6 @@ UserCategory.belongsTo(User, { as: "user", foreignKey: "userId" });
 UserCategory.belongsTo(Category, { as: "category", foreignKey: "categoryId" });
 UserCategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
 
-// NewsArticle authoring
-User.hasMany(NewsArticle,   { foreignKey: "userId", as: "news" });
-NewsArticle.belongsTo(User, { foreignKey: "userId", as: "author" });
-
-Profile.hasMany(NewsArticle,   { foreignKey: "profileId", as: "news" });
-NewsArticle.belongsTo(Profile, { foreignKey: "profileId", as: "profile" });
 
 // Job posting
 User.hasMany(Job, { foreignKey: "postedByUserId", as: "jobs" });
@@ -625,7 +617,6 @@ module.exports = {
   Category,
   Subcategory,
   UserCategory,
-  NewsArticle,
   Goal,
   UserGoal,
   Event,

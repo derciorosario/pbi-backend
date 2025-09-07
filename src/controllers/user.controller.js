@@ -8,7 +8,6 @@ const {
   UserCategory,
   Goal,
   UserGoal,
-  NewsArticle,
   Job,
   Event,
   Connection,
@@ -84,7 +83,7 @@ exports.getPublicProfile = async (req, res) => {
     const [jobsCount, eventsCount, newsCount] = await Promise.all([
       Job.count({ where: { postedByUserId: user.id } }),
       Event.count({ where: { organizerUserId: user.id } }),
-      NewsArticle ? NewsArticle.count({ where: { userId: user.id } }) : Promise.resolve(0),
+      Promise.resolve(0),
     ]);
 
     const [recentJobs, recentEvents] = await Promise.all([
