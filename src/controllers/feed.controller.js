@@ -24,6 +24,7 @@ const {
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 
+
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
     include: [{ model: Subcategory, as: "subcategories" }],
@@ -32,8 +33,6 @@ exports.getMeta = async (req, res) => {
       [{ model: Subcategory, as: "subcategories" }, "name", "ASC"],
     ],
   });
-
-
 
   const identities = await Identity.findAll({
     include: [
@@ -158,7 +157,14 @@ const includeEventRefs = [
   { model: Category, as: "category", attributes: ["id", "name"] },
   { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
   { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] },
-  { model: User, as: "organizer", attributes: ["id", "name"] },
+  {
+    model: User,
+    as: "organizer",
+    attributes: ["id", "name", "avatarUrl"],
+    include: [
+      { model: Profile, as: "profile", attributes: ["avatarUrl"] }
+    ]
+  },
   // Audience associations
   {
     model: Category,
@@ -199,7 +205,7 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
     {
       model: User,
       as: "provider",
-      attributes: ["id", "name"],
+      attributes: ["id", "name", "avatarUrl"],
       include: [
         {
           model: UserCategory,
@@ -211,6 +217,7 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
             { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
           ],
         },
+        { model: Profile, as: "profile", attributes: ["avatarUrl"] }
       ],
     },
     // Direct associations
@@ -254,7 +261,14 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
 // [PRODUCT] include → seller + audience M2M with enhanced associations
 function makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   const include = [
-    { model: User, as: "seller", attributes: ["id", "name"] },
+    {
+      model: User,
+      as: "seller",
+      attributes: ["id", "name", "avatarUrl"],
+      include: [
+        { model: Profile, as: "profile", attributes: ["avatarUrl"] }
+      ]
+    },
     {
       model: Category,
       as: "audienceCategories",
@@ -295,7 +309,14 @@ function makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }) {
 // [TOURISM] include → author + audience M2M with enhanced associations
 function makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   const include = [
-    { model: User, as: "author", attributes: ["id", "name"] },
+    {
+      model: User,
+      as: "author",
+      attributes: ["id", "name", "avatarUrl"],
+      include: [
+        { model: Profile, as: "profile", attributes: ["avatarUrl"] }
+      ]
+    },
     {
       model: Category,
       as: "audienceCategories",
@@ -336,7 +357,14 @@ function makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }) {
 // [FUNDING] include → creator + direct category + audience M2M with enhanced associations
 function makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   const include = [
-    { model: User, as: "creator", attributes: ["id", "name"] },
+    {
+      model: User,
+      as: "creator",
+      attributes: ["id", "name", "avatarUrl"],
+      include: [
+        { model: Profile, as: "profile", attributes: ["avatarUrl"] }
+      ]
+    },
     { model: Category, as: "category", attributes: ["id", "name"], required: false },
     {
       model: Category,
@@ -384,11 +412,44 @@ exports.getFeed = async (req, res) => {
       subcategoryId,
       subsubCategoryId,
       identityId,
+
+      // products
+      price,              // field: price
+      // services
+      serviceType,        // field: serviceType
+      priceType,          // field: priceType
+      deliveryTime,       // field: deliveryTime
+
+      // shared (Jobs, Services)
+      experienceLevel,    // field: experienceLevel
+      locationType,       // field: locationType
+      // jobs
+      jobType,            // field: jobType
+      workMode,           // field: workMode
+      // tourism
+      postType,           // field: postType
+      season,             // field: season
+      budgetRange,        // field: budgetRange
+      // funding
+      fundingGoal,        // field: goal
+      amountRaised,       // field: raised
+      deadline,           // field: deadline
+      // events
+      date,
+      eventType,          // field: eventType
+      registrationType,   // field: registrationType
+
       limit = 20,
       offset = 0,
     } = req.query;
     
-    console.log("Feed request:", { tab, q, country, city, categoryId, subcategoryId, subsubCategoryId, identityId });
+    console.log("Feed request:", {
+      tab, q, country, city, categoryId, subcategoryId, subsubCategoryId, identityId,
+      // Log additional filters
+      price, serviceType, priceType, deliveryTime, experienceLevel, locationType,
+      jobType, workMode, postType, season, budgetRange, fundingGoal, amountRaised, deadline,
+      eventType, date, registrationType
+    });
     
     // Improved text search handling
     let searchTerms = [];
@@ -403,7 +464,21 @@ exports.getFeed = async (req, res) => {
     const off = pickNumber(offset) ?? 0;
 
     const isFilterActive = Boolean(
-      country || city || categoryId || subcategoryId || subsubCategoryId || identityId
+      country || city || categoryId || subcategoryId || subsubCategoryId || identityId ||
+      // Product filters
+      price ||
+      // Service filters
+      serviceType || priceType || deliveryTime ||
+      // Shared filters
+      experienceLevel || locationType ||
+      // Job filters
+      jobType || workMode ||
+      // Tourism filters
+      postType || season || budgetRange ||
+      // Funding filters
+      fundingGoal || amountRaised || deadline ||
+      // Event filters
+      eventType || date || registrationType
     );
     
     // Treat text search separately to allow it to work with interest-based prioritization
@@ -544,27 +619,90 @@ exports.getFeed = async (req, res) => {
     }
 
     // ---------------- WHEREs from filters ----------------
-    const whereCommon = {};
-    if (country) whereCommon.country = country;
-    if (city) whereCommon.city = like(city);
-
+    // Enhanced flexible location matching
+    const createFlexibleLocationFilter = () => {
+      const filter = {};
+      
+      // If both country and city are provided, we'll use OR logic to match either
+      if (country && city) {
+        filter[Op.or] = [
+          // Direct matches
+          { country: country },
+          { city: like(city) },
+          
+          // Cross matches (city value in country field or country value in city field)
+          { country: like(city) },
+          { city: like(country) },
+        ];
+      }
+      // If only country is provided
+      else if (country) {
+        filter[Op.or] = [
+          { country: country },
+          { city: like(country) }, // Also match country name in city field
+        ];
+      }
+      // If only city is provided
+      else if (city) {
+        filter[Op.or] = [
+          { city: like(city) },
+          { country: like(city) }, // Also match city name in country field
+        ];
+      }
+      
+      return filter;
+    };
+    
+    // Create flexible location filters for each item type
+    const whereCommon = createFlexibleLocationFilter();
     const whereJob = { ...whereCommon };
     const whereEvent = { ...whereCommon };
     const whereService = { ...whereCommon };
-
-    // Products: country only
+    
+    // Products: Apply location matching (only country, no city field in Product model)
     const whereProduct = {};
-    if (country) whereProduct.country = country;
-
-    // Tourism: country + location (uses ?city)
+    if (country) {
+      whereProduct.country = country;
+    }
+    if (price) {
+      whereProduct.price = { [Op.lte]: Number(price) };
+    }
+    
+    // Tourism: Apply flexible location matching with location field
     const whereTourism = {};
-    if (country) whereTourism.country = country;
-    if (city) whereTourism.location = like(city);
-
-    // Funding: country + city, optional status/visibility if you want (left open)
-    const whereFunding = {};
-    if (country) whereFunding.country = country;
-    if (city) whereFunding.city = like(city);
+    if (country && city) {
+      whereTourism[Op.or] = [
+        { country: country },
+        { location: like(city) },
+        { country: like(city) },
+        { location: like(country) },
+      ];
+    } else if (country) {
+      whereTourism[Op.or] = [
+        { country: country },
+        { location: like(country) },
+      ];
+    } else if (city) {
+      whereTourism[Op.or] = [
+        { location: like(city) },
+        { country: like(city) },
+      ];
+    }
+    
+    // Funding: Apply flexible location matching and funding-specific filters
+    const whereFunding = createFlexibleLocationFilter();
+    
+    // Apply funding-specific filters
+    if (fundingGoal) {
+      whereFunding.goal = { [Op.lte]: Number(fundingGoal) };
+    }
+    if (amountRaised) {
+      whereFunding.raised = { [Op.gte]: Number(amountRaised) };
+    }
+    if (deadline) {
+      // Filter for deadlines that are after the specified date
+      whereFunding.deadline = { [Op.gte]: deadline };
+    }
 
     // Apply taxonomy filters
     if (categoryId) {
@@ -579,6 +717,58 @@ exports.getFeed = async (req, res) => {
       whereEvent.subcategoryId = subcategoryId;
       // products/tourism/funding via M2M
     }
+    
+    // Apply job-specific filters
+    if (jobType) {
+      whereJob.jobType = jobType;
+    }
+    if (workMode) {
+      whereJob.workMode = workMode;
+    }
+    if (experienceLevel) {
+      whereJob.experienceLevel = experienceLevel;
+      // Also apply to services if applicable
+      whereService.experienceLevel = experienceLevel;
+    }
+    if (locationType) {
+      whereJob.locationType = locationType;
+      // Also apply to services if applicable
+      whereService.locationType = locationType;
+    }
+    
+    // Apply service-specific filters
+    if (serviceType) {
+      whereService.serviceType = serviceType;
+    }
+    if (priceType) {
+      whereService.priceType = priceType;
+    }
+    if (deliveryTime) {
+      whereService.deliveryTime = deliveryTime;
+    }
+    
+    // Apply tourism-specific filters
+    if (postType) {
+      whereTourism.postType = postType;
+    }
+    if (season) {
+      whereTourism.season = season;
+    }
+    if (budgetRange) {
+      whereTourism.budgetRange = budgetRange;
+    }
+    
+    // Apply event-specific filters
+    if (eventType) {
+      whereEvent.eventType = eventType;
+    }
+    if (date) {
+      // Filter for events on or after the specified date
+      whereEvent.date = { [Op.gte]: date };
+    }
+    if (registrationType) {
+      whereEvent.registrationType = registrationType;
+    }
     if (subsubCategoryId) {
       whereJob.subsubCategoryId = subsubCategoryId;
       whereEvent.subsubCategoryId = subsubCategoryId;
@@ -592,35 +782,41 @@ exports.getFeed = async (req, res) => {
         { title: like(term) },
         { companyName: like(term) },
         { city: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
       
       whereEvent[Op.or] = searchTerms.flatMap(term => [
         { title: like(term) },
         { description: like(term) },
         { city: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
       
       whereService[Op.or] = searchTerms.flatMap(term => [
         { title: like(term) },
         { description: like(term) },
         { city: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
       
       whereProduct[Op.or] = searchTerms.flatMap(term => [
         { title: like(term) },
         { description: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
       
       whereTourism[Op.or] = searchTerms.flatMap(term => [
         { title: like(term) },
         { description: like(term) },
         { location: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
       
       whereFunding[Op.or] = searchTerms.flatMap(term => [
         { title: like(term) },
         { pitch: like(term) },
         { city: like(term) },
+        { country: like(term) }, // Also match country names
       ]);
     }
 
@@ -708,51 +904,140 @@ exports.getFeed = async (req, res) => {
     }
 
     // ---------------- Mappers ----------------
-    const mapJob = (j) => ({
-      kind: "job",
-      id: j.id,
-      title: j.title,
-      companyName: j.companyName,
-      jobType: j.jobType,
-      workMode: j.workMode,
-      categoryId: j.categoryId ? String(j.categoryId) : "",
-      categoryName: j.category?.name || "",
-      subcategoryId: j.subcategoryId ? String(j.subcategoryId) : "",
-      subcategoryName: j.subcategory?.name || "",
-      description: j.description,
-      city: j.city,
-      country: j.country,
-      currency: j.currency,
-      salaryMin: j.salaryMin,
-      salaryMax: j.salaryMax,
-      createdAt: j.createdAt,
-      timeAgo: timeAgo(j.createdAt),
-      postedByUserId: j.postedByUserId || null,
-      postedByUserName: j.postedBy?.name || null,
-      postedByUserAvatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
-    });
+    const mapJob = (j) => {
+      const jobData = {
+        kind: "job",
+        id: j.id,
+        title: j.title,
+        companyName: j.companyName,
+        jobType: j.jobType,
+        workMode: j.workMode,
+        categoryId: j.categoryId ? String(j.categoryId) : "",
+        categoryName: j.category?.name || "",
+        subcategoryId: j.subcategoryId ? String(j.subcategoryId) : "",
+        subcategoryName: j.subcategory?.name || "",
+        description: j.description,
+        city: j.city,
+        country: j.country,
+        currency: j.currency,
+        salaryMin: j.salaryMin,
+        salaryMax: j.salaryMax,
+        createdAt: j.createdAt,
+        timeAgo: timeAgo(j.createdAt),
+        postedByUserId: j.postedByUserId || null,
+        postedByUserName: j.postedBy?.name || null,
+        postedByUserAvatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
+        avatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
+        // Add coverImage field if it exists
+        coverImage: j.coverImage || j.coverImageBase64 || null,
+        // Audience associations
+        audienceCategories: (j.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (j.audienceSubcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (j.audienceSubsubs || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (j.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
+      };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        jobData.matchPercentage = calculateItemMatchPercentage(jobData);
+      } else {
+        jobData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return jobData;
+    };
 
-    const mapEvent = (e) => ({
-      kind: "event",
-      id: e.id,
-      title: e.title,
-      eventType: e.eventType,
-      description: e.description,
-      coverImageBase64: e.coverImageBase64,
-      isPaid: e.isPaid,
-      price: e.price,
-      currency: e.currency,
-      categoryId: e.categoryId ? String(e.categoryId) : "",
-      categoryName: e.category?.name || "",
-      subcategoryId: e.subcategoryId ? String(e.subcategoryId) : "",
-      subcategoryName: e.subcategory?.name || "",
-      city: e.city,
-      country: e.country,
-      createdAt: e.createdAt,
-      timeAgo: timeAgo(e.createdAt),
-      organizerUserId: e.organizerUserId || null,
-      organizerUserName: e.organizer?.name || null,
-    });
+    const mapEvent = (e) => {
+      const eventData = {
+        kind: "event",
+        id: e.id,
+        title: e.title,
+        eventType: e.eventType,
+        description: e.description,
+        coverImageBase64: e.coverImageBase64,
+        
+        // Debug all event fields to find image fields
+        _debug_fields: process.env.NODE_ENV !== 'production' ? Object.keys(e.dataValues || e).filter(k =>
+          typeof e[k] === 'string' &&
+          (k.toLowerCase().includes('image') || k.toLowerCase().includes('cover') || k.toLowerCase().includes('photo'))
+        ) : null,
+        
+        // Check for various possible image field names and handle the case where "Url" might be prepended
+        coverImage: (() => {
+          // Check all possible field names
+          const possibleFields = [
+            'coverImage', 'coverImageBase64', 'coverImageUrl', 'overImage',
+            'overImageUrl', 'eventImage', 'eventCover', 'image', 'imageUrl'
+          ];
+          
+          // Try each field
+          for (const field of possibleFields) {
+            if (e[field]) {
+              let value = e[field];
+              
+              // Handle case where "Url" is prepended to the actual URL
+              if (typeof value === 'string' && value.startsWith('Url')) {
+                value = value.substring(3); // Remove "Url" prefix
+              }
+              
+              console.log(`Found image in field ${field}: ${value}`);
+              return value;
+            }
+          }
+          
+          // If we have any field with 'image' in its name, try that as a fallback
+          const imageFields = Object.keys(e.dataValues || e).filter(k =>
+            typeof e[k] === 'string' &&
+            (k.toLowerCase().includes('image') || k.toLowerCase().includes('cover') || k.toLowerCase().includes('photo'))
+          );
+          
+          if (imageFields.length > 0) {
+            const field = imageFields[0];
+            let value = e[field];
+            
+            // Handle case where "Url" is prepended to the actual URL
+            if (typeof value === 'string' && value.startsWith('Url')) {
+              value = value.substring(3); // Remove "Url" prefix
+            }
+            
+            console.log(`Found image in fallback field ${field}: ${value}`);
+            return value;
+          }
+          
+          return null;
+        })(),
+        
+        images: e.images ? (typeof e.images === 'string' ? JSON.parse(e.images || '[]') : (Array.isArray(e.images) ? e.images : [])) : [],
+        isPaid: e.isPaid,
+        price: e.price,
+        currency: e.currency,
+        categoryId: e.categoryId ? String(e.categoryId) : "",
+        categoryName: e.category?.name || "",
+        subcategoryId: e.subcategoryId ? String(e.subcategoryId) : "",
+        subcategoryName: e.subcategory?.name || "",
+        city: e.city,
+        country: e.country,
+        createdAt: e.createdAt,
+        timeAgo: timeAgo(e.createdAt),
+        organizerUserId: e.organizerUserId || null,
+        organizerUserName: e.organizer?.name || null,
+        avatarUrl: e.organizer?.avatarUrl || e.organizer?.profile?.avatarUrl || null,
+        // Audience associations
+        audienceCategories: (e.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (e.audienceSubcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (e.audienceSubsubs || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (e.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
+      };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        eventData.matchPercentage = calculateItemMatchPercentage(eventData);
+      } else {
+        eventData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return eventData;
+    };
 
     // [SERVICE] representative cat/subcat from provider interests
     function pickServiceCatSub(svc, preferredCatId, preferredSubId) {
@@ -775,7 +1060,8 @@ exports.getFeed = async (req, res) => {
 
     const mapService = (s) => {
       const picked = pickServiceCatSub(s, categoryId, subcategoryId);
-      return {
+      
+      const serviceData = {
         kind: "service",
         id: s.id,
         title: s.title,
@@ -786,6 +1072,7 @@ exports.getFeed = async (req, res) => {
         deliveryTime: s.deliveryTime,
         locationType: s.locationType,
         experienceLevel: s.experienceLevel,
+        images: s.attachments ? (typeof s.attachments === 'string' ? JSON.parse(s.attachments || '[]') : (Array.isArray(s.attachments) ? s.attachments : [])) : [],
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
@@ -796,7 +1083,22 @@ exports.getFeed = async (req, res) => {
         timeAgo: timeAgo(s.createdAt),
         providerUserId: s.providerUserId || null,
         providerUserName: s.provider?.name || null,
+        avatarUrl: s.provider?.avatarUrl || s.provider?.profile?.avatarUrl || null,
+        // Audience associations
+        audienceCategories: (s.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (s.audienceSubcategories || []).map(sub => ({ id: String(sub.id), name: sub.name })),
+        audienceSubsubs: (s.audienceSubsubs || []).map(sub => ({ id: String(sub.id), name: sub.name })),
+        audienceIdentities: (s.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
       };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        serviceData.matchPercentage = calculateItemMatchPercentage(serviceData);
+      } else {
+        serviceData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return serviceData;
     };
 
     // [PRODUCT] pick representative category/subcategory from audience M2M
@@ -837,15 +1139,44 @@ exports.getFeed = async (req, res) => {
 
     const mapProduct = (p) => {
       const picked = pickProductCatSub(p, categoryId, subcategoryId);
-      return {
+      
+      // Parse images safely - handle both array and JSON string formats
+      let parsedImages = [];
+      try {
+        if (Array.isArray(p.images)) {
+          parsedImages = p.images;
+        } else if (typeof p.images === 'string') {
+          parsedImages = JSON.parse(p.images || '[]');
+        } else if (p.images && typeof p.images === 'object') {
+          // Handle case where it might be a Sequelize object
+          parsedImages = p.images;
+        }
+        console.log(`Product ${p.id} images parsed:`, parsedImages);
+      } catch (err) {
+        console.error(`Error parsing images for product ${p.id}:`, err.message);
+      }
+      
+      // Parse tags safely
+      let parsedTags = [];
+      try {
+        if (Array.isArray(p.tags)) {
+          parsedTags = p.tags;
+        } else if (typeof p.tags === 'string') {
+          parsedTags = JSON.parse(p.tags || '[]');
+        }
+      } catch (err) {
+        console.error(`Error parsing tags for product ${p.id}:`, err.message);
+      }
+      
+      const productData = {
         kind: "product",
         id: p.id,
         title: p.title,
         description: p.description,
         price: p.price,
         quantity: p.quantity,
-        tags: Array.isArray(p.tags) ? p.tags : [],
-        images: Array.isArray(p.images) ? p.images : [],
+        tags: parsedTags,
+        images: parsedImages,
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
@@ -855,7 +1186,22 @@ exports.getFeed = async (req, res) => {
         timeAgo: timeAgo(p.createdAt),
         sellerUserId: p.sellerUserId || null,
         sellerUserName: p.seller?.name || null,
+        avatarUrl: p.seller?.avatarUrl || p.seller?.profile?.avatarUrl || null,
+        // Audience associations
+        audienceCategories: (p.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (p.audienceSubcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (p.audienceSubsubs || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (p.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
       };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        productData.matchPercentage = calculateItemMatchPercentage(productData);
+      } else {
+        productData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return productData;
     };
 
     // [TOURISM] pick representative category/subcategory from audience M2M
@@ -894,7 +1240,36 @@ exports.getFeed = async (req, res) => {
 
     const mapTourism = (t) => {
       const picked = pickTourismCatSub(t, categoryId, subcategoryId);
-      return {
+      
+      // Parse images safely - handle both array and JSON string formats
+      let parsedImages = [];
+      try {
+        if (Array.isArray(t.images)) {
+          parsedImages = t.images;
+        } else if (typeof t.images === 'string') {
+          parsedImages = JSON.parse(t.images || '[]');
+        } else if (t.images && typeof t.images === 'object') {
+          // Handle case where it might be a Sequelize object
+          parsedImages = t.images;
+        }
+        console.log(`Tourism ${t.id} images parsed:`, parsedImages);
+      } catch (err) {
+        console.error(`Error parsing images for tourism ${t.id}:`, err.message);
+      }
+      
+      // Parse tags safely
+      let parsedTags = [];
+      try {
+        if (Array.isArray(t.tags)) {
+          parsedTags = t.tags;
+        } else if (typeof t.tags === 'string') {
+          parsedTags = JSON.parse(t.tags || '[]');
+        }
+      } catch (err) {
+        console.error(`Error parsing tags for tourism ${t.id}:`, err.message);
+      }
+      
+      const tourismData = {
         kind: "tourism",
         id: t.id,
         postType: t.postType, // Destination | Experience | Culture
@@ -902,8 +1277,8 @@ exports.getFeed = async (req, res) => {
         description: t.description,
         season: t.season || null,
         budgetRange: t.budgetRange || null,
-        tags: Array.isArray(t.tags) ? t.tags : [],
-        images: Array.isArray(t.images) ? t.images : [],
+        tags: parsedTags,
+        images: parsedImages,
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
@@ -914,7 +1289,22 @@ exports.getFeed = async (req, res) => {
         timeAgo: timeAgo(t.createdAt),
         authorUserId: t.authorUserId || null,
         authorUserName: t.author?.name || null,
+        avatarUrl: t.author?.avatarUrl || t.author?.profile?.avatarUrl || null,
+        // Audience associations
+        audienceCategories: (t.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (t.audienceSubcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (t.audienceSubsubs || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (t.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
       };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        tourismData.matchPercentage = calculateItemMatchPercentage(tourismData);
+      } else {
+        tourismData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return tourismData;
     };
 
     // [FUNDING] pick representative category/subcategory from audience; prefer direct category if present
@@ -966,7 +1356,48 @@ exports.getFeed = async (req, res) => {
 
     const mapFunding = (f) => {
       const picked = pickFundingCatSub(f, categoryId, subcategoryId);
-      return {
+      
+      // Parse images safely - handle both array and JSON string formats
+      let parsedImages = [];
+      try {
+        if (Array.isArray(f.images)) {
+          parsedImages = f.images;
+        } else if (typeof f.images === 'string') {
+          parsedImages = JSON.parse(f.images || '[]');
+        } else if (f.images && typeof f.images === 'object') {
+          // Handle case where it might be a Sequelize object
+          parsedImages = f.images;
+        }
+        console.log(`Funding ${f.id} images parsed:`, parsedImages);
+      } catch (err) {
+        console.error(`Error parsing images for funding ${f.id}:`, err.message);
+      }
+      
+      // Parse tags safely
+      let parsedTags = [];
+      try {
+        if (Array.isArray(f.tags)) {
+          parsedTags = f.tags;
+        } else if (typeof f.tags === 'string') {
+          parsedTags = JSON.parse(f.tags || '[]');
+        }
+      } catch (err) {
+        console.error(`Error parsing tags for funding ${f.id}:`, err.message);
+      }
+      
+      // Parse links safely
+      let parsedLinks = [];
+      try {
+        if (Array.isArray(f.links)) {
+          parsedLinks = f.links;
+        } else if (typeof f.links === 'string') {
+          parsedLinks = JSON.parse(f.links || '[]');
+        }
+      } catch (err) {
+        console.error(`Error parsing links for funding ${f.id}:`, err.message);
+      }
+      
+      const fundingData = {
         kind: "funding",
         id: f.id,
         title: f.title,
@@ -980,9 +1411,10 @@ exports.getFeed = async (req, res) => {
         phone: f.phone || null,
         status: f.status,
         visibility: f.visibility,
-        tags: Array.isArray(f.tags) ? f.tags : [],
-        links: Array.isArray(f.links) ? f.links : [],
-        images: Array.isArray(f.images) ? f.images : [],
+        tags: parsedTags,
+        links: parsedLinks,
+        raised:f.raised,
+        images: parsedImages,
         // derived category/subcategory (prefers direct category)
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
@@ -995,9 +1427,137 @@ exports.getFeed = async (req, res) => {
         timeAgo: timeAgo(f.createdAt),
         creatorUserId: f.creatorUserId || null,
         creatorUserName: f.creator?.name || null,
+        avatarUrl: f.creator?.avatarUrl || f.creator?.profile?.avatarUrl || null,
+        // Audience associations
+        audienceCategories: (f.audienceCategories || []).map(c => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (f.audienceSubcategories || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (f.audienceSubsubs || []).map(s => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (f.audienceIdentities || []).map(i => ({ id: String(i.id), name: i.name })),
       };
+      
+      // Calculate match percentage if user is logged in
+      if (currentUserId) {
+        fundingData.matchPercentage = calculateItemMatchPercentage(fundingData);
+      } else {
+        fundingData.matchPercentage = 20; // Default match percentage for non-logged in users
+      }
+      
+      return fundingData;
     };
 
+    // Calculate match percentage between current user and an item
+    const calculateItemMatchPercentage = (item) => {
+      // If no user is logged in, return default percentage
+      if (!currentUserId) return 20;
+      
+      // Extract item's taxonomies
+      const itemTaxonomies = {
+        categories: (item.audienceCategories || []).map(c => String(c.id)),
+        subcategories: (item.audienceSubcategories || []).map(s => String(s.id)),
+        subsubcategories: (item.audienceSubsubs || []).map(s => String(s.id)),
+        identities: (item.audienceIdentities || []).map(i => String(i.id)),
+      };
+      
+      // Add direct category/subcategory if they exist
+      if (item.categoryId) itemTaxonomies.categories.push(String(item.categoryId));
+      if (item.subcategoryId) itemTaxonomies.subcategories.push(String(item.subcategoryId));
+      
+      // Remove duplicates
+      itemTaxonomies.categories = [...new Set(itemTaxonomies.categories)];
+      itemTaxonomies.subcategories = [...new Set(itemTaxonomies.subcategories)];
+      itemTaxonomies.subsubcategories = [...new Set(itemTaxonomies.subsubcategories)];
+      itemTaxonomies.identities = [...new Set(itemTaxonomies.identities)];
+      
+      // Define maximum possible score and required factors
+      const MAX_SCORE = 100;
+      
+      // Always require at least these many factors for a 100% match
+      const REQUIRED_FACTORS = 3;
+      
+      // Define weights for different match types (total should be 100)
+      const WEIGHTS = {
+        category: 30,       // Category interest match
+        subcategory: 35,    // Subcategory interest match
+        subsubcategory: 20, // Subsubcategory interest match
+        identity: 15,       // Identity interest match
+      };
+      
+      // Calculate score for each factor
+      let totalScore = 0;
+      let matchedFactors = 0;
+      
+      // Category matches
+      if (userDefaults.interestCategoryIds.length > 0 && itemTaxonomies.categories.length > 0) {
+        const catMatches = itemTaxonomies.categories.filter(id =>
+          userDefaults.interestCategoryIds.includes(id));
+        
+        if (catMatches.length > 0) {
+          // Calculate percentage of matching categories
+          const catMatchPercentage = Math.min(1, catMatches.length /
+            Math.max(userDefaults.interestCategoryIds.length, itemTaxonomies.categories.length));
+          
+          totalScore += WEIGHTS.category * catMatchPercentage;
+          matchedFactors++;
+        }
+      }
+      
+      // Subcategory matches
+      if (userDefaults.interestSubcategoryIds.length > 0 && itemTaxonomies.subcategories.length > 0) {
+        const subMatches = itemTaxonomies.subcategories.filter(id =>
+          userDefaults.interestSubcategoryIds.includes(id));
+        
+        if (subMatches.length > 0) {
+          // Calculate percentage of matching subcategories
+          const subMatchPercentage = Math.min(1, subMatches.length /
+            Math.max(userDefaults.interestSubcategoryIds.length, itemTaxonomies.subcategories.length));
+          
+          totalScore += WEIGHTS.subcategory * subMatchPercentage;
+          matchedFactors++;
+        }
+      }
+      
+      // Subsubcategory matches
+      if (userDefaults.interestSubsubCategoryIds.length > 0 && itemTaxonomies.subsubcategories.length > 0) {
+        const xMatches = itemTaxonomies.subsubcategories.filter(id =>
+          userDefaults.interestSubsubCategoryIds.includes(id));
+        
+        if (xMatches.length > 0) {
+          // Calculate percentage of matching subsubcategories
+          const xMatchPercentage = Math.min(1, xMatches.length /
+            Math.max(userDefaults.interestSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length));
+          
+          totalScore += WEIGHTS.subsubcategory * xMatchPercentage;
+          matchedFactors++;
+        }
+      }
+      
+      // Identity matches
+      if (userDefaults.interestIdentityIds.length > 0 && itemTaxonomies.identities.length > 0) {
+        const idMatches = itemTaxonomies.identities.filter(id =>
+          userDefaults.interestIdentityIds.includes(id));
+        
+        if (idMatches.length > 0) {
+          // Calculate percentage of matching identities
+          const idMatchPercentage = Math.min(1, idMatches.length /
+            Math.max(userDefaults.interestIdentityIds.length, itemTaxonomies.identities.length));
+          
+          totalScore += WEIGHTS.identity * idMatchPercentage;
+          matchedFactors++;
+        }
+      }
+      
+      // Apply a penalty if fewer than REQUIRED_FACTORS matched
+      if (matchedFactors < REQUIRED_FACTORS) {
+        // Apply a scaling factor based on how many factors matched
+        const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
+        totalScore = totalScore * scalingFactor;
+      }
+      
+      // Ensure the score is between 20 and 100
+      // We use 20 as minimum to ensure all items have some match percentage
+      return Math.max(20, Math.min(100, Math.round(totalScore)));
+    };
+    
     // ---------------- Enhanced Scoring with Prioritization ----------------
     // Create sets for efficient lookups
     // Interest sets (what the user is looking for) - higher priority
@@ -1291,9 +1851,14 @@ exports.getFeed = async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
+        // For Funding in "all" tab, we need to handle the audience associations differently
+        // to avoid the "Unknown column 'audienceCategories.id' in 'where clause'" error
         Funding.findAll({
-          subQuery: Boolean(categoryId || subcategoryId || subsubCategoryId || identityId),
-          where: whereFunding,
+          // Don't use subQuery when we have taxonomy filters to avoid the error
+          subQuery: false,
+          where: categoryId
+            ? { ...whereFunding, categoryId } // Use direct categoryId filter instead of the complex OR condition
+            : whereFunding,
           include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
@@ -1511,9 +2076,14 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
+      // For Funding in "all" tab, we need to handle the audience associations differently
+      // to avoid the "Unknown column 'audienceCategories.id' in 'where clause'" error
       Funding.findAll({
-        subQuery: Boolean(categoryId || subcategoryId || subsubCategoryId || identityId),
-        where: whereFunding,
+        // Don't use subQuery when we have taxonomy filters to avoid the error
+        subQuery: false,
+        where: categoryId
+          ? { ...whereFunding, categoryId } // Use direct categoryId filter instead of the complex OR condition
+          : whereFunding,
         include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -1779,56 +2349,94 @@ exports.getSuggestions = async (req, res) => {
           .map(String)
       };
 
-      // Improved scoring for suggestions with better weights
-      // Count matches for more accurate percentage
-      let matchCount = 0;
-      let possibleMatches = 0;
+      // Define maximum possible score and required factors
+      const MAX_SCORE = 100;
       
-      // Only count possible matches for taxonomies that exist
-      possibleMatches += myWant.xSet.size > 0 && other.xs.length > 0 ? 1 : 0;
-      possibleMatches += myWant.subSet.size > 0 && other.subs.length > 0 ? 1 : 0;
-      possibleMatches += myWant.catSet.size > 0 && other.cats.length > 0 ? 1 : 0;
-      possibleMatches += myWant.idSet.size > 0 && other.ids.length > 0 ? 1 : 0;
-      possibleMatches += myWant.city && u.city ? 1 : 0;
-      possibleMatches += myWant.country && (u.countryOfResidence || u.country) ? 1 : 0;
+      // Always require at least these many factors for a 100% match
+      const REQUIRED_FACTORS = 4;
       
-      // If no possible matches, ensure we don't divide by zero
-      if (possibleMatches === 0) possibleMatches = 1;
+      // Define weights for different match types (total should be 100)
+      const WEIGHTS = {
+        category: 20,       // Category match
+        subcategory: 25,    // Subcategory match
+        subsubcategory: 15, // Subsubcategory match
+        identity: 10,       // Identity match
+        country: 15,        // Country match
+        city: 15,           // City match
+      };
       
-      let s = 0;
-      if (other.xs.some(id => myWant.xSet.has(id))) {
-        s += W.x;
-        matchCount++;
+      // Calculate score for each factor
+      let totalScore = 0;
+      let matchedFactors = 0;
+      
+      // Category matches
+      if (myWant.catSet.size > 0 && other.cats.length > 0) {
+        const catMatches = other.cats.filter(id => myWant.catSet.has(id));
+        if (catMatches.length > 0) {
+          // Calculate percentage of matching categories
+          const catMatchPercentage = Math.min(1, catMatches.length / Math.max(myWant.catSet.size, other.cats.length));
+          totalScore += WEIGHTS.category * catMatchPercentage;
+          matchedFactors++;
+        }
       }
-      if (other.subs.some(id => myWant.subSet.has(id))) {
-        s += W.sub;
-        matchCount++;
+      
+      // Subcategory matches
+      if (myWant.subSet.size > 0 && other.subs.length > 0) {
+        const subMatches = other.subs.filter(id => myWant.subSet.has(id));
+        if (subMatches.length > 0) {
+          // Calculate percentage of matching subcategories
+          const subMatchPercentage = Math.min(1, subMatches.length / Math.max(myWant.subSet.size, other.subs.length));
+          totalScore += WEIGHTS.subcategory * subMatchPercentage;
+          matchedFactors++;
+        }
       }
-      if (other.cats.some(id => myWant.catSet.has(id))) {
-        s += W.cat;
-        matchCount++;
+      
+      // Subsubcategory matches
+      if (myWant.xSet.size > 0 && other.xs.length > 0) {
+        const xMatches = other.xs.filter(id => myWant.xSet.has(id));
+        if (xMatches.length > 0) {
+          // Calculate percentage of matching subsubcategories
+          const xMatchPercentage = Math.min(1, xMatches.length / Math.max(myWant.xSet.size, other.xs.length));
+          totalScore += WEIGHTS.subsubcategory * xMatchPercentage;
+          matchedFactors++;
+        }
       }
-      if (other.ids.some(id => myWant.idSet.has(id))) {
-        s += W.id;
-        matchCount++;
+      
+      // Identity matches
+      if (myWant.idSet.size > 0 && other.ids.length > 0) {
+        const idMatches = other.ids.filter(id => myWant.idSet.has(id));
+        if (idMatches.length > 0) {
+          // Calculate percentage of matching identities
+          const idMatchPercentage = Math.min(1, idMatches.length / Math.max(myWant.idSet.size, other.ids.length));
+          totalScore += WEIGHTS.identity * idMatchPercentage;
+          matchedFactors++;
+        }
       }
-
+      
+      // City match
       const hisCity = (u.city || "").toLowerCase();
-      const hisCountry = u.countryOfResidence || u.country || null;
-
       if (myWant.city && hisCity && myWant.city === hisCity) {
-        s += W.city;
-        matchCount++;
+        totalScore += WEIGHTS.city;
+        matchedFactors++;
       }
+      
+      // Country match
+      const hisCountry = u.countryOfResidence || u.country || null;
       if (myWant.country && hisCountry && myWant.country === hisCountry) {
-        s += W.country;
-        matchCount++;
+        totalScore += WEIGHTS.country;
+        matchedFactors++;
       }
-
-      // Calculate percentage based on actual matches vs possible matches
-      // Ensure it's a number from 0 to 100
-      const pct = Math.round((matchCount / possibleMatches) * 100);
-      return Math.max(0, Math.min(100, pct));
+      
+      // Apply a penalty if fewer than REQUIRED_FACTORS matched
+      // This ensures that a single category match won't result in a high percentage
+      if (matchedFactors < REQUIRED_FACTORS) {
+        // Apply a scaling factor based on how many factors matched
+        const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
+        totalScore = totalScore * scalingFactor;
+      }
+      
+      // Ensure the score is between 0 and 100
+      return Math.max(0, Math.min(100, Math.round(totalScore)));
     };
 
     const mapUser = (u, idx) => {

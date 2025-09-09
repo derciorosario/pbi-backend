@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@react-google-maps/api": "^2.20.7",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.18",
@@ -31,7 +32,7 @@
     "jobs-events": "node src/seeds/seedJobsAndEvents.js",
     "migrate:add-company-private": "node scripts/add_make_company_name_private.js",
     "migrate:add-raised-field": "node scripts/add_raised_field_to_funding.js",
-    "seed-more":"node src/seeds/seedProductsServicesTourismFunding.js"
+    "seed-more": "node src/seeds/seedProductsServicesTourismFunding.js"
   },
   "keywords": [],
   "author": "",

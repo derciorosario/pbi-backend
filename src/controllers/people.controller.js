@@ -38,12 +38,25 @@ exports.searchPeople = async (req, res) => {
       cats, // multiple category ids (comma-separated)
       subcategoryId,
       goalId,
+      experienceLevel, // Added experienceLevel filter
       connectionStatus, // NEW: filter (comma-separated): connected,incoming_pending,outgoing_pending,none
       limit = 20,
       offset = 0,
     } = req.query;
 
-    console.log(connectionStatus)
+    console.log("People search request:", {
+      q,
+      country,
+      city,
+      categoryId,
+      cats,
+      subcategoryId,
+      goalId,
+      experienceLevel,
+      connectionStatus,
+      limit,
+      offset
+    });
 
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
@@ -85,16 +98,53 @@ exports.searchPeople = async (req, res) => {
       accountType: { [Op.ne]: "admin" },
       ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {}),
     };
-    if (country) whereUser.country = country;
-    if (city) whereUser.city = like(city);
+    // Enhanced flexible location matching
+    if (country && city) {
+      whereUser[Op.or] = [
+        // Direct matches
+        { country: country },
+        { city: like(city) },
+        
+        // Cross matches (city value in country field or country value in city field)
+        { country: like(city) },
+        { city: like(country) },
+      ];
+    }
+    // If only country is provided
+    else if (country) {
+      whereUser[Op.or] = [
+        { country: country },
+        { city: like(country) }, // Also match country name in city field
+      ];
+    }
+    // If only city is provided
+    else if (city) {
+      whereUser[Op.or] = [
+        { city: like(city) },
+        { country: like(city) }, // Also match city name in country field
+      ];
+    }
 
     if (q) {
       whereUser[Op.or] = [
         { name: like(q) },
         { email: like(q) },
+        { phone: like(q) },
+        { biography: like(q) },
+        { nationality: like(q) },
         { "$profile.professionalTitle$": like(q) },
         { "$profile.about$": like(q) },
+        { "$profile.primaryIdentity$": like(q) },
+        { country: like(q) }, // Also match country names
+        { city: like(q) }, // Also match city names
+        { countryOfResidence: like(q) }, // Also match country of residence
       ];
+    }
+
+    // ---- Profile WHERE conditions ----
+    const whereProfile = {};
+    if (experienceLevel) {
+      whereProfile.experienceLevel = experienceLevel;
     }
 
     // ---- Include for interests (categories/subcategories) ----
@@ -131,7 +181,12 @@ exports.searchPeople = async (req, res) => {
     const rows = await User.findAll({
       where: whereUser,
       include: [
-        { model: Profile, as: "profile", required: false },
+        {
+          model: Profile,
+          as: "profile",
+          required: Object.keys(whereProfile).length > 0, // Make profile required if filtering by profile fields
+          where: Object.keys(whereProfile).length > 0 ? whereProfile : undefined
+        },
         interestsInclude,
         goalsInclude,
       ],
@@ -174,7 +229,8 @@ exports.searchPeople = async (req, res) => {
 
     // ---- Scoring for prioritization when NO explicit filters ----
     const hasExplicitFilter =
-      !!(effGoalIds.length || effCategoryIds.length || effSubcategoryIds.length || country || city || q);
+      !!(effGoalIds.length || effCategoryIds.length || effSubcategoryIds.length ||
+         country || city || q || experienceLevel);
 
     const scored = rows.map((u) => {
       const userGoalIds = (u.goals || []).map((g) => String(g.id));

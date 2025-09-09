@@ -15,6 +15,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         validate: { isEmail: true },
       },
+      
       phone: { type: DataTypes.STRING },
       biography: { type: DataTypes.TEXT },
       nationality: { type: DataTypes.STRING },
@@ -37,6 +38,7 @@ module.exports = (sequelize, DataTypes) => {
       provider: { type: DataTypes.ENUM("local", "google"), allowNull: false, defaultValue: "local" },
       googleId: { type: DataTypes.STRING(64), allowNull: true },
       avatarUrl: { type: DataTypes.STRING(512), allowNull: true, validate: { isUrl: true } },
+
     },
     {
       tableName: "users",
