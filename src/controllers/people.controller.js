@@ -186,6 +186,7 @@ exports.searchPeople = async (req, res) => {
       }
     }
 
+
     // ---- Include for interests (categories/subcategories) ----
     const interestsWhere = {};
     

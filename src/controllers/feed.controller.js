@@ -93,6 +93,18 @@ const pickNumber = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+function ensureArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(Boolean);
+  if (typeof val === "string") {
+    return val
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [val];
+}
+
 // ---- Humanizer
 function timeAgo(date) {
   const d = new Date(date);
@@ -413,6 +425,12 @@ exports.getFeed = async (req, res) => {
       subsubCategoryId,
       identityId,
 
+      // Audience filters from AudienceTree
+      audienceIdentityIds,
+      audienceCategoryIds,
+      audienceSubcategoryIds,
+      audienceSubsubCategoryIds,
+
       // products
       price,              // field: price
       // services
@@ -445,6 +463,8 @@ exports.getFeed = async (req, res) => {
     
     console.log("Feed request:", {
       tab, q, country, city, categoryId, subcategoryId, subsubCategoryId, identityId,
+      // Log audience filters
+      audienceIdentityIds, audienceCategoryIds, audienceSubcategoryIds, audienceSubsubCategoryIds,
       // Log additional filters
       price, serviceType, priceType, deliveryTime, experienceLevel, locationType,
       jobType, workMode, postType, season, budgetRange, fundingGoal, amountRaised, deadline,
@@ -463,8 +483,37 @@ exports.getFeed = async (req, res) => {
     const lim = pickNumber(limit) ?? 20;
     const off = pickNumber(offset) ?? 0;
 
-    const isFilterActive = Boolean(
+    // Parse audience filter IDs
+    const effAudienceIdentityIds = ensureArray(audienceIdentityIds).filter(Boolean);
+    const effAudienceCategoryIds = ensureArray(audienceCategoryIds).filter(Boolean);
+    const effAudienceSubcategoryIds = ensureArray(audienceSubcategoryIds).filter(Boolean);
+    const effAudienceSubsubCategoryIds = ensureArray(audienceSubsubCategoryIds).filter(Boolean);
+    
+    // Convert to strings to ensure consistent comparison
+    const effAudienceIdentityIdsStr = effAudienceIdentityIds.map(id => String(id));
+    const effAudienceCategoryIdsStr = effAudienceCategoryIds.map(id => String(id));
+    const effAudienceSubcategoryIdsStr = effAudienceSubcategoryIds.map(id => String(id));
+    const effAudienceSubsubCategoryIdsStr = effAudienceSubsubCategoryIds.map(id => String(id));
+
+    // Log audience filter parameters for debugging
+    console.log("Audience filter parameters:", {
+      identityIds: effAudienceIdentityIds,
+      audienceCategoryIds: effAudienceCategoryIds,
+      audienceSubcategoryIds: effAudienceSubcategoryIds,
+      audienceSubsubCategoryIds: effAudienceSubsubCategoryIds
+    });
+
+    
+    // Treat text search separately to allow it to work with interest-based prioritization
+    const hasTextSearch = Boolean(q && searchTerms.length > 0);
+    const currentUserId = req.user?.id || null;
+
+    // Check if any explicit filters are applied
+    const hasExplicitFilter = Boolean(
       country || city || categoryId || subcategoryId || subsubCategoryId || identityId ||
+      // Audience filters
+      effAudienceIdentityIds.length || effAudienceCategoryIds.length ||
+      effAudienceSubcategoryIds.length || effAudienceSubsubCategoryIds.length ||
       // Product filters
       price ||
       // Service filters
@@ -478,12 +527,10 @@ exports.getFeed = async (req, res) => {
       // Funding filters
       fundingGoal || amountRaised || deadline ||
       // Event filters
-      eventType || date || registrationType
+      eventType || date || registrationType ||
+      // Text search
+      hasTextSearch
     );
-    
-    // Treat text search separately to allow it to work with interest-based prioritization
-    const hasTextSearch = Boolean(q && searchTerms.length > 0);
-    const currentUserId = req.user?.id || null;
 
     // Enhanced user defaults to distinguish between interests and attributes
     let userDefaults = {
@@ -541,70 +588,70 @@ exports.getFeed = async (req, res) => {
           // Store unique IDs for attributes
           userDefaults.attributeCategoryIds = Array.from(new Set(attributeCats));
           userDefaults.attributeSubcategoryIds = Array.from(new Set(attributeSubs));
-          
+
           // Now try to get interest data (what the user is looking for)
           // Initialize empty arrays for all interest types
           userDefaults.interestCategoryIds = [];
           userDefaults.interestSubcategoryIds = [];
           userDefaults.interestSubsubCategoryIds = [];
           userDefaults.interestIdentityIds = [];
-          
+
           try {
             // Get category interests
             const categoryInterests = await UserCategoryInterest.findAll({
               where: { userId: currentUserId },
               include: [{ model: Category, as: "category", attributes: ["id", "name"] }]
             });
-            
+
             userDefaults.interestCategoryIds = categoryInterests
               .map(i => i.categoryId)
               .filter(Boolean);
           } catch (error) {
             console.log("Category interests not available:", error.message);
           }
-          
+
           try {
             // Get subcategory interests
             const subcategoryInterests = await UserSubcategoryInterest.findAll({
               where: { userId: currentUserId },
               include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name"] }]
             });
-            
+
             userDefaults.interestSubcategoryIds = subcategoryInterests
               .map(i => i.subcategoryId)
               .filter(Boolean);
           } catch (error) {
             console.log("Subcategory interests not available:", error.message);
           }
-          
+
           try {
             // Get subsubcategory interests
             const subsubInterests = await UserSubsubCategoryInterest.findAll({
               where: { userId: currentUserId },
               include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }]
             });
-            
+
             userDefaults.interestSubsubCategoryIds = subsubInterests
               .map(i => i.subsubCategoryId)
               .filter(Boolean);
           } catch (error) {
             console.log("Subsubcategory interests not available:", error.message);
           }
-          
+
           try {
             // Get identity interests
             const identityInterests = await UserIdentityInterest.findAll({
               where: { userId: currentUserId },
               include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }]
             });
-            
+
             userDefaults.interestIdentityIds = identityInterests
               .map(i => i.identityId)
               .filter(Boolean);
           } catch (error) {
             console.log("Identity interests not available:", error.message);
           }
-          
+
           console.log("User interests loaded:", {
             categories: userDefaults.interestCategoryIds,
             subcategories: userDefaults.interestSubcategoryIds,
@@ -619,27 +666,33 @@ exports.getFeed = async (req, res) => {
     }
 
     // ---------------- WHEREs from filters ----------------
+    // Parse country as array to support multiple countries
+    const countries = ensureArray(country);
+    console.log("Countries filter:", countries);
+    
     // Enhanced flexible location matching
     const createFlexibleLocationFilter = () => {
       const filter = {};
       
-      // If both country and city are provided, we'll use OR logic to match either
-      if (country && city) {
+      // If both countries and city are provided, we'll use OR logic to match either
+      if (countries.length > 0 && city) {
         filter[Op.or] = [
-          // Direct matches
-          { country: country },
+          // Direct country matches (any of the provided countries)
+          { country: { [Op.in]: countries } },
+          // City match
           { city: like(city) },
           
-          // Cross matches (city value in country field or country value in city field)
-          { country: like(city) },
-          { city: like(country) },
+          // Cross matches (city value in country field or country values in city field)
+          ...countries.map(c => ({ city: like(c) })),
         ];
       }
-      // If only country is provided
-      else if (country) {
+      // If only countries are provided
+      else if (countries.length > 0) {
         filter[Op.or] = [
-          { country: country },
-          { city: like(country) }, // Also match country name in city field
+          // Direct country matches (any of the provided countries)
+          { country: { [Op.in]: countries } },
+          // Also match country names in city field
+          ...countries.map(c => ({ city: like(c) })),
         ];
       }
       // If only city is provided
@@ -661,8 +714,8 @@ exports.getFeed = async (req, res) => {
     
     // Products: Apply location matching (only country, no city field in Product model)
     const whereProduct = {};
-    if (country) {
-      whereProduct.country = country;
+    if (countries.length > 0) {
+      whereProduct.country = { [Op.in]: countries };
     }
     if (price) {
       whereProduct.price = { [Op.lte]: Number(price) };
@@ -670,17 +723,22 @@ exports.getFeed = async (req, res) => {
     
     // Tourism: Apply flexible location matching with location field
     const whereTourism = {};
-    if (country && city) {
+    if (countries.length > 0 && city) {
       whereTourism[Op.or] = [
-        { country: country },
+        // Direct country matches
+        { country: { [Op.in]: countries } },
+        // Location matches
         { location: like(city) },
+        // Cross matches
         { country: like(city) },
-        { location: like(country) },
+        ...countries.map(c => ({ location: like(c) })),
       ];
-    } else if (country) {
+    } else if (countries.length > 0) {
       whereTourism[Op.or] = [
-        { country: country },
-        { location: like(country) },
+        // Direct country matches
+        { country: { [Op.in]: countries } },
+        // Also match country names in location field
+        ...countries.map(c => ({ location: like(c) })),
       ];
     } else if (city) {
       whereTourism[Op.or] = [
@@ -717,57 +775,228 @@ exports.getFeed = async (req, res) => {
       whereEvent.subcategoryId = subcategoryId;
       // products/tourism/funding via M2M
     }
+
+    // Apply audience filters to WHERE clauses for M2M associations
+    if (effAudienceIdentityIdsStr.length > 0) {
+      console.log("Applying audience identity filters:", effAudienceIdentityIdsStr);
+      
+      // Create a separate array for audience identity filters
+      const audienceIdentityFilter = { "$audienceIdentities.id$": { [Op.in]: effAudienceIdentityIdsStr } };
+      
+      // For Job
+      if (!whereJob[Op.and]) whereJob[Op.and] = [];
+      whereJob[Op.and].push(audienceIdentityFilter);
+      
+      // For Event
+      if (!whereEvent[Op.and]) whereEvent[Op.and] = [];
+      whereEvent[Op.and].push(audienceIdentityFilter);
+      
+      // For Service
+      if (!whereService[Op.and]) whereService[Op.and] = [];
+      whereService[Op.and].push(audienceIdentityFilter);
+      
+      // For Product
+      if (!whereProduct[Op.and]) whereProduct[Op.and] = [];
+      whereProduct[Op.and].push(audienceIdentityFilter);
+      
+      // For Tourism
+      if (!whereTourism[Op.and]) whereTourism[Op.and] = [];
+      whereTourism[Op.and].push(audienceIdentityFilter);
+      
+      // For Funding
+      if (!whereFunding[Op.and]) whereFunding[Op.and] = [];
+      whereFunding[Op.and].push(audienceIdentityFilter);
+    }
+
+    if (effAudienceCategoryIdsStr.length > 0) {
+      console.log("Applying audience category filters:", effAudienceCategoryIdsStr);
+      
+      // Create a separate array for audience category filters
+      const audienceCategoryFilter = { "$audienceCategories.id$": { [Op.in]: effAudienceCategoryIdsStr } };
+      
+      // For Job
+      if (!whereJob[Op.and]) whereJob[Op.and] = [];
+      whereJob[Op.and].push(audienceCategoryFilter);
+      
+      // For Event
+      if (!whereEvent[Op.and]) whereEvent[Op.and] = [];
+      whereEvent[Op.and].push(audienceCategoryFilter);
+      
+      // For Service
+      if (!whereService[Op.and]) whereService[Op.and] = [];
+      whereService[Op.and].push(audienceCategoryFilter);
+      
+      // For Product
+      if (!whereProduct[Op.and]) whereProduct[Op.and] = [];
+      whereProduct[Op.and].push(audienceCategoryFilter);
+      
+      // For Tourism
+      if (!whereTourism[Op.and]) whereTourism[Op.and] = [];
+      whereTourism[Op.and].push(audienceCategoryFilter);
+      
+      // For Funding
+      if (!whereFunding[Op.and]) whereFunding[Op.and] = [];
+      whereFunding[Op.and].push(audienceCategoryFilter);
+    }
+
+    if (effAudienceSubcategoryIdsStr.length > 0) {
+      console.log("Applying audience subcategory filters:", effAudienceSubcategoryIdsStr);
+      
+      // Create a separate array for audience subcategory filters
+      const audienceSubcategoryFilter = { "$audienceSubcategories.id$": { [Op.in]: effAudienceSubcategoryIdsStr } };
+      
+      // For Job
+      if (!whereJob[Op.and]) whereJob[Op.and] = [];
+      whereJob[Op.and].push(audienceSubcategoryFilter);
+      
+      // For Event
+      if (!whereEvent[Op.and]) whereEvent[Op.and] = [];
+      whereEvent[Op.and].push(audienceSubcategoryFilter);
+      
+      // For Service
+      if (!whereService[Op.and]) whereService[Op.and] = [];
+      whereService[Op.and].push(audienceSubcategoryFilter);
+      
+      // For Product
+      if (!whereProduct[Op.and]) whereProduct[Op.and] = [];
+      whereProduct[Op.and].push(audienceSubcategoryFilter);
+      
+      // For Tourism
+      if (!whereTourism[Op.and]) whereTourism[Op.and] = [];
+      whereTourism[Op.and].push(audienceSubcategoryFilter);
+      
+      // For Funding
+      if (!whereFunding[Op.and]) whereFunding[Op.and] = [];
+      whereFunding[Op.and].push(audienceSubcategoryFilter);
+    }
+
+    if (effAudienceSubsubCategoryIdsStr.length > 0) {
+      console.log("Applying audience subsubcategory filters:", effAudienceSubsubCategoryIdsStr);
+      
+      // Create a separate array for audience subsubcategory filters
+      const audienceSubsubFilter = { "$audienceSubsubs.id$": { [Op.in]: effAudienceSubsubCategoryIdsStr } };
+      
+      // For Job
+      if (!whereJob[Op.and]) whereJob[Op.and] = [];
+      whereJob[Op.and].push(audienceSubsubFilter);
+      
+      // For Event
+      if (!whereEvent[Op.and]) whereEvent[Op.and] = [];
+      whereEvent[Op.and].push(audienceSubsubFilter);
+      
+      // For Service
+      if (!whereService[Op.and]) whereService[Op.and] = [];
+      whereService[Op.and].push(audienceSubsubFilter);
+      
+      // For Product
+      if (!whereProduct[Op.and]) whereProduct[Op.and] = [];
+      whereProduct[Op.and].push(audienceSubsubFilter);
+      
+      // For Tourism
+      if (!whereTourism[Op.and]) whereTourism[Op.and] = [];
+      whereTourism[Op.and].push(audienceSubsubFilter);
+      
+      // For Funding
+      if (!whereFunding[Op.and]) whereFunding[Op.and] = [];
+      whereFunding[Op.and].push(audienceSubsubFilter);
+    }
     
     // Apply job-specific filters
     if (jobType) {
-      whereJob.jobType = jobType;
+      // Handle multiple job types (comma-separated)
+      const jobTypes = jobType.split(',').filter(Boolean);
+      if (jobTypes.length > 0) {
+        whereJob.jobType = { [Op.in]: jobTypes };
+      }
     }
     if (workMode) {
-      whereJob.workMode = workMode;
+      // Handle multiple work modes (comma-separated)
+      const workModes = workMode.split(',').filter(Boolean);
+      if (workModes.length > 0) {
+        whereJob.workMode = { [Op.in]: workModes };
+      }
     }
     if (experienceLevel) {
-      whereJob.experienceLevel = experienceLevel;
-      // Also apply to services if applicable
-      whereService.experienceLevel = experienceLevel;
+      // Handle multiple experience levels (comma-separated)
+      const experienceLevels = experienceLevel.split(',').filter(Boolean);
+      if (experienceLevels.length > 0) {
+        whereJob.experienceLevel = { [Op.in]: experienceLevels };
+        whereService.experienceLevel = { [Op.in]: experienceLevels };
+      }
     }
     if (locationType) {
-      whereJob.locationType = locationType;
-      // Also apply to services if applicable
-      whereService.locationType = locationType;
+      // Handle multiple location types (comma-separated)
+      const locationTypes = locationType.split(',').filter(Boolean);
+      if (locationTypes.length > 0) {
+        whereJob.locationType = { [Op.in]: locationTypes };
+        whereService.locationType = { [Op.in]: locationTypes };
+      }
     }
     
     // Apply service-specific filters
     if (serviceType) {
-      whereService.serviceType = serviceType;
+      // Handle multiple service types (comma-separated)
+      const serviceTypes = serviceType.split(',').filter(Boolean);
+      if (serviceTypes.length > 0) {
+        whereService.serviceType = { [Op.in]: serviceTypes };
+      }
     }
     if (priceType) {
-      whereService.priceType = priceType;
+      // Handle multiple price types (comma-separated)
+      const priceTypes = priceType.split(',').filter(Boolean);
+      if (priceTypes.length > 0) {
+        whereService.priceType = { [Op.in]: priceTypes };
+      }
     }
     if (deliveryTime) {
-      whereService.deliveryTime = deliveryTime;
+      // Handle multiple delivery times (comma-separated)
+      const deliveryTimes = deliveryTime.split(',').filter(Boolean);
+      if (deliveryTimes.length > 0) {
+        whereService.deliveryTime = { [Op.in]: deliveryTimes };
+      }
     }
     
     // Apply tourism-specific filters
     if (postType) {
-      whereTourism.postType = postType;
+      // Handle multiple post types (comma-separated)
+      const postTypes = postType.split(',').filter(Boolean);
+      if (postTypes.length > 0) {
+        whereTourism.postType = { [Op.in]: postTypes };
+      }
     }
     if (season) {
-      whereTourism.season = season;
+      // Handle multiple seasons (comma-separated)
+      const seasons = season.split(',').filter(Boolean);
+      if (seasons.length > 0) {
+        whereTourism.season = { [Op.in]: seasons };
+      }
     }
     if (budgetRange) {
-      whereTourism.budgetRange = budgetRange;
+      // Handle multiple budget ranges (comma-separated)
+      const budgetRanges = budgetRange.split(',').filter(Boolean);
+      if (budgetRanges.length > 0) {
+        whereTourism.budgetRange = { [Op.in]: budgetRanges };
+      }
     }
     
     // Apply event-specific filters
     if (eventType) {
-      whereEvent.eventType = eventType;
+      // Handle multiple event types (comma-separated)
+      const eventTypes = eventType.split(',').filter(Boolean);
+      if (eventTypes.length > 0) {
+        whereEvent.eventType = { [Op.in]: eventTypes };
+      }
     }
     if (date) {
       // Filter for events on or after the specified date
       whereEvent.date = { [Op.gte]: date };
     }
     if (registrationType) {
-      whereEvent.registrationType = registrationType;
+      // Handle multiple registration types (comma-separated)
+      const registrationTypes = registrationType.split(',').filter(Boolean);
+      if (registrationTypes.length > 0) {
+        whereEvent.registrationType = { [Op.in]: registrationTypes };
+      }
     }
     if (subsubCategoryId) {
       whereJob.subsubCategoryId = subsubCategoryId;
@@ -820,32 +1049,32 @@ exports.getFeed = async (req, res) => {
       ]);
     }
 
-    // Add OR filters for Funding audience (and direct category)
+    // Add filters for Funding audience (and direct category)
     // Use subQuery:false in queries where these $paths are used.
     if (categoryId) {
-      whereFunding[Op.or] = [
-        ...(whereFunding[Op.or] || []),
+      if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
+      whereFunding[Op.or].push(
         { categoryId }, // direct
-        { "$audienceCategories.id$": categoryId }, // M2M
-      ];
+        { "$audienceCategories.id$": categoryId } // M2M
+      );
     }
     if (subcategoryId) {
-      whereFunding[Op.or] = [
-        ...(whereFunding[Op.or] || []),
-        { "$audienceSubcategories.id$": subcategoryId },
-      ];
+      if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
+      whereFunding[Op.or].push(
+        { "$audienceSubcategories.id$": subcategoryId }
+      );
     }
     if (subsubCategoryId) {
-      whereFunding[Op.or] = [
-        ...(whereFunding[Op.or] || []),
-        { "$audienceSubsubs.id$": subsubCategoryId },
-      ];
+      if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
+      whereFunding[Op.or].push(
+        { "$audienceSubsubs.id$": subsubCategoryId }
+      );
     }
     if (identityId) {
-      whereFunding[Op.or] = [
-        ...(whereFunding[Op.or] || []),
-        { "$audienceIdentities.id$": identityId },
-      ];
+      if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
+      whereFunding[Op.or].push(
+        { "$audienceIdentities.id$": identityId }
+      );
     }
 
     // ---------------- Connection status decorator ----------------
@@ -1449,7 +1678,7 @@ exports.getFeed = async (req, res) => {
     const calculateItemMatchPercentage = (item) => {
       // If no user is logged in, return default percentage
       if (!currentUserId) return 20;
-      
+
       // Extract item's taxonomies
       const itemTaxonomies = {
         categories: (item.audienceCategories || []).map(c => String(c.id)),
@@ -1457,102 +1686,144 @@ exports.getFeed = async (req, res) => {
         subsubcategories: (item.audienceSubsubs || []).map(s => String(s.id)),
         identities: (item.audienceIdentities || []).map(i => String(i.id)),
       };
-      
+
       // Add direct category/subcategory if they exist
       if (item.categoryId) itemTaxonomies.categories.push(String(item.categoryId));
       if (item.subcategoryId) itemTaxonomies.subcategories.push(String(item.subcategoryId));
-      
+
       // Remove duplicates
       itemTaxonomies.categories = [...new Set(itemTaxonomies.categories)];
       itemTaxonomies.subcategories = [...new Set(itemTaxonomies.subcategories)];
       itemTaxonomies.subsubcategories = [...new Set(itemTaxonomies.subsubcategories)];
       itemTaxonomies.identities = [...new Set(itemTaxonomies.identities)];
-      
+
       // Define maximum possible score and required factors
       const MAX_SCORE = 100;
-      
+
       // Always require at least these many factors for a 100% match
       const REQUIRED_FACTORS = 3;
-      
+
       // Define weights for different match types (total should be 100)
       const WEIGHTS = {
-        category: 30,       // Category interest match
-        subcategory: 35,    // Subcategory interest match
+        category: 25,       // Category interest match
+        subcategory: 30,    // Subcategory interest match
         subsubcategory: 20, // Subsubcategory interest match
         identity: 15,       // Identity interest match
+        location: 10,       // Location match
       };
-      
+
       // Calculate score for each factor
       let totalScore = 0;
       let matchedFactors = 0;
-      
-      // Category matches
-      if (userDefaults.interestCategoryIds.length > 0 && itemTaxonomies.categories.length > 0) {
+
+      // Category matches (combine user interests with audience filter selections)
+      const allUserCategoryIds = [...new Set([
+        ...userDefaults.interestCategoryIds,
+        ...effAudienceCategoryIds
+      ])];
+
+      if (allUserCategoryIds.length > 0 && itemTaxonomies.categories.length > 0) {
         const catMatches = itemTaxonomies.categories.filter(id =>
-          userDefaults.interestCategoryIds.includes(id));
-        
+          allUserCategoryIds.includes(id));
+
         if (catMatches.length > 0) {
           // Calculate percentage of matching categories
           const catMatchPercentage = Math.min(1, catMatches.length /
-            Math.max(userDefaults.interestCategoryIds.length, itemTaxonomies.categories.length));
-          
+            Math.max(allUserCategoryIds.length, itemTaxonomies.categories.length));
+
           totalScore += WEIGHTS.category * catMatchPercentage;
           matchedFactors++;
         }
       }
-      
-      // Subcategory matches
-      if (userDefaults.interestSubcategoryIds.length > 0 && itemTaxonomies.subcategories.length > 0) {
+
+      // Subcategory matches (combine user interests with audience filter selections)
+      const allUserSubcategoryIds = [...new Set([
+        ...userDefaults.interestSubcategoryIds,
+        ...effAudienceSubcategoryIds
+      ])];
+
+      if (allUserSubcategoryIds.length > 0 && itemTaxonomies.subcategories.length > 0) {
         const subMatches = itemTaxonomies.subcategories.filter(id =>
-          userDefaults.interestSubcategoryIds.includes(id));
-        
+          allUserSubcategoryIds.includes(id));
+
         if (subMatches.length > 0) {
           // Calculate percentage of matching subcategories
           const subMatchPercentage = Math.min(1, subMatches.length /
-            Math.max(userDefaults.interestSubcategoryIds.length, itemTaxonomies.subcategories.length));
-          
+            Math.max(allUserSubcategoryIds.length, itemTaxonomies.subcategories.length));
+
           totalScore += WEIGHTS.subcategory * subMatchPercentage;
           matchedFactors++;
         }
       }
-      
-      // Subsubcategory matches
-      if (userDefaults.interestSubsubCategoryIds.length > 0 && itemTaxonomies.subsubcategories.length > 0) {
+
+      // Subsubcategory matches (combine user interests with audience filter selections)
+      const allUserSubsubCategoryIds = [...new Set([
+        ...userDefaults.interestSubsubCategoryIds,
+        ...effAudienceSubsubCategoryIds
+      ])];
+
+      if (allUserSubsubCategoryIds.length > 0 && itemTaxonomies.subsubcategories.length > 0) {
         const xMatches = itemTaxonomies.subsubcategories.filter(id =>
-          userDefaults.interestSubsubCategoryIds.includes(id));
-        
+          allUserSubsubCategoryIds.includes(id));
+
         if (xMatches.length > 0) {
           // Calculate percentage of matching subsubcategories
           const xMatchPercentage = Math.min(1, xMatches.length /
-            Math.max(userDefaults.interestSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length));
-          
+            Math.max(allUserSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length));
+
           totalScore += WEIGHTS.subsubcategory * xMatchPercentage;
           matchedFactors++;
         }
       }
-      
-      // Identity matches
-      if (userDefaults.interestIdentityIds.length > 0 && itemTaxonomies.identities.length > 0) {
+
+      // Identity matches (combine user interests with audience filter selections)
+      const allUserIdentityIds = [...new Set([
+        ...userDefaults.interestIdentityIds,
+        ...effAudienceIdentityIds
+      ])];
+
+      if (allUserIdentityIds.length > 0 && itemTaxonomies.identities.length > 0) {
         const idMatches = itemTaxonomies.identities.filter(id =>
-          userDefaults.interestIdentityIds.includes(id));
-        
+          allUserIdentityIds.includes(id));
+
         if (idMatches.length > 0) {
           // Calculate percentage of matching identities
           const idMatchPercentage = Math.min(1, idMatches.length /
-            Math.max(userDefaults.interestIdentityIds.length, itemTaxonomies.identities.length));
-          
+            Math.max(allUserIdentityIds.length, itemTaxonomies.identities.length));
+
           totalScore += WEIGHTS.identity * idMatchPercentage;
           matchedFactors++;
         }
       }
-      
+
+      // Location match
+      const itemCity = (item.city || item.location || "").toLowerCase();
+
+      // Exact city match
+      if (userDefaults.city && itemCity && itemCity === userDefaults.city.toLowerCase()) {
+        totalScore += WEIGHTS.location * 0.6; // 60% of location score for exact city match
+        matchedFactors++;
+      }
+      // Partial city name matching
+      else if (userDefaults.city && itemCity &&
+               (itemCity.includes(userDefaults.city.toLowerCase()) ||
+                userDefaults.city.toLowerCase().includes(itemCity))) {
+        totalScore += WEIGHTS.location * 0.3; // 30% of location score for partial city match
+        matchedFactors++;
+      }
+      // Country match
+      else if (userDefaults.country && item.country === userDefaults.country) {
+        totalScore += WEIGHTS.location * 0.4; // 40% of location score for country match
+        matchedFactors++;
+      }
+
       // Apply a penalty if fewer than REQUIRED_FACTORS matched
       if (matchedFactors < REQUIRED_FACTORS) {
         // Apply a scaling factor based on how many factors matched
         const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
         totalScore = totalScore * scalingFactor;
       }
-      
+
       // Ensure the score is between 20 and 100
       // We use 20 as minimum to ensure all items have some match percentage
       return Math.max(20, Math.min(100, Math.round(totalScore)));
@@ -1753,6 +2024,7 @@ exports.getFeed = async (req, res) => {
       console.log("No user logged in, using filters only");
       if (tab === "events") {
         const events = await Event.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audienceIdentities.id
           where: whereEvent,
           include: includeEventRefs,
           order: [["createdAt", "DESC"]],
@@ -1764,6 +2036,7 @@ exports.getFeed = async (req, res) => {
 
       if (tab === "jobs") {
         const jobs = await Job.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereJob,
           include: includeCategoryRefs,
           order: [["createdAt", "DESC"]],
@@ -1775,6 +2048,7 @@ exports.getFeed = async (req, res) => {
 
       if (tab === "services") {
         const services = await Service.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereService,
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
@@ -1786,6 +2060,7 @@ exports.getFeed = async (req, res) => {
 
       if (tab === "products") {
         const products = await Product.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereProduct,
           include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
@@ -1797,6 +2072,7 @@ exports.getFeed = async (req, res) => {
 
       if (tab === "tourism") {
         const tourism = await Tourism.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereTourism,
           include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
@@ -1809,7 +2085,7 @@ exports.getFeed = async (req, res) => {
       // [FUNDING] tab
       if (tab === "funding") {
         const funding = await Funding.findAll({
-          subQuery: Boolean(categoryId || subcategoryId || subsubCategoryId || identityId), // needed for $audience...$ filtering
+          subQuery: false, // Always use false to prevent the subquery issue with audience associations
           where: whereFunding,
           include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
@@ -1822,30 +2098,35 @@ exports.getFeed = async (req, res) => {
       // “All”
       const [jobsAll, eventsAll, servicesAll, productsAll, tourismAll, fundingAll] = await Promise.all([
         Job.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereJob,
           include: includeCategoryRefs,
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Event.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audienceIdentities.id
           where: whereEvent,
           include: includeEventRefs,
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Service.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereService,
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Product.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereProduct,
           include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Tourism.findAll({
+          subQuery: false, // Add this to prevent the subquery issue with audience associations
           where: whereTourism,
           include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
@@ -1922,6 +2203,7 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "events") {
       const events = await Event.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audienceIdentities.id
         where: whereEvent,
         include: includeEventRefs,
         order: [["createdAt", "DESC"]],
@@ -1949,6 +2231,7 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "jobs") {
       const jobs = await Job.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereJob,
         include: includeCategoryRefs,
         order: [["createdAt", "DESC"]],
@@ -1968,6 +2251,7 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "services") {
       const services = await Service.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereService,
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
@@ -1987,6 +2271,7 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "products") {
       const products = await Product.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereProduct,
         include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
@@ -2006,6 +2291,7 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "tourism") {
       const tourism = await Tourism.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereTourism,
         include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
@@ -2026,7 +2312,7 @@ exports.getFeed = async (req, res) => {
     // [FUNDING] prioritized
     if (tab === "funding") {
       const funding = await Funding.findAll({
-        subQuery: Boolean(categoryId || subcategoryId || subsubCategoryId || identityId),
+        subQuery: false, // Always use false to prevent the subquery issue with audience associations
         where: whereFunding,
         include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
@@ -2047,30 +2333,35 @@ exports.getFeed = async (req, res) => {
     // "All" tab with filters applied first
     const [jobsBuf, eventsBuf, servicesBuf, productsBuf, tourismBuf, fundingBuf] = await Promise.all([
       Job.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereJob,
         include: includeCategoryRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Event.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audienceIdentities.id
         where: whereEvent,
         include: includeEventRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Service.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereService,
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Product.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereProduct,
         include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Tourism.findAll({
+        subQuery: false, // Add this to prevent the subquery issue with audience associations
         where: whereTourism,
         include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
@@ -2079,11 +2370,9 @@ exports.getFeed = async (req, res) => {
       // For Funding in "all" tab, we need to handle the audience associations differently
       // to avoid the "Unknown column 'audienceCategories.id' in 'where clause'" error
       Funding.findAll({
-        // Don't use subQuery when we have taxonomy filters to avoid the error
+        // Always use subQuery: false to prevent the subquery issue with audience associations
         subQuery: false,
-        where: categoryId
-          ? { ...whereFunding, categoryId } // Use direct categoryId filter instead of the complex OR condition
-          : whereFunding,
+        where: whereFunding,
         include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
