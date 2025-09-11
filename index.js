@@ -127,7 +127,7 @@ app.use((err, req, res, next) => {
 // ---------------------------
 // Start Server + DB
 // ---------------------------
-const PORT = process.env.PORT || 3008;
+const PORT = process.env.PORT || 5000;
 
 const { seedIfEmpty } = require("./src/utils/seed");
 const seedAll = require("./src/seeds/seedAll");
