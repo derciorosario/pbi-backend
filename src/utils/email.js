@@ -26,6 +26,7 @@ async function getTransport() {
     secure: String(SMTP_SECURE) === "true",
     auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
+  
 
   // ⚙️ ESM module — import dynamically in CJS
   const hbsMod = await import("nodemailer-express-handlebars");

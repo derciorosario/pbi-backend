@@ -14,6 +14,7 @@ const { sequelize } = require("./src/models");
 const authRoutes = require("./src/routes/auth.routes");
 const { ensureAdmin } = require("./src/setup/ensureAdmin");
 const { initializeQuickActionsEvents } = require("./src/controllers/realtime.controller");
+const { startNotificationCronJobs } = require("./src/cron/notificationEmails");
 
 // ---------------------------
 // Express App Setup
@@ -103,9 +104,15 @@ app.use("/api/meeting-requests", require("./src/routes/meetingRequest.routes"));
 // Notification routes
 app.use("/api/notifications", require("./src/routes/notification.routes"));
 
+// Settings routes
+app.use("/api/user/settings", require("./src/routes/settings.routes"));
+
 const publicRoutes = require("./src/routes/public.routes");
 
 app.use("/api/public", publicRoutes);
+
+// Test routes (for development only)
+app.use("/api/test", require("./src/routes/test.routes"));
 
 
 // ❌ 404 handler
@@ -120,7 +127,7 @@ app.use((err, req, res, next) => {
 // ---------------------------
 // Start Server + DB
 // ---------------------------
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3008;
 
 const { seedIfEmpty } = require("./src/utils/seed");
 const seedAll = require("./src/seeds/seedAll");
@@ -153,6 +160,7 @@ const seedAll = require("./src/seeds/seedAll");
     // Socket.IO setup
     // Simplified socket connection without authentication
     io.use((socket, next) => {
+
       console.log('Socket connection attempt');
       
       // Get userId from handshake query or auth
@@ -419,6 +427,9 @@ const seedAll = require("./src/seeds/seedAll");
         });
       });
     });
+
+    // Start notification cron jobs
+    startNotificationCronJobs();
 
     server.listen(PORT, () =>
       console.log(`🚀 Server running at http://localhost:${PORT}`)

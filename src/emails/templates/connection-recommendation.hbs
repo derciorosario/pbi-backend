@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>People You May Want to Connect With</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .header {
+      background-color: #0a66c2;
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .content {
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+    .recommendation {
+      margin-bottom: 20px;
+      padding: 15px;
+      background-color: white;
+      border-radius: 5px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+    }
+    .avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      overflow: hidden;
+      margin-right: 15px;
+      background-color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #666;
+    }
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .person-info {
+      flex: 1;
+    }
+    .person-name {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #0a66c2;
+    }
+    .person-bio {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .btn {
+      display: inline-block;
+      padding: 8px 15px;
+      background-color: #97cbff;
+      color: #0a66c2;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>People You May Want to Connect With</h1>
+    </div>
+    <div class="content">
+      <p>Hello {{name}},</p>
+      <p>We've found some people you might want to connect with based on your profile and network:</p>
+      
+      {{#each recommendations}}
+      <div class="recommendation">
+        <div class="avatar">
+          {{#if avatarUrl}}
+            <img src="{{avatarUrl}}" alt="{{name}}">
+          {{else}}
+            {{name.[0]}}
+          {{/if}}
+        </div>
+        <div class="person-info">
+          <div class="person-name">{{name}} <span style="font-size: 14px; color: #0a66c2; background-color: #e8f0fe; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">{{matchPercentage}}% Match</span></div>
+          {{#if professionalTitle}}
+          <div style="font-size: 14px; color: #555; margin-bottom: 5px;">{{professionalTitle}}</div>
+          {{/if}}
+          {{#if categories.length}}
+          <div style="font-size: 13px; margin-bottom: 5px;">
+            <span style="color: #666; font-weight: bold;">Categories:</span>
+            {{#each categories}}
+              <span style="background-color: #f0f0f0; padding: 2px 6px; border-radius: 10px; margin-right: 5px; display: inline-block; margin-bottom: 3px;">{{this}}</span>
+            {{/each}}
+          </div>
+          {{/if}}
+          <div class="person-bio">{{biography}}</div>
+          <a href="{{link}}" class="btn">View Profile</a>
+        </div>
+      </div>
+      {{/each}}
+      
+      <p>Expand your network and discover new opportunities!</p>
+    </div>
+    <div class="footer">
+      <p>You're receiving this email because you've enabled connection recommendations in your notification settings.</p>
+      <p>To update your preferences, <a href="{{baseUrl}}/settings">visit your settings page</a>.</p>
+      <p>&copy; 2025 55Links. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>

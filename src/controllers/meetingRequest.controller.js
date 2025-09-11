@@ -1,6 +1,7 @@
 const { MeetingRequest, User, Profile, Notification } = require("../models");
 const { Op } = require("sequelize");
 const { sendTemplatedEmail } = require("../utils/email");
+const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 
 // Create a new meeting request
 exports.createMeetingRequest = async (req, res) => {
@@ -92,30 +93,37 @@ exports.createMeetingRequest = async (req, res) => {
       }
     });
 
-    // Send email notification
+    // Send email notification if enabled
     try {
-      const recipient = await User.findByPk(toUserId, { attributes: ["id", "name", "email"] });
-      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
-      const link = `${baseUrl}/notifications?tab=Meetings`;
+      // Check if recipient has enabled email notifications for meeting requests
+      const isEnabled = await isEmailNotificationEnabled(toUserId, 'meetingRequests');
+      
+      if (isEnabled) {
+        const recipient = await User.findByPk(toUserId, { attributes: ["id", "name", "email"] });
+        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const link = `${baseUrl}/notifications?tab=Meetings`;
 
-      await sendTemplatedEmail({
-        to: recipient.email,
-        subject: `New Meeting Request from ${requester.name || requester.email}`,
-        template: "meeting-request",
-        context: {
-          name: recipient.name,
-          fromName: requester.name || requester.email,
-          title,
-          agenda: agenda || null,
-          scheduledAt: new Date(scheduledAt),
-          duration,
-          timezone,
-          mode,
-          location: mode === "in_person" ? location : null,
-          link: mode === "video" ? link : null,
-          link: link
-        }
-      });
+        await sendTemplatedEmail({
+          to: recipient.email,
+          subject: `New Meeting Request from ${requester.name || requester.email}`,
+          template: "meeting-request",
+          context: {
+            name: recipient.name,
+            fromName: requester.name || requester.email,
+            title,
+            agenda: agenda || null,
+            scheduledAt: new Date(scheduledAt),
+            duration,
+            timezone,
+            mode,
+            location: mode === "in_person" ? location : null,
+            link: mode === "video" ? link : null,
+            link: link
+          }
+        });
+      } else {
+        console.log(`Email notification skipped for user ${toUserId} (meetingRequests disabled)`);
+      }
     } catch (emailErr) {
       console.error("Failed to send meeting request email:", emailErr);
       // Continue even if email fails
@@ -232,28 +240,35 @@ exports.respondToMeetingRequest = async (req, res) => {
       }
     });
 
-    // Send email notification
+    // Send email notification if enabled
     try {
-      const requester = await User.findByPk(meetingRequest.fromUserId, { attributes: ["id", "name", "email"] });
-      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
-      const profileLink = `${baseUrl}/profile/${meetingRequest.toUserId}`;
+      // Check if requester has enabled email notifications for meeting requests
+      const isEnabled = await isEmailNotificationEnabled(meetingRequest.fromUserId, 'meetingRequests');
+      
+      if (isEnabled) {
+        const requester = await User.findByPk(meetingRequest.fromUserId, { attributes: ["id", "name", "email"] });
+        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const profileLink = `${baseUrl}/profile/${meetingRequest.toUserId}`;
 
-      await sendTemplatedEmail({
-        to: requester.email,
-        subject: action === "accept"
-          ? `${meetingRequest.recipient.name || meetingRequest.recipient.email} Accepted Your Meeting Request`
-          : `${meetingRequest.recipient.name || meetingRequest.recipient.email} Declined Your Meeting Request`,
-        template: "meeting-response",
-        context: {
-          name: requester.name,
-          responderName: meetingRequest.recipient.name || meetingRequest.recipient.email,
-          accepted: action === "accept",
-          title: meetingRequest.title,
-          scheduledAt: meetingRequest.scheduledAt,
-          rejectionReason: action === "reject" ? rejectionReason : null,
-          profileLink
-        }
-      });
+        await sendTemplatedEmail({
+          to: requester.email,
+          subject: action === "accept"
+            ? `${meetingRequest.recipient.name || meetingRequest.recipient.email} Accepted Your Meeting Request`
+            : `${meetingRequest.recipient.name || meetingRequest.recipient.email} Declined Your Meeting Request`,
+          template: "meeting-response",
+          context: {
+            name: requester.name,
+            responderName: meetingRequest.recipient.name || meetingRequest.recipient.email,
+            accepted: action === "accept",
+            title: meetingRequest.title,
+            scheduledAt: meetingRequest.scheduledAt,
+            rejectionReason: action === "reject" ? rejectionReason : null,
+            profileLink
+          }
+        });
+      } else {
+        console.log(`Email notification skipped for user ${meetingRequest.fromUserId} (meetingRequests disabled)`);
+      }
     } catch (emailErr) {
       console.error("Failed to send meeting response email:", emailErr);
       // Continue even if email fails
@@ -337,21 +352,28 @@ exports.cancelMeetingRequest = async (req, res) => {
         }
       });
 
-      // Send email notification
+      // Send email notification if enabled
       try {
-        const recipient = await User.findByPk(meetingRequest.toUserId, { attributes: ["id", "name", "email"] });
+        // Check if recipient has enabled email notifications for meeting requests
+        const isEnabled = await isEmailNotificationEnabled(meetingRequest.toUserId, 'meetingRequests');
+        
+        if (isEnabled) {
+          const recipient = await User.findByPk(meetingRequest.toUserId, { attributes: ["id", "name", "email"] });
 
-        await sendTemplatedEmail({
-          to: recipient.email,
-          subject: `${meetingRequest.requester.name || meetingRequest.requester.email} Cancelled Meeting Request`,
-          template: "meeting-cancelled",
-          context: {
-            name: recipient.name,
-            requesterName: meetingRequest.requester.name || meetingRequest.requester.email,
-            title: meetingRequest.title,
-            scheduledAt: meetingRequest.scheduledAt
-          }
-        });
+          await sendTemplatedEmail({
+            to: recipient.email,
+            subject: `${meetingRequest.requester.name || meetingRequest.requester.email} Cancelled Meeting Request`,
+            template: "meeting-cancelled",
+            context: {
+              name: recipient.name,
+              requesterName: meetingRequest.requester.name || meetingRequest.requester.email,
+              title: meetingRequest.title,
+              scheduledAt: meetingRequest.scheduledAt
+            }
+          });
+        } else {
+          console.log(`Email notification skipped for user ${meetingRequest.toUserId} (meetingRequests disabled)`);
+        }
       } catch (emailErr) {
         console.error("Failed to send meeting cancellation email:", emailErr);
         // Continue even if email fails

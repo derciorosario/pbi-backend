@@ -26,11 +26,16 @@ const Funding = require("./funding")(sequelize, DataTypes);
 const Message = require("./message")(sequelize, DataTypes);
 const Conversation = require("./conversation")(sequelize, DataTypes);
 const MeetingRequest = require("./meetingRequest")(sequelize, DataTypes);
+const UserSettings = require("./userSettings")(sequelize, DataTypes);
 
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
 User.hasOne(Profile, { foreignKey: "userId", as: "profile", onDelete: "CASCADE" });
 Profile.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// User ↔ UserSettings (1:1)
+User.hasOne(UserSettings, { foreignKey: "userId", as: "settings", onDelete: "CASCADE" });
+UserSettings.belongsTo(User, { foreignKey: "userId", as: "user" });
 
 // VerificationToken ↔ User (1:N)
 VerificationToken.belongsTo(User, { foreignKey: "userId", as: "user" });
@@ -654,4 +659,6 @@ module.exports = {
   FundingSubsubCategory,
   // Export meeting request model
   MeetingRequest,
+  // Export user settings model
+  UserSettings,
 };

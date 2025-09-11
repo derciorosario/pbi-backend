@@ -17,6 +17,7 @@ const {
   UserCategoryInterest,
   UserSubcategoryInterest,
   UserSubsubCategoryInterest,
+  UserSettings,
 } = require("../models");
 
 function arr(val) {
@@ -147,6 +148,24 @@ exports.saveOneShot = async (req, res) => {
     }
 
     await t.commit();
+
+
+     let [settings, created] = await UserSettings.findOrCreate({
+          where: { userId },
+          defaults: {
+            notifications: JSON.stringify({
+              jobOpportunities: { email: true },
+              connectionInvitations: { email: true },
+              connectionRecommendations: { email: true },
+              connectionUpdates: { email: true },
+              messages: { email: true },
+              meetingRequests: { email: true }
+            }),
+            emailFrequency: "daily"
+          }
+     });
+
+
     return res.json({
       ok: true,
       saved: {

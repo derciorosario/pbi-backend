@@ -6,6 +6,7 @@ const {
   Notification,
 } = require("../models");
 const { sendTemplatedEmail } = require("../utils/email");
+const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 
 // normaliza par (userOneId < userTwoId) para conexão única
 function normalizePair(a, b) {
@@ -54,23 +55,30 @@ exports.createRequest = async (req, res) => {
       payload: { requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
     });
     
-    // Send email notification
+    // Send email notification if enabled
     try {
-      const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
-      const link = `${baseUrl}/people`;
+      // Check if recipient has enabled email notifications for connection invitations
+      const isEnabled = await isEmailNotificationEnabled(toUserId, 'connectionInvitations');
       
-      await sendTemplatedEmail({
-        to: toUser.email,
-        subject: `New Connection Request from ${fromUser?.name || "Someone"}`,
-        template: "connection-request",
-        context: {
-          name: toUser.name,
-          fromName: fromUser?.name || "Someone",
-          message: message || null,
-          reason: reason || null,
-          link
-        }
-      });
+      if (isEnabled) {
+        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const link = `${baseUrl}/people`;
+        
+        await sendTemplatedEmail({
+          to: toUser.email,
+          subject: `New Connection Request from ${fromUser?.name || "Someone"}`,
+          template: "connection-request",
+          context: {
+            name: toUser.name,
+            fromName: fromUser?.name || "Someone",
+            message: message || null,
+            reason: reason || null,
+            link
+          }
+        });
+      } else {
+        console.log(`Email notification skipped for user ${toUserId} (connectionInvitations disabled)`);
+      }
     } catch (emailErr) {
       console.error("Failed to send connection request email:", emailErr);
       // Continue even if email fails
@@ -157,24 +165,29 @@ exports.respond = async (req, res) => {
         payload: { byUserId: userId, requestId: row.id },
       });
       
-      // Send email notification
+      // Send email notification if enabled
       try {
-        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
-        const profileLink = `${baseUrl}/profile/${userId}`;
+        // Check if requester has enabled email notifications for connection updates
+        const isEnabled = await isEmailNotificationEnabled(row.fromUserId, 'connectionUpdates');
         
-        await sendTemplatedEmail({
-          to: requester.email,
-          subject: `${responder?.name || "Someone"} Accepted Your Connection Request`,
-          template: "connection-response",
-          context: {
-            name: requester.name,
-            responderName: responder?.name || "Someone",
-            accepted: true,
-            profileLink
-          }
-        });
-
-        console.log('-----------')
+        if (isEnabled) {
+          const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+          const profileLink = `${baseUrl}/profile/${userId}`;
+          
+          await sendTemplatedEmail({
+            to: requester.email,
+            subject: `${responder?.name || "Someone"} Accepted Your Connection Request`,
+            template: "connection-response",
+            context: {
+              name: requester.name,
+              responderName: responder?.name || "Someone",
+              accepted: true,
+              profileLink
+            }
+          });
+        } else {
+          console.log(`Email notification skipped for user ${row.fromUserId} (connectionUpdates disabled)`);
+        }
       } catch (emailErr) {
         console.error("Failed to send connection acceptance email:", emailErr);
         // Continue even if email fails
@@ -199,18 +212,25 @@ exports.respond = async (req, res) => {
         payload: { byUserId: userId, requestId: row.id },
       });
       
-      // Send email notification
+      // Send email notification if enabled
       try {
-        await sendTemplatedEmail({
-          to: requester.email,
-          subject: `${responder?.name || "Someone"} Declined Your Connection Request`,
-          template: "connection-response",
-          context: {
-            name: requester.name,
-            responderName: responder?.name || "Someone",
-            accepted: false
-          }
-        });
+        // Check if requester has enabled email notifications for connection updates
+        const isEnabled = await isEmailNotificationEnabled(row.fromUserId, 'connectionUpdates');
+        
+        if (isEnabled) {
+          await sendTemplatedEmail({
+            to: requester.email,
+            subject: `${responder?.name || "Someone"} Declined Your Connection Request`,
+            template: "connection-response",
+            context: {
+              name: requester.name,
+              responderName: responder?.name || "Someone",
+              accepted: false
+            }
+          });
+        } else {
+          console.log(`Email notification skipped for user ${row.fromUserId} (connectionUpdates disabled)`);
+        }
       } catch (emailErr) {
         console.error("Failed to send connection rejection email:", emailErr);
         // Continue even if email fails

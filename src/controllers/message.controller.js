@@ -2,6 +2,7 @@
 const { Op } = require("sequelize");
 const { Message, Conversation, User, Profile } = require("../models");
 const { sendTemplatedEmail } = require("../utils/email");
+const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 
 // Get all conversations for the current user
 async function getConversations(req, res, next) {
@@ -296,23 +297,34 @@ async function sendMessage(req, res, next) {
       ]
     });
 
-    // Send email notification to receiver
+    // Send email notification to receiver if enabled
     try {
-      const sender = await User.findByPk(senderId, { attributes: ["id", "name", "email"] });
-      const baseUrl = process.env.WEBSITE_URL || "https://pbi.africa";
-      const messagesLink = `${baseUrl}/messages?userId=${sender.id}`;
+      // Check if receiver has enabled email notifications for messages
+      const isEnabled = await isEmailNotificationEnabled(receiverId, 'messages');
 
-      await sendTemplatedEmail({
-        to: receiver.email,
-        subject: `New Message from ${sender.name}`,
-        template: "new-message",
-        context: {
-          name: receiver.name,
-          senderName: sender.name,
-          message: content,
-          messagesLink
-        }
-      });
+      console.log({isEnabled})
+
+      return
+      
+      if (isEnabled) {
+        const sender = await User.findByPk(senderId, { attributes: ["id", "name", "email"] });
+        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const messagesLink = `${baseUrl}/messages?userId=${sender.id}`;
+
+        await sendTemplatedEmail({
+          to: receiver.email,
+          subject: `New Message from ${sender.name}`,
+          template: "new-message",
+          context: {
+            name: receiver.name,
+            senderName: sender.name,
+            message: content,
+            messagesLink
+          }
+        });
+      } else {
+        console.log(`Email notification skipped for user ${receiverId} (messages disabled)`);
+      }
     } catch (emailErr) {
       console.error("Failed to send message notification email:", emailErr);
       // Continue even if email fails

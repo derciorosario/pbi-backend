@@ -39,6 +39,7 @@ exports.searchPeople = async (req, res) => {
     const {
       q,
       country,
+      accountType,
       city,
       categoryId,
       cats, // multiple category ids (comma-separated)
@@ -54,12 +55,9 @@ exports.searchPeople = async (req, res) => {
       audienceSubsubCategoryIds,
       limit = 20,
       offset = 0,
+
     } = req.query;
 
-    console.log(identityIds,
-      audienceCategoryIds,
-      audienceSubcategoryIds,
-      audienceSubsubCategoryIds,)
 
     console.log("People search request:", {
       q,
@@ -129,10 +127,26 @@ exports.searchPeople = async (req, res) => {
     });
 
     // ---- Base WHERE: hide admins and (if logged in) self ----
-    const whereUser = {
-      accountType: { [Op.ne]: "admin" },
-      ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {}),
-    };
+   const whereUser = {
+      ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {})
+    }
+
+    whereUser.accountType = { [Op.ne]: "admin" }
+
+    if (accountType) {
+      const types = ensureArray(accountType)
+        .map(t => t.toLowerCase())
+        .filter(t => ["company", "individual"].includes(t))
+      if (types.length > 0) {
+        whereUser.accountType = {
+          [Op.and]: [
+            { [Op.ne]: "admin" },
+            { [Op.in]: types }
+          ]
+        }
+      }
+    }
+
     // Enhanced flexible location matching
     if (country && city) {
       whereUser[Op.or] = [
@@ -484,6 +498,7 @@ exports.searchPeople = async (req, res) => {
           about: u.profile?.about || null,
           createdAt: u.createdAt,
           connectionStatus: cStatus,
+          accountType:u.accountType,
           matchPercentage: matchPercentage, // Add match percentage to output
         },
       };
