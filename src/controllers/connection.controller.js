@@ -61,7 +61,7 @@ exports.createRequest = async (req, res) => {
       const isEnabled = await isEmailNotificationEnabled(toUserId, 'connectionInvitations');
       
       if (isEnabled) {
-        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
         const link = `${baseUrl}/people`;
         
         await sendTemplatedEmail({
@@ -171,7 +171,7 @@ exports.respond = async (req, res) => {
         const isEnabled = await isEmailNotificationEnabled(row.fromUserId, 'connectionUpdates');
         
         if (isEnabled) {
-          const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+          const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
           const profileLink = `${baseUrl}/profile/${userId}`;
           
           await sendTemplatedEmail({

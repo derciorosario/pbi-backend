@@ -912,7 +912,7 @@ const BULK_USERS = [
   {
     email: "ops.admin@pbi.africa",
     password: "Admin@123",
-    name: "55Links Ops",
+    name: "54Links Ops",
     phone: "+27 10 200 0000",
     nationality: "South African",
     country: "South Africa",
@@ -937,7 +937,7 @@ const BULK_USERS = [
   {
     email: "content.admin@pbi.africa",
     password: "Admin@123",
-    name: "55Links Content Admin",
+    name: "54Links Content Admin",
     phone: "+27 10 200 0001",
     nationality: "South African",
     country: "South Africa",

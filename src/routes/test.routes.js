@@ -47,4 +47,23 @@ router.get('/notifications/daily', function(req, res) {
   }
 });
 
+router.get('/notifications/monthly', function(req, res) {
+  try {
+    // Run daily notification emails
+    sendNotificationEmails('monthly')
+      .then(() => {
+        return res.json({ message: 'Daily notification emails triggered successfully' });
+      })
+      .catch(error => {
+        console.error('Error triggering daily notification emails:', error);
+        return res.status(500).json({ message: 'Failed to trigger daily notification emails' });
+      });
+  } catch (error) {
+    console.error('Error triggering daily notification emails:', error);
+    return res.status(500).json({ message: 'Failed to trigger daily notification emails' });
+  }
+});
+
+
+
 module.exports = router;

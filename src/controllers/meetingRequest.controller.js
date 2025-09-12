@@ -100,7 +100,7 @@ exports.createMeetingRequest = async (req, res) => {
       
       if (isEnabled) {
         const recipient = await User.findByPk(toUserId, { attributes: ["id", "name", "email"] });
-        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
         const link = `${baseUrl}/notifications?tab=Meetings`;
 
         await sendTemplatedEmail({
@@ -247,7 +247,7 @@ exports.respondToMeetingRequest = async (req, res) => {
       
       if (isEnabled) {
         const requester = await User.findByPk(meetingRequest.fromUserId, { attributes: ["id", "name", "email"] });
-        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
         const profileLink = `${baseUrl}/profile/${meetingRequest.toUserId}`;
 
         await sendTemplatedEmail({

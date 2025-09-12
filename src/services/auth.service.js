@@ -34,7 +34,7 @@ async function createUserAndSendVerification({
   template: "verify-email",
   context: {
     subject: "Your verification link",
-    preheader: "Here’s a fresh link to verify your 55Links account.",
+    preheader: "Here’s a fresh link to verify your 54Links account.",
     name: user.name,
     link,
     expiresInHours: 24,
@@ -84,7 +84,7 @@ async function resendVerification(email) {
   template: "verify-email",
   context: {
     subject: "Your verification link",
-    preheader: "Here’s a fresh link to verify your 55Links account.",
+    preheader: "Here’s a fresh link to verify your 54Links account.",
     name: user.name,
     link,
     expiresInHours: 24,

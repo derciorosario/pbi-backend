@@ -3,9 +3,9 @@ const path = require("path");
 const { registerEmailHelpers } = require("./emailHelpers");
 
 const BRAND = {
-  name: "55Links",
-  website: process.env.WEBSITE_URL || "https://55links.com",
-  supportEmail: process.env.SUPPORT_EMAIL || "support@55links.com",
+  name: "54Links",
+  website: process.env.WEBSITE_URL || "https://54links.com",
+  supportEmail: process.env.SUPPORT_EMAIL || "support@54links.com",
   primary: "#034ea2",
   text: "#202124",
   muted: "#5f6368",
@@ -62,7 +62,7 @@ async function getTransport() {
  * @param {object} opts.context - handlebars variables available to template
  */
 async function sendTemplatedEmail({ to, subject, template, context = {} }) {
-  const from = process.env.EMAIL_FROM || "55Links <no-reply@pbi.africa>";
+  const from = process.env.EMAIL_FROM || "54Links <no-reply@pbi.africa>";
   const transport = await getTransport();
 
   console.log({ to, subject,context,transport })

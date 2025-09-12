@@ -308,7 +308,7 @@ async function sendMessage(req, res, next) {
       
       if (isEnabled) {
         const sender = await User.findByPk(senderId, { attributes: ["id", "name", "email"] });
-        const baseUrl = process.env.WEBSITE_URL || "https://55links.com";
+        const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
         const messagesLink = `${baseUrl}/messages?userId=${sender.id}`;
 
         await sendTemplatedEmail({

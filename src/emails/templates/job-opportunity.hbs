@@ -4,123 +4,87 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Job Opportunities For You</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .header {
-      background-color: #0a66c2;
-      color: white;
-      padding: 20px;
-      text-align: center;
-    }
-    .content {
-      padding: 20px;
-      background-color: #f9f9f9;
-    }
-    .job {
-      margin-bottom: 20px;
-      padding: 15px;
-      background-color: white;
-      border-radius: 5px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    .job-title {
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #0a66c2;
-      font-size: 18px;
-    }
-    .job-company {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
-    .job-location {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 10px;
-    }
-    .job-meta {
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-    }
-    .job-meta img {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      margin-right: 5px;
-    }
-    .job-description {
-      margin-bottom: 10px;
-      font-size: 14px;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .btn {
-      display: inline-block;
-      padding: 8px 15px;
-      background-color: #97cbff;
-      color: #0a66c2;
-      text-decoration: none;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      font-size: 12px;
-      color: #666;
-    }
-  </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Job Opportunities For You</h1>
-    </div>
-    <div class="content">
-      <p>Hello {{name}},</p>
-      <p>We've found some job opportunities that might interest you:</p>
-      
-      {{#each jobs}}
-      <div class="job">
-        <div class="job-title">{{title}} <span style="font-size: 14px; color: #0a66c2; background-color: #e8f0fe; padding: 2px 6px; border-radius: 10px; margin-left: 5px;">{{matchPercentage}}% Match</span></div>
-        <div class="job-company">{{company}}</div>
-        <div class="job-location">{{location}}</div>
-        <div class="job-meta">
-          {{#if createdBy.avatarUrl}}
-            <img src="{{createdBy.avatarUrl}}" alt="{{createdBy.name}}">
-          {{/if}}
-          Posted by {{createdBy.name}} • {{createdAt}}
-        </div>
-        <div class="job-description">
-          {{description}}
-        </div>
-        <a href="{{link}}" class="btn">View Job</a>
-      </div>
-      {{/each}}
-      
-      <p>Don't miss out on these opportunities! Check them out today.</p>
-    </div>
-    <div class="footer">
-      <p>You're receiving this email because you've enabled job opportunity notifications in your settings.</p>
-      <p>To update your preferences, <a href="{{baseUrl}}/settings">visit your settings page</a>.</p>
-      <p>&copy; 2025 55Links. All rights reserved.</p>
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:#f3f2ef;font-family:Arial,sans-serif;line-height:1.5;color:#333;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td align="center" style="padding:20px 10px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;">
+
+          <!-- HEADER -->
+          <tr>
+            <td align="center" bgcolor="#0a66c2" style="padding:20px;">
+              <h1 style="margin:0;font-size:18px;color:#ffffff;">54Links Job Opportunities Alert</h1>
+            </td>
+          </tr>
+
+          <!-- CONTENT -->
+          <tr>
+            <td style="padding:20px;background-color:#f9f9f9;">
+              <p style="margin:0 0 15px;">Hello {{name}},</p>
+              <p style="margin:0 0 20px;">We've found some job opportunities that might interest you:</p>
+
+              {{#each jobs}}
+              <!-- Job Card -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;background:#ffffff;border:1px solid #eee;border-radius:6px;">
+                <tr>
+                  <td style="padding:15px;font-size:14px;">
+
+                    <!-- Job Title -->
+                    <div style="font-weight:bold;margin-bottom:5px;color:#0a66c2;font-size:16px;">
+                      {{title}}
+                      <span style="font-size:12px;color:#0a66c2;background-color:#e8f0fe;padding:2px 6px;border-radius:10px;margin-left:5px;">{{matchPercentage}}% Match</span>
+                    </div>
+
+                    <!-- Company -->
+                    <div style="font-weight:bold;margin-bottom:5px;">{{company}}</div>
+
+                    <!-- Location -->
+                    <div style="font-size:13px;color:#666;margin-bottom:10px;">{{location}}</div>
+
+                    <!-- Meta -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
+                      <tr>
+                        {{#if createdBy.avatarUrl}}
+                        <td valign="middle" style="padding-right:6px;">
+                          <img src="{{createdBy.avatarUrl}}" alt="{{createdBy.name}}" width="20" height="20" style="display:block;border-radius:50%;">
+                        </td>
+                        {{/if}}
+                        <td valign="middle" style="font-size:12px;color:#666;">
+                          Posted by {{createdBy.name}} • {{createdAt}}
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Description -->
+                    <div style="margin-bottom:10px;font-size:13px;line-height:1.4;color:#333;">
+                      {{description}}
+                    </div>
+
+                    <!-- Button -->
+                    <a href="{{link}}" style="display:inline-block;padding:8px 15px;background-color:#0a66c2;color:#ffffff;text-decoration:none;border-radius:20px;font-size:13px;">View Job</a>
+
+                  </td>
+                </tr>
+              </table>
+              {{/each}}
+
+              <p style="margin:20px 0 0;">Don't miss out on these opportunities! Check them out today.</p>
+            </td>
+          </tr>
+
+          <!-- FOOTER -->
+          <tr>
+            <td style="padding:15px;font-size:12px;color:#666;text-align:center;border-top:1px solid #ddd;">
+              <p style="margin:0 0 5px;">You're receiving this email because you've enabled job opportunity notifications in your settings.</p>
+              <p style="margin:0 0 5px;"><a href="{{baseUrl}}/settings" style="color:#0a66c2;">Update preferences</a></p>
+              <p style="margin:0;">&copy; 2025 54Links. All rights reserved.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
