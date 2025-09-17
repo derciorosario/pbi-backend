@@ -39,5 +39,15 @@ async function saveGoals(req, res, next) {
   }
 }
 
+async function saveIndustries(req, res, next) {
+  try {
+    const { industryCategoryIds, industrySubcategoryIds, industrySubsubCategoryIds } = req.body;
+    const out = await Svc.setIndustries(req.user.sub, industryCategoryIds, industrySubcategoryIds || [], industrySubsubCategoryIds || []);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+}
 
-module.exports = { state, saveIdentities, saveCategories, saveGoals };
+
+module.exports = { state, saveIdentities, saveCategories, saveGoals, saveIndustries };

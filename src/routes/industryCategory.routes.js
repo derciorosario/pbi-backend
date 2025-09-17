@@ -1,7 +1,9 @@
-const router = require("express").Router();
-const ctrl = require("../controllers/industryCategory.controller");
+const express = require("express");
+const industryCategoryController = require("../controllers/industryCategory.controller");
 
-// GET /api/industry-categories/tree?type=job
-router.get("/tree", ctrl.getTree);
+const router = express.Router();
+
+// Get industry categories tree
+router.get("/tree", industryCategoryController.getIndustryCategoriesTree);
 
 module.exports = router;

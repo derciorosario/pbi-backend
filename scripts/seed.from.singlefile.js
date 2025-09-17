@@ -14,8 +14,8 @@ const {
 const norm = (s) => String(s || "").trim();
 
 // -------- CONFIG: choose what to seed --------
-//const sectionsToSeed = ["goals", "identities", "company_identities"];
-const sectionsToSeed = ["company_identities"];
+const sectionsToSeed = ["goals", "identities", "company_identities"];
+//const sectionsToSeed = ["company_identities"];
 
 async function findOrCreateCategoryByName(name, identityId = null, type = "individual") {
   const n = norm(name);
@@ -109,7 +109,7 @@ async function seedFromSingleFile() {
     await sequelize.authenticate();
     await sequelize.sync({ alter: true }); // will add new columns if missing
     await seedFromSingleFile();
-    process.exit(0);
+   // process.exit(0);
   } catch (e) {
     console.error("❌ Seed failed:", e);
     process.exit(1);

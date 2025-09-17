@@ -156,7 +156,7 @@ const seedAll = require("./src/seeds/seedAll");
     // 👉 Run seeding if needed
     //await seedIfEmpty();
 
-    //await seedAll();
+   
 
     // 🔑 Ensure default admin exists
     await ensureAdmin();
@@ -190,12 +190,20 @@ const seedAll = require("./src/seeds/seedAll");
 
 
 
-    //require('./scripts/seed.from.singlefile.js')
-   //require("./scripts/seedGeneralCategories");
+  //  require('./scripts/seed.from.singlefile.js')
+   //require("./scripts/seedGeneralCategories.js");
    //require("./scripts/seedIndustryCategories.js");
-   
+
+  //await seedAll();
+   //
     // Track online users
-   
+
+    //add seeds:
+    //node node src/seeds/seedProductsServicesTourismFunding.js
+    //node src/seeds/seedUsers.js
+
+
+
 
 
 

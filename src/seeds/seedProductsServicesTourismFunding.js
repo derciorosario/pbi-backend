@@ -41,6 +41,9 @@ const {
   GeneralCategory,
   GeneralSubcategory,
   GeneralSubsubCategory,
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
 } = require("../models");
 
 /** ------------------------- Helpers ------------------------- **/
@@ -139,6 +142,43 @@ async function upsertGeneralSubsubCategoryByName(categoryName, subcategoryName, 
   if (!subsub) {
     subsub = await GeneralSubsubCategory.create({ name: subsubName, generalSubcategoryId: sub.id });
     console.log(`      ↳ General SubsubCategory created: ${categoryName} > ${subcategoryName} > ${subsubName}`);
+  }
+  return subsub;
+}
+
+// Industry Category helpers
+async function upsertIndustryCategoryByName(name) {
+  if (!name) return null;
+  let cat = await IndustryCategory.findOne({ where: { name } });
+  if (!cat) {
+    cat = await IndustryCategory.create({ name });
+    console.log(`➕ Industry Category created: ${name}`);
+  }
+  return cat;
+}
+
+async function upsertIndustrySubcategoryByName(categoryName, subName) {
+  if (!categoryName || !subName) return null;
+  const cat = await upsertIndustryCategoryByName(categoryName);
+  let sub = await IndustrySubcategory.findOne({
+    where: { name: subName, industryCategoryId: cat.id },
+  });
+  if (!sub) {
+    sub = await IndustrySubcategory.create({ name: subName, industryCategoryId: cat.id });
+    console.log(`   ↳ Industry Subcategory created: ${categoryName} > ${subName}`);
+  }
+  return sub;
+}
+
+async function upsertIndustrySubsubCategoryByName(categoryName, subcategoryName, subsubName) {
+  if (!categoryName || !subcategoryName || !subsubName) return null;
+  const sub = await upsertIndustrySubcategoryByName(categoryName, subcategoryName);
+  let subsub = await IndustrySubsubCategory.findOne({
+    where: { name: subsubName, industrySubcategoryId: sub.id },
+  });
+  if (!subsub) {
+    subsub = await IndustrySubsubCategory.create({ name: subsubName, industrySubcategoryId: sub.id });
+    console.log(`      ↳ Industry SubsubCategory created: ${categoryName} > ${subcategoryName} > ${subsubName}`);
   }
   return subsub;
 }
@@ -306,6 +346,9 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Accessories",
     generalCategoryName: "Fashion & Apparel",
     generalSubcategoryName: "Bags",
+    industryCategoryName: "Manufacturing & Construction",
+    industrySubcategoryName: "Manufacturing",
+    industrySubsubCategoryName: "Textiles",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -335,6 +378,9 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Textiles",
     generalCategoryName: "Fashion & Apparel",
     generalSubcategoryName: "Textiles",
+    industryCategoryName: "Manufacturing & Construction",
+    industrySubcategoryName: "Manufacturing",
+    industrySubsubCategoryName: "Textiles",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -361,6 +407,9 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Gadgets & Accessories",
     generalCategoryName: "Electronics & Technology",
     generalSubcategoryName: "Smart Home Devices",
+    industryCategoryName: "Knowledge & Technology",
+    industrySubcategoryName: "Information Technology",
+    industrySubsubCategoryName: "Hardware Manufacturing",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Technology", "Energy"],
@@ -385,6 +434,9 @@ const PRODUCT_SEEDS = [
     sellerEmail: "afri-agro@54links.com",
     categoryName: "Health & Beauty",
     subcategoryName: "Skincare",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Healthcare & Pharmaceuticals",
+    industrySubsubCategoryName: "Pharmaceutical Manufacturing",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Health & Beauty", "Trade"],
@@ -411,6 +463,8 @@ const PRODUCT_SEEDS = [
     sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Home & Living",
     subcategoryName: "Home Decor",
+    industryCategoryName: "Manufacturing & Construction",
+    industrySubcategoryName: "Manufacturing",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Home & Living", "Trade"],
@@ -446,6 +500,9 @@ const SERVICE_SEEDS = [
     subcategoryName: "Web Development",
     generalCategoryName: "Technology & IT Services",
     generalSubcategoryName: "Web Development",
+    industryCategoryName: "Knowledge & Technology",
+    industrySubcategoryName: "Information Technology",
+    industrySubsubCategoryName: "Software Development",
     createdAtDaysAgo: 3,
     audience: {
       categories: ["Technology", "Service Providers"],
@@ -475,6 +532,9 @@ const SERVICE_SEEDS = [
     providerEmail: "sa-renew@54links.com",
     categoryName: "Business",
     subcategoryName: "Consulting & Strategy",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Professional Services",
+    industrySubsubCategoryName: "Consulting Services",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Business", "Service Providers"],
@@ -504,6 +564,8 @@ const SERVICE_SEEDS = [
     providerEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Branding & Creative Strategy",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Professional Services",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Marketing & Advertising", "Service Providers"],
@@ -533,6 +595,8 @@ const SERVICE_SEEDS = [
     providerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Farming & Crop Production",
+    industryCategoryName: "Agriculture",
+    industrySubcategoryName: "Crop Production",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Agriculture", "Service Providers"],
@@ -562,6 +626,8 @@ const SERVICE_SEEDS = [
     providerEmail: "naija-fintech@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Media, Entertainment & Sports",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Marketing & Advertising", "Service Providers"],
@@ -596,6 +662,8 @@ const TOURISM_SEEDS = [
     generalCategoryName: "Tourist Attractions",
     generalSubcategoryName: "Natural Attractions",
     generalSubsubCategoryName: "National Parks & Reserves",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Hospitality & Tourism",
     createdAtDaysAgo: 4,
     audience: {
       categories: ["Tourism & Travel"],
@@ -622,6 +690,9 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Food & Wine",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Hospitality & Tourism",
+    industrySubsubCategoryName: "Tour Operators",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Tourism & Travel"],
@@ -648,6 +719,8 @@ const TOURISM_SEEDS = [
     authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Cultural Tourism",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Hospitality & Tourism",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Tourism & Travel"],
@@ -674,6 +747,8 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Natural Wonders",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Hospitality & Tourism",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Tourism & Travel"],
@@ -700,6 +775,9 @@ const TOURISM_SEEDS = [
     authorEmail: "naija-fintech@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Adventure Tourism",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Hospitality & Tourism",
+    industrySubsubCategoryName: "Tour Operators",
     createdAtDaysAgo: 9,
     audience: {
       categories: ["Tourism & Travel"],
@@ -740,6 +818,8 @@ const FUNDING_SEEDS = [
     generalCategoryName: "Grants & Funding",
     generalSubcategoryName: "Innovation & Startup Funding",
     generalSubsubCategoryName: "Seed Funding",
+    industryCategoryName: "Agriculture",
+    industrySubcategoryName: "Agricultural Technology (AgriTech)",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Agriculture", "Energy"],
@@ -774,6 +854,9 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "naija-fintech@54links.com",
     categoryName: "Healthcare",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Healthcare & Pharmaceuticals",
+    industrySubsubCategoryName: "Hospitals & Clinics",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Healthcare"],
@@ -808,6 +891,9 @@ const FUNDING_SEEDS = [
     creatorEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
+    industryCategoryName: "Oil & Gas",
+    industrySubcategoryName: "Alternative & Emerging Segments",
+    industrySubsubCategoryName: "Renewable Integration with Oil & Gas",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy"],
@@ -841,6 +927,8 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "afri-agro@54links.com",
     categoryName: "Education",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Education & Training",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Education", "Technology"],
@@ -875,6 +963,9 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
+    industryCategoryName: "Manufacturing & Construction",
+    industrySubcategoryName: "Manufacturing",
+    industrySubsubCategoryName: "Textiles",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -916,6 +1007,8 @@ const EVENT_SEEDS = [
     subcategoryName: "Tech Events",
     generalCategoryName: "Technology & Innovation",
     generalSubcategoryName: "Developer Meetups",
+    industryCategoryName: "Knowledge & Technology",
+    industrySubcategoryName: "Information Technology",
     createdAtDaysAgo: 60,
     audience: {
       categories: ["Technology", "Business"],
@@ -952,6 +1045,8 @@ const EVENT_SEEDS = [
     organizerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Technology",
+    industryCategoryName: "Agriculture",
+    industrySubcategoryName: "Agricultural Technology (AgriTech)",
     createdAtDaysAgo: 75,
     audience: {
       categories: ["Agriculture", "Technology"],
@@ -988,6 +1083,8 @@ const EVENT_SEEDS = [
     organizerEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
+    industryCategoryName: "Oil & Gas",
+    industrySubcategoryName: "Alternative & Emerging Segments",
     createdAtDaysAgo: 90,
     audience: {
       categories: ["Energy", "Business"],
@@ -1024,6 +1121,9 @@ const EVENT_SEEDS = [
     organizerEmail: "naija-fintech@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Fashion Events",
+    industryCategoryName: "Manufacturing & Construction",
+    industrySubcategoryName: "Manufacturing",
+    industrySubsubCategoryName: "Textiles",
     createdAtDaysAgo: 120,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -1060,6 +1160,8 @@ const EVENT_SEEDS = [
     organizerEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Healthcare & Pharmaceuticals",
     createdAtDaysAgo: 100,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1092,6 +1194,9 @@ const JOB_SEEDS = [
     postedByEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Software Development",
+    industryCategoryName: "Knowledge & Technology",
+    industrySubcategoryName: "Information Technology",
+    industrySubsubCategoryName: "Software Development",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Technology", "Finance"],
@@ -1120,6 +1225,8 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Management",
+    industryCategoryName: "Agriculture",
+    industrySubcategoryName: "Agribusiness & Agro-Processing",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Agriculture", "Project Management"],
@@ -1148,6 +1255,9 @@ const JOB_SEEDS = [
     postedByEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
+    industryCategoryName: "Oil & Gas",
+    industrySubcategoryName: "Alternative & Emerging Segments",
+    industrySubsubCategoryName: "Renewable Integration with Oil & Gas",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy", "Engineering"],
@@ -1176,6 +1286,8 @@ const JOB_SEEDS = [
     postedByEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Media, Entertainment & Sports",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Marketing & Advertising", "Fashion & Apparel"],
@@ -1204,6 +1316,9 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
+    industryCategoryName: "Services",
+    industrySubcategoryName: "Healthcare & Pharmaceuticals",
+    industrySubsubCategoryName: "Medical Equipment Suppliers",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1254,6 +1369,21 @@ async function run(){
         }
       }
 
+      // Handle industry categories for products
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (p.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(p.industryCategoryName);
+        if (p.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(p.industryCategoryName, p.industrySubcategoryName);
+          if (p.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(p.industryCategoryName, p.industrySubcategoryName, p.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [product, created] = await Product.findOrCreate({
         where: {
           title: p.title,
@@ -1272,6 +1402,9 @@ async function run(){
           generalCategoryId: generalCat ? generalCat.id : null,
           generalSubcategoryId: generalSub ? generalSub.id : null,
           generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           createdAt: daysAgo(p.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1315,6 +1448,21 @@ async function run(){
         }
       }
 
+      // Handle industry categories for services
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (s.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(s.industryCategoryName);
+        if (s.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(s.industryCategoryName, s.industrySubcategoryName);
+          if (s.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(s.industryCategoryName, s.industrySubcategoryName, s.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [service, created] = await Service.findOrCreate({
         where: {
           title: s.title,
@@ -1337,6 +1485,9 @@ async function run(){
           generalCategoryId: generalCat ? generalCat.id : null,
           generalSubcategoryId: generalSub ? generalSub.id : null,
           generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           createdAt: daysAgo(s.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1380,6 +1531,21 @@ async function run(){
         }
       }
 
+      // Handle industry categories for tourism
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (t.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(t.industryCategoryName);
+        if (t.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(t.industryCategoryName, t.industrySubcategoryName);
+          if (t.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(t.industryCategoryName, t.industrySubcategoryName, t.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [tourism, created] = await Tourism.findOrCreate({
         where: {
           title: t.title,
@@ -1399,6 +1565,9 @@ async function run(){
           generalCategoryId: generalCat ? generalCat.id : null,
           generalSubcategoryId: generalSub ? generalSub.id : null,
           generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           createdAt: daysAgo(t.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1442,6 +1611,21 @@ async function run(){
         }
       }
 
+      // Handle industry categories for funding
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (f.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(f.industryCategoryName);
+        if (f.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(f.industryCategoryName, f.industrySubcategoryName);
+          if (f.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(f.industryCategoryName, f.industrySubcategoryName, f.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [funding, created] = await Funding.findOrCreate({
         where: {
           title: f.title,
@@ -1469,6 +1653,9 @@ async function run(){
           generalCategoryId: generalCat ? generalCat.id : null,
           generalSubcategoryId: generalSub ? generalSub.id : null,
           generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           createdAt: daysAgo(f.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1512,6 +1699,21 @@ async function run(){
         }
       }
 
+      // Handle industry categories for events
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (e.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(e.industryCategoryName);
+        if (e.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(e.industryCategoryName, e.industrySubcategoryName);
+          if (e.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(e.industryCategoryName, e.industrySubcategoryName, e.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [event, created] = await Event.findOrCreate({
         where: {
           title: e.title,
@@ -1537,6 +1739,9 @@ async function run(){
           generalCategoryId: generalCat ? generalCat.id : null,
           generalSubcategoryId: generalSub ? generalSub.id : null,
           generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           createdAt: daysAgo(e.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1565,6 +1770,21 @@ async function run(){
         ? await upsertSubcategoryByName(j.categoryName, j.subcategoryName)
         : null;
 
+      // Handle industry categories for jobs
+      let industryCat = null;
+      let industrySub = null;
+      let industrySubsub = null;
+
+      if (j.industryCategoryName) {
+        industryCat = await upsertIndustryCategoryByName(j.industryCategoryName);
+        if (j.industrySubcategoryName) {
+          industrySub = await upsertIndustrySubcategoryByName(j.industryCategoryName, j.industrySubcategoryName);
+          if (j.industrySubsubCategoryName) {
+            industrySubsub = await upsertIndustrySubsubCategoryByName(j.industryCategoryName, j.industrySubcategoryName, j.industrySubsubCategoryName);
+          }
+        }
+      }
+
       const [job, created] = await Job.findOrCreate({
         where: {
           title: j.title,
@@ -1591,6 +1811,9 @@ async function run(){
           contactEmail: j.contactEmail || null,
           categoryId: cat ? cat.id : null,
           subcategoryId: sub ? sub.id : null,
+          industryCategoryId: industryCat ? industryCat.id : null,
+          industrySubcategoryId: industrySub ? industrySub.id : null,
+          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
           status: "published",
           createdAt: daysAgo(j.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),

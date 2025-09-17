@@ -13,6 +13,9 @@ exports.createJob = async (req, res) => {
       applicationDeadline, positions, applicationInstructions, contactEmail,
       categoryId, subcategoryId, status,coverImageBase64,companyId,
 
+      // Industry fields
+      industryCategoryId,
+      industrySubcategoryId,
 
       // NEW (arrays are accepted as arrays or CSV):
       identityIds: _identityIds,
@@ -69,7 +72,9 @@ exports.createJob = async (req, res) => {
       status: status || "published",
       postedByUserId: req.user.id,
       coverImageBase64,
-      companyId
+      companyId,
+      industryCategoryId,
+      industrySubcategoryId,
     });
 
     // attach audience sets (include the primary ones if arrays were empty)
@@ -138,6 +143,8 @@ exports.updateJob = async (req, res) => {
     if (data.generalCategoryId === '') data.generalCategoryId = null;
     if (data.generalSubcategoryId === '') data.generalSubcategoryId = null;
     if (data.generalSubsubCategoryId === '') data.generalSubsubCategoryId = null;
+    if (data.industryCategoryId === '') data.industryCategoryId = null;
+    if (data.industrySubcategoryId === '') data.industrySubcategoryId = null;
 
     // primary pair validation (legacy)
     const nextCategoryId = data.categoryId ?? job.categoryId;

@@ -17,6 +17,11 @@ const {
   UserCategoryInterest,
   UserSubcategoryInterest,
   UserSubsubCategoryInterest,
+  // INDUSTRIES
+  IndustryCategory,
+  UserIndustryCategory,
+  UserIndustrySubcategory,
+  UserIndustrySubsubCategory,
 } = require("../models");
 
 const { computeProfileProgress } = require("../utils/profileProgress");
@@ -70,6 +75,7 @@ async function getMe(req, res, next) {
     const [
       doIdentRows, doCatRows, doSubRows, doXRows,
       wantIdentRows, wantCatRows, wantSubRows, wantXRows,
+      industryCatRows, industrySubRows, industryXRows,
     ] = await Promise.all([
       UserIdentity.findAll({ where: { userId }, attributes: ["identityId"] }),
       UserCategory.findAll({ where: { userId }, attributes: ["categoryId"] }),
@@ -80,6 +86,10 @@ async function getMe(req, res, next) {
       UserCategoryInterest.findAll({ where: { userId }, attributes: ["categoryId"] }),
       UserSubcategoryInterest.findAll({ where: { userId }, attributes: ["subcategoryId"] }),
       UserSubsubCategoryInterest.findAll({ where: { userId }, attributes: ["subsubCategoryId"] }),
+
+      UserIndustryCategory.findAll({ where: { userId }, attributes: ["industryCategoryId"] }),
+      UserIndustrySubcategory.findAll({ where: { userId }, attributes: ["industrySubcategoryId"] }),
+      UserIndustrySubsubCategory.findAll({ where: { userId }, attributes: ["industrySubsubCategoryId"] }),
     ]);
 
     const counts = {
@@ -87,6 +97,7 @@ async function getMe(req, res, next) {
       subcategories: doSubRows.length,
       // podemos somar subsubs se quiser mostrar no progresso
       subsubs:       doXRows.length,
+      industryCategories: industryCatRows.length,
     };
 
     const progress = computeProfileProgress({ user, profile, counts });
@@ -106,6 +117,11 @@ async function getMe(req, res, next) {
       interestCategoryIds:       wantCatRows.map(r => r.categoryId),
       interestSubcategoryIds:    wantSubRows.map(r => r.subcategoryId),
       interestSubsubCategoryIds: wantXRows.map(r => r.subsubCategoryId),
+
+      // INDUSTRIES
+      industryCategoryIds:       industryCatRows.map(r => r.industryCategoryId),
+      industrySubcategoryIds:    industrySubRows.map(r => r.industrySubcategoryId),
+      industrySubsubCategoryIds: industryXRows.map(r => r.industrySubsubCategoryId),
 
       progress,
     });
@@ -183,6 +199,26 @@ async function validateIds({ identityIds, categoryIds, subcategoryIds, subsubCat
     categoryIds: vCat,
     subcategoryIds: vSub,
     subsubCategoryIds: vX,
+  };
+}
+
+/* Helpers de validação para indústrias */
+async function validateIndustryIds({ industryCategoryIds, industrySubcategoryIds, industrySubsubCategoryIds }) {
+  const [
+    vIndustryCat,
+    vIndustrySub,
+    vIndustryX,
+  ] = await Promise.all([
+    IndustryCategory.findAll({ where: { id: arr(industryCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+    // For subcategories and subsubs, we need to validate they exist in the industry tree
+    // This is a simplified validation - in production you might want more complex validation
+    Promise.resolve(arr(industrySubcategoryIds)),
+    Promise.resolve(arr(industrySubsubCategoryIds)),
+  ]);
+  return {
+    industryCategoryIds: vIndustryCat,
+    industrySubcategoryIds: arr(industrySubcategoryIds),
+    industrySubsubCategoryIds: arr(industrySubsubCategoryIds),
   };
 }
 
@@ -272,10 +308,46 @@ async function updateInterestSelections(req, res, next) {
   }
 }
 
+/* PUT /api/profile/industry-selections
+   Atualiza as seleções de indústrias do usuário */
+async function updateIndustrySelections(req, res, next) {
+  const t = await sequelize.transaction();
+  try {
+    const userId = req.user.sub;
+    const payload = await validateIndustryIds({
+      industryCategoryIds: req.body.industryCategoryIds,
+      industrySubcategoryIds: req.body.industrySubcategoryIds,
+      industrySubsubCategoryIds: req.body.industrySubsubCategoryIds,
+    });
+
+    // clear (sequencial na mesma transação)
+    await UserIndustryCategory.destroy({ where: { userId }, transaction: t });
+    await UserIndustrySubcategory.destroy({ where: { userId }, transaction: t });
+    await UserIndustrySubsubCategory.destroy({ where: { userId }, transaction: t });
+
+    // create
+    if (payload.industryCategoryIds.length)
+      await UserIndustryCategory.bulkCreate(payload.industryCategoryIds.map(industryCategoryId => ({ userId, industryCategoryId })), { transaction: t });
+
+    if (payload.industrySubcategoryIds.length)
+      await UserIndustrySubcategory.bulkCreate(payload.industrySubcategoryIds.map(industrySubcategoryId => ({ userId, industrySubcategoryId })), { transaction: t });
+
+    if (payload.industrySubsubCategoryIds.length)
+      await UserIndustrySubsubCategory.bulkCreate(payload.industrySubsubCategoryIds.map(industrySubsubCategoryId => ({ userId, industrySubsubCategoryId })), { transaction: t });
+
+    await t.commit();
+    return getMe(req, res, next);
+  } catch (e) {
+    try { if (!t.finished) await t.rollback(); } catch {}
+    next(e);
+  }
+}
+
 module.exports = {
   getMe,
   updatePersonal,
   updateProfessional,
   updateDoSelections,
   updateInterestSelections,
+  updateIndustrySelections,
 };

@@ -2,27 +2,37 @@
 const { v4: uuidv4 } = require("uuid");
 
 module.exports = (sequelize, DataTypes) => {
-  return sequelize.define(
+  const UserIndustryCategory = sequelize.define(
     "UserIndustryCategory",
     {
-      id: {
-        type: DataTypes.UUID,
-        defaultValue: () => uuidv4(),
-        primaryKey: true,
-      },
       userId: {
         type: DataTypes.UUID,
         allowNull: false,
+        primaryKey: true,
       },
       industryCategoryId: {
         type: DataTypes.UUID,
         allowNull: false,
+        primaryKey: true,
+        references: {
+          model: 'industry_categories',
+          key: 'id'
+        }
       },
     },
     {
       tableName: "user_industry_categories",
       timestamps: true,
-      indexes: [],
     }
   );
+
+  // Add the association to IndustryCategory
+  UserIndustryCategory.associate = (models) => {
+    UserIndustryCategory.belongsTo(models.IndustryCategory, {
+      foreignKey: 'industryCategoryId',
+      as: 'industryCategory'
+    });
+  };
+
+  return UserIndustryCategory;
 };

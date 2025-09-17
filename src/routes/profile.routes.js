@@ -10,6 +10,7 @@ router.put("/profile/professional", auth(true), C.updateProfessional);
 
 router.put("/profile/do-selections", auth(true), C.updateDoSelections);
 router.put("/profile/interest-selections", auth(true), C.updateInterestSelections);
+router.put("/profile/industry-selections", auth(true), C.updateIndustrySelections);
 
 module.exports = router;
 

@@ -19,6 +19,12 @@ const {
   UserIdentityInterest,
   Goal,
   UserGoal,
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
+  UserIndustryCategory,
+  UserIndustrySubcategory,
+  UserIndustrySubsubCategory,
 } = require("../models");
 
 const bcrypt = require("bcryptjs");
@@ -177,6 +183,68 @@ async function findGoalIdsByNames(names = []) {
   return rows.map((g) => g.id);
 }
 
+async function findIndustryCategoryIdsByNames(names = []) {
+  if (!names.length) return [];
+  const rows = await IndustryCategory.findAll({ where: { name: names } });
+  return rows.map((r) => r.id);
+}
+
+async function findIndustrySubcategoryIdsByNames(pairs = []) {
+  // pairs: [{ categoryName, subName }]
+  const out = [];
+  for (const { categoryName, subName } of pairs) {
+    const cat = await IndustryCategory.findOne({ where: { name: categoryName } });
+    if (!cat) continue;
+    const sub = await IndustrySubcategory.findOne({
+      where: { name: subName, industryCategoryId: cat.id },
+    });
+    if (sub) out.push(sub.id);
+  }
+  return out;
+}
+
+async function findIndustrySubsubCategoryIdsByNames(triples = []) {
+  // triples: [{ categoryName, subName, subsubName }]
+  const out = [];
+  for (const { categoryName, subName, subsubName } of triples) {
+    const cat = await IndustryCategory.findOne({ where: { name: categoryName } });
+    if (!cat) {
+      console.log(`Industry Category not found: ${categoryName}`);
+      continue;
+    }
+    
+    const sub = await IndustrySubcategory.findOne({
+      where: { name: subName, industryCategoryId: cat.id },
+    });
+    if (!sub) {
+      console.log(`Industry Subcategory not found: ${subName} in category ${categoryName}`);
+      continue;
+    }
+    
+    const subsub = await IndustrySubsubCategory.findOne({
+      where: { name: subsubName, industrySubcategoryId: sub.id },
+    });
+    if (subsub) {
+      out.push(subsub.id);
+    } else {
+      console.log(`Industry SubsubCategory not found: ${subsubName} in subcategory ${subName}`);
+      
+      // Create the industry subsubcategory if it doesn't exist
+      try {
+        const newSubsub = await IndustrySubsubCategory.create({
+          name: subsubName,
+          industrySubcategoryId: sub.id
+        });
+        out.push(newSubsub.id);
+        console.log(`Created industry subsubcategory: ${subsubName}`);
+      } catch (error) {
+        console.error(`Failed to create industry subsubcategory ${subsubName}:`, error.message);
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Cria/atualiza User + Profile e associa categorias, subcategorias, subsubcategorias, identidades e goals.
  */
@@ -200,6 +268,9 @@ async function upsertUserWithProfile({
   subsubcategoryInterests = [],
   identityInterests = [],
   goals = [], // <<--- array de nomes de goals
+  industryCategories = [],
+  industrySubcategories = [],
+  industrySubsubcategories = [],
 }) {
   const passwordHash = await hash(password);
 
@@ -304,6 +375,39 @@ async function upsertUserWithProfile({
       `🔗 Linked ${catIds.length} categories, ${subIds.length} subcategories, ${subsubIds.length} subsubcategories, and ${identityIds.length} identities to ${email}`
     );
   }
+  
+  // Industry Categories/Subcategories/SubsubCategories (M2M)
+  if (industryCategories.length || industrySubcategories.length || industrySubsubcategories.length) {
+    const industryCatIds = await findIndustryCategoryIdsByNames(industryCategories);
+    const industrySubIds = await findIndustrySubcategoryIdsByNames(industrySubcategories);
+    const industrySubsubIds = await findIndustrySubsubCategoryIdsByNames(industrySubsubcategories);
+
+    // Clear previous associations
+    await UserIndustryCategory.destroy({ where: { userId: user.id } });
+    await UserIndustrySubcategory.destroy({ where: { userId: user.id } });
+    await UserIndustrySubsubCategory.destroy({ where: { userId: user.id } });
+
+    // Create new associations
+    if (industryCatIds.length) {
+      await UserIndustryCategory.bulkCreate(
+        industryCatIds.map((cid) => ({ userId: user.id, industryCategoryId: cid }))
+      );
+    }
+    if (industrySubIds.length) {
+      await UserIndustrySubcategory.bulkCreate(
+        industrySubIds.map((sid) => ({ userId: user.id, industrySubcategoryId: sid }))
+      );
+    }
+    if (industrySubsubIds.length) {
+      await UserIndustrySubsubCategory.bulkCreate(
+        industrySubsubIds.map((ssid) => ({ userId: user.id, industrySubsubCategoryId: ssid }))
+      );
+    }
+
+    console.log(
+      `🔗 Linked ${industryCatIds.length} industry categories, ${industrySubIds.length} industry subcategories, and ${industrySubsubIds.length} industry subsubcategories to ${email}`
+    );
+  }
 
   // Interests (M2M)
   if (categoryInterests.length || subcategoryInterests.length || subsubcategoryInterests.length || identityInterests.length) {
@@ -397,6 +501,13 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Trade", subName: "Food & Beverage", subsubName: "Beverages" }
     ],
+    industryCategories: ["Agriculture"],
+    industrySubcategories: [
+      { categoryName: "Agriculture", subName: "Agribusiness & Agro-Processing" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Agriculture", subName: "Agribusiness & Agro-Processing", subsubName: "Food Processing" }
+    ],
     categoryInterests: ["Technology", "Energy"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Fintech" },
@@ -434,6 +545,13 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Artificial Intelligence", subsubName: "Machine Learning" },
       { categoryName: "Technology", subName: "Data Science & Analysis", subsubName: "Big Data" }
     ],
+    industryCategories: ["Knowledge & Technology"],
+    industrySubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Information Technology" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Information Technology", subsubName: "Artificial Intelligence" }
+    ],
     categoryInterests: ["Education", "Health"],
     subcategoryInterests: [
       { categoryName: "Education", subName: "EdTech" },
@@ -470,6 +588,13 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Energy", subName: "Renewable Energy", subsubName: "Solar" },
       { categoryName: "Energy", subName: "Renewable Energy", subsubName: "Wind" }
+    ],
+    industryCategories: ["Oil & Gas"],
+    industrySubcategories: [
+      { categoryName: "Oil & Gas", subName: "Alternative & Emerging Segments" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Oil & Gas", subName: "Alternative & Emerging Segments", subsubName: "Renewable Integration with Oil & Gas" }
     ],
     categoryInterests: ["Technology", "Manufacturing"],
     subcategoryInterests: [
@@ -581,6 +706,13 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Technology", subName: "Software Development", subsubName: "Frontend" }
     ],
+    industryCategories: ["Knowledge & Technology"],
+    industrySubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Information Technology" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Information Technology", subsubName: "Software Development" }
+    ],
     categoryInterests: ["Technology"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Software Development" },
@@ -617,6 +749,13 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Data Science & Analysis", subsubName: "Machine Learning" },
       { categoryName: "Technology", subName: "Artificial Intelligence", subsubName: "NLP" }
     ],
+    industryCategories: ["Knowledge & Technology"],
+    industrySubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Data & Analytics" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Data & Analytics", subsubName: "Artificial Intelligence" }
+    ],
     categoryInterests: ["Technology", "Health"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Data Science & Analysis" },
@@ -651,6 +790,13 @@ const BULK_USERS = [
     ],
     subsubcategories: [
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets", subsubName: "Portfolio Management" }
+    ],
+    industryCategories: ["Services"],
+    industrySubcategories: [
+      { categoryName: "Services", subName: "Financial Services" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Services", subName: "Financial Services", subsubName: "Investments" }
     ],
     categoryInterests: ["Technology", "Commerce & Financial Services"],
     subcategoryInterests: [
@@ -786,6 +932,10 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Environment & Climate Action", subName: "Waste Management", subsubName: "Recycling" }
     ],
+    industryCategories: ["Services"],
+    industrySubcategories: [
+      { categoryName: "Services", subName: "Professional Services" }
+    ],
     categoryInterests: ["Technology", "Manufacturing"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Clean Tech / Green Energy Solutions" },
@@ -822,6 +972,10 @@ const BULK_USERS = [
     ],
     subsubcategories: [
       { categoryName: "Design & Creative", subName: "UI/UX Designer", subsubName: "Mobile Design" }
+    ],
+    industryCategories: ["Knowledge & Technology"],
+    industrySubcategories: [
+      { categoryName: "Knowledge & Technology", subName: "Information Technology" }
     ],
     categoryInterests: ["Technology", "Marketing & Advertising"],
     subcategoryInterests: [
@@ -860,6 +1014,10 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Education", subName: "IT & Computer Science", subsubName: "Undergraduate" }
     ],
+    industryCategories: ["Services"],
+    industrySubcategories: [
+      { categoryName: "Services", subName: "Education & Training" }
+    ],
     categoryInterests: ["Technology", "Education"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Artificial Intelligence" },
@@ -896,6 +1054,13 @@ const BULK_USERS = [
     ],
     subsubcategories: [
       { categoryName: "Finance & Fintech", subName: "Venture Capital", subsubName: "Early Stage" }
+    ],
+    industryCategories: ["Services"],
+    industrySubcategories: [
+      { categoryName: "Services", subName: "Financial Services" }
+    ],
+    industrySubsubcategories: [
+      { categoryName: "Services", subName: "Financial Services", subsubName: "Investments" }
     ],
     categoryInterests: ["Technology", "Health", "Agriculture"],
     subcategoryInterests: [
@@ -1054,6 +1219,8 @@ async function seedUsersFromIdentityCategoryMap() {
         subsubcategoryInterests: sampleSubsubcategories,
         identityInterests: [identityName],
         goals: identityCategoryMap.goals.slice(0, 3), // Take first 3 goals
+        industryCategories: ["Services"], // Default industry category
+        industrySubcategories: [{ categoryName: "Services", subName: "Professional Services" }], // Default industry subcategory
       });
       
       console.log(`Created sample user for identity: ${identityName}`);

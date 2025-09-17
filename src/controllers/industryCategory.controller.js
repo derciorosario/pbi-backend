@@ -4,19 +4,17 @@ const {
   IndustrySubsubCategory,
 } = require("../models");
 
-exports.getTree = async (req, res) => {
+async function getIndustryCategoriesTree(req, res, next) {
   try {
-    const rows = await IndustryCategory.findAll({
+    const industryCategories = await IndustryCategory.findAll({
       include: [
         {
           model: IndustrySubcategory,
           as: "subcategories",
-          required: false,
           include: [
             {
               model: IndustrySubsubCategory,
               as: "subsubs",
-              required: false,
             },
           ],
         },
@@ -33,9 +31,25 @@ exports.getTree = async (req, res) => {
       ],
     });
 
-    res.json({ industryCategories: rows });
-  } catch (err) {
-    console.error("Error in getTree (IndustryCategory):", err);
-    res.status(500).json({ error: "Internal server error" });
+    res.json({
+      industryCategories: industryCategories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        subcategories: cat.subcategories?.map((sub) => ({
+          id: sub.id,
+          name: sub.name,
+          subsubs: sub.subsubs?.map((subsub) => ({
+            id: subsub.id,
+            name: subsub.name,
+          })) || [],
+        })) || [],
+      })),
+    });
+  } catch (error) {
+    next(error);
   }
+}
+
+module.exports = {
+  getIndustryCategoriesTree,
 };

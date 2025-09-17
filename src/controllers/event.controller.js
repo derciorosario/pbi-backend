@@ -80,6 +80,10 @@ exports.create = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+
+      // Industry fields
+      industryCategoryId,
+      industrySubcategoryId,
     } = req.body;
 
     if (!title || !description) return res.status(400).json({ message: "Title and description are required" });
@@ -150,6 +154,8 @@ exports.create = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+      industryCategoryId,
+      industrySubcategoryId,
     });
 
     // Set audience associations
@@ -200,6 +206,12 @@ exports.update = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+
+      // Industry fields
+      industryCategoryId,
+      industrySubcategoryId,
+      industrySubsubCategoryId,
+
       ...body
     } = req.body;
     
@@ -253,6 +265,9 @@ exports.update = async (req, res) => {
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
       generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
       generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
+      industryCategoryId: industryCategoryId === '' ? null : industryCategoryId,
+      industrySubcategoryId: industrySubcategoryId === '' ? null : industrySubcategoryId,
+      industrySubsubCategoryId: industrySubsubCategoryId === '' ? null : industrySubsubCategoryId,
     });
 
     await event.save();

@@ -17,8 +17,16 @@ const {
   UserCategoryInterest,
   UserSubcategoryInterest,
   UserSubsubCategoryInterest,
+  // industries
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
+  UserIndustryCategory,
+  UserIndustrySubcategory,
+  UserIndustrySubsubCategory,
   UserSettings,
 } = require("../models");
+
 
 function arr(val) {
   if (!val) return [];
@@ -29,6 +37,7 @@ function arr(val) {
 exports.saveOneShot = async (req, res) => {
   const userId = req.user?.id || req.user?.sub;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
 
   const {
     // what the user DOES
@@ -43,7 +52,15 @@ exports.saveOneShot = async (req, res) => {
     interestCategoryIds = [],
     interestSubcategoryIds = [],
     interestSubsubCategoryIds = [],
+
+    // industry selections
+    industryCategoryIds = [],
+    industrySubcategoryIds = [],
+    industrySubsubCategoryIds = [],
   } = req.body || {};
+
+  console.log({industryCategoryIds,industrySubcategoryIds,industrySubsubCategoryIds})
+
 
   const t = await sequelize.transaction();
   try {
@@ -65,6 +82,13 @@ exports.saveOneShot = async (req, res) => {
         SubsubCategory.findAll({ where: { id: arr(interestSubsubCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
       ]);
 
+    const [validIndustryCategoryIds, validIndustrySubcatIds, validIndustrySubsubIds] =
+      await Promise.all([
+        IndustryCategory.findAll({ where: { id: arr(industryCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        IndustrySubcategory.findAll({ where: { id: arr(industrySubcategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+        IndustrySubsubCategory.findAll({ where: { id: arr(industrySubsubCategoryIds) }, attributes: ["id"] }).then(r => r.map(x => x.id)),
+      ]);
+
     // --- CLEAR previous selections (SEQUENTIAL: avoid Promise.all with same tx) ---
     await UserIdentity.destroy({ where: { userId }, transaction: t });
     await UserCategory.destroy({ where: { userId }, transaction: t });
@@ -76,6 +100,11 @@ exports.saveOneShot = async (req, res) => {
     await UserCategoryInterest.destroy({ where: { userId }, transaction: t });
     await UserSubcategoryInterest.destroy({ where: { userId }, transaction: t });
     await UserSubsubCategoryInterest.destroy({ where: { userId }, transaction: t });
+
+    // Clear industry selections
+    await UserIndustryCategory.destroy({ where: { userId }, transaction: t });
+    await UserIndustrySubcategory.destroy({ where: { userId }, transaction: t });
+    await UserIndustrySubsubCategory.destroy({ where: { userId }, transaction: t });
 
     // --- CREATE new selections (bulkCreate per table) ---
     if (validIdentityIds.length) {
@@ -135,6 +164,29 @@ exports.saveOneShot = async (req, res) => {
       );
     }
 
+    console.log({validIndustryCategoryIds})
+    console.log({validIndustrySubcatIds})
+
+    // Save industry selections using bulkCreate for consistency
+    if (validIndustryCategoryIds.length) {
+      await UserIndustryCategory.bulkCreate(
+        validIndustryCategoryIds.map(industryCategoryId => ({ userId, industryCategoryId })),
+        { transaction: t, ignoreDuplicates: true }
+      );
+    }
+    if (validIndustrySubcatIds.length) {
+      await UserIndustrySubcategory.bulkCreate(
+        validIndustrySubcatIds.map(industrySubcategoryId => ({ userId, industrySubcategoryId })),
+        { transaction: t, ignoreDuplicates: true }
+      );
+    }
+    if (validIndustrySubsubIds.length) {
+      await UserIndustrySubsubCategory.bulkCreate(
+        validIndustrySubsubIds.map(industrySubsubCategoryId => ({ userId, industrySubsubCategoryId })),
+        { transaction: t, ignoreDuplicates: true }
+      );
+    }
+
     // --- Profile flags (optional if fields exist) ---
     const prof = await Profile.findOne({ where: { userId }, transaction: t });
     if (prof) {
@@ -178,7 +230,11 @@ exports.saveOneShot = async (req, res) => {
         interestCategoryIds: validInterestCategoryIds,
         interestSubcategoryIds: validInterestSubcatIds,
         interestSubsubCategoryIds: validInterestSubsubIds,
+        industryCategoryIds: validIndustryCategoryIds,
+        industrySubcategoryIds: validIndustrySubcatIds,
+        industrySubsubCategoryIds: validIndustrySubsubIds,
       },
+      warnings: [],
     });
   } catch (e) {
     // only rollback if still active

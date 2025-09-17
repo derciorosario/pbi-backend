@@ -505,6 +505,9 @@ exports.getFeed = async (req, res) => {
       subsubCategoryId,
       identityId,
 
+      // Industry filters
+      industryIds,
+
       // General taxonomy filters
       generalCategoryIds,
       generalSubcategoryIds,
@@ -550,8 +553,12 @@ exports.getFeed = async (req, res) => {
     const cities = ensureArray(city);
     console.log("Cities filter:", cities);
 
+    // Parse industry filter IDs
+    const effIndustryIds = ensureArray(industryIds).filter(Boolean);
+
     console.log("Feed request:", {
       tab, q, country, city, categoryId, subcategoryId, subsubCategoryId, identityId,
+      industryIds: effIndustryIds,
       generalCategoryIds, generalSubcategoryIds, generalSubsubCategoryIds,
       audienceIdentityIds, audienceCategoryIds, audienceSubcategoryIds, audienceSubsubCategoryIds,
       price, serviceType, priceType, deliveryTime, experienceLevel, locationType,
@@ -606,6 +613,7 @@ exports.getFeed = async (req, res) => {
 
     const hasExplicitFilter = Boolean(
       country || city || categoryId || subcategoryId || subsubCategoryId || identityId ||
+      effIndustryIds.length ||
       effGeneralCategoryIds.length || effGeneralSubcategoryIds.length || effGeneralSubsubCategoryIds.length ||
       effAudienceIdentityIds.length || effAudienceCategoryIds.length ||
       effAudienceSubcategoryIds.length || effAudienceSubsubCategoryIds.length ||
@@ -859,6 +867,16 @@ exports.getFeed = async (req, res) => {
       whereEvent.subsubCategoryId = subsubCategoryId;
     }
 
+    // Industry filters
+    if (effIndustryIds.length > 0) {
+      whereJob.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereEvent.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereService.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereProduct.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereTourism.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereFunding.industryCategoryId = { [Op.in]: effIndustryIds };
+    }
+
     // Audience filters via $paths
     if (effAudienceIdentityIdsStr.length > 0) {
       const f = { "$audienceIdentities.id$": { [Op.in]: effAudienceIdentityIdsStr } };
@@ -1007,6 +1025,12 @@ exports.getFeed = async (req, res) => {
     if (identityId) {
       if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
       whereFunding[Op.or].push({ "$audienceIdentities.id$": identityId });
+    }
+
+    // Add industry ORs for funding (since funding can have direct industry or audience industry)
+    if (effIndustryIds.length > 0) {
+      if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
+      whereFunding[Op.or].push({ industryCategoryId: { [Op.in]: effIndustryIds } });
     }
 
     // ---------------- Connection status decorator ----------------

@@ -49,6 +49,10 @@ exports.create = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+
+      // Industry fields
+      industryCategoryId,
+      industrySubcategoryId,
     } = req.body;
 
     // Basic validation
@@ -90,6 +94,8 @@ exports.create = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+      industryCategoryId,
+      industrySubcategoryId,
     });
 
     // Set audience associations
@@ -138,6 +144,10 @@ exports.update = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+
+      // Industry fields
+      industryCategoryId,
+      industrySubcategoryId,
       ...body
     } = req.body;
 
@@ -188,6 +198,8 @@ exports.update = async (req, res) => {
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
       generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
       generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
+      industryCategoryId: industryCategoryId === '' ? null : industryCategoryId,
+      industrySubcategoryId: industrySubcategoryId === '' ? null : industrySubcategoryId,
     });
 
     await product.save();

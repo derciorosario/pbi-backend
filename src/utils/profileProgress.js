@@ -31,6 +31,9 @@ function computeProfileProgress({ user, profile, counts }) {
   // Interests (Goals)
   slots.push((counts.goals || 0) >= 1);
 
+  // Industries
+  slots.push((counts.industryCategories || 0) > 0); // at least 1 industry category
+
   const filled = slots.filter(Boolean).length;
   const percent = Math.round((filled / slots.length) * 100);
   return { percent, filled, total: slots.length };

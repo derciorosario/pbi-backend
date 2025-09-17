@@ -125,9 +125,13 @@
             { "name": "Mineral Exploration & Drilling Services" },
             { "name": "Mine Support Services", "subsubs": ["Blasting", "Ventilation", "Equipment Services"] }
           ]
-        },
-        {
-          "name": "Oil & Gas - Upstream (Exploration & Production)",
+        }
+    ]    
+    },
+    {"name":"Oil & Gas",
+      "categories":[
+            {
+          "name": "Upstream (Exploration & Production)",
           "subcategories": [
             { "name": "Geological & Geophysical Exploration" },
             { "name": "Drilling Operations", "subsubs": ["Onshore", "Offshore"] },
@@ -137,7 +141,7 @@
           ]
         },
         {
-          "name": "Oil & Gas - Midstream (Transportation & Storage)",
+          "name": "Midstream (Transportation & Storage)",
           "subcategories": [
             { "name": "Pipeline Transportation", "subsubs": ["Crude Oil", "Refined Products", "Natural Gas"] },
             { "name": "LNG Transportation" },
@@ -147,7 +151,7 @@
           ]
         },
         {
-          "name": "Oil & Gas - Downstream (Refining & Distribution)",
+          "name": "Downstream (Refining & Distribution)",
           "subcategories": [
             { "name": "Refining", "subsubs": ["Petrol", "Diesel", "Kerosene", "Jet Fuel", "Lubricants"] },
             { "name": "Petrochemicals", "subsubs": ["Plastics", "Fertilizers", "Synthetic Rubber"] },
@@ -174,8 +178,8 @@
             { "name": "Renewable Integration with Oil & Gas" }
           ]
         }
-      ]
-    },
+    ]
+  },
     {
       "name": "Manufacturing & Construction",
       "categories": [

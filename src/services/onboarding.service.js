@@ -11,6 +11,12 @@ const {
   UserSubsubCategory,
   Goal,
   UserGoal,
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
+  UserIndustryCategory,
+  UserIndustrySubcategory,
+  UserIndustrySubsubCategory,
 } = require("../models");
 
 function clampInt(v, d) {
@@ -154,4 +160,53 @@ async function setGoals(userId, goalIds = []) {
   return getState(userId);
 }
 
-module.exports = { getState, setIdentities, setCategories, setGoals };
+async function setIndustries(userId, industryCategoryIds = [], industrySubcategoryIds = [], industrySubsubCategoryIds = []) {
+  const industryCatIds = Array.isArray(industryCategoryIds) ? industryCategoryIds.filter(Boolean) : [];
+  const industrySubIds = Array.isArray(industrySubcategoryIds) ? industrySubcategoryIds.filter(Boolean) : [];
+  const industrySubsubIds = Array.isArray(industrySubsubCategoryIds) ? industrySubsubCategoryIds.filter(Boolean) : [];
+
+  if (industryCatIds.length < 1) {
+    const err = new Error("At least 1 industry category required");
+    err.status = 400;
+    throw err;
+  }
+
+  const [industryCats, industrySubs, industrySubsubs] = await Promise.all([
+    IndustryCategory.findAll({ where: { id: industryCatIds } }),
+    industrySubIds.length ? IndustrySubcategory.findAll({ where: { id: industrySubIds } }) : [],
+    industrySubsubIds.length ? IndustrySubsubCategory.findAll({ where: { id: industrySubsubIds } }) : [],
+  ]);
+
+  if (industryCats.length !== industryCatIds.length) {
+    const err = new Error("Some industry categories are invalid");
+    err.status = 400;
+    throw err;
+  }
+  if (industrySubIds.length && industrySubs.length !== industrySubIds.length) {
+    const err = new Error("Some industry subcategories are invalid");
+    err.status = 400;
+    throw err;
+  }
+  if (industrySubsubIds.length && industrySubsubs.length !== industrySubsubIds.length) {
+    const err = new Error("Some industry level-3 subcategories are invalid");
+    err.status = 400;
+    throw err;
+  }
+
+  // Replace selections (idempotent)
+  await Promise.all([
+    UserIndustryCategory.destroy({ where: { userId } }),
+    UserIndustrySubcategory.destroy({ where: { userId } }),
+    UserIndustrySubsubCategory.destroy({ where: { userId } }),
+  ]);
+
+  await Promise.all([
+    ...industryCatIds.map((industryCategoryId) => UserIndustryCategory.create({ userId, industryCategoryId })),
+    ...industrySubIds.map((industrySubcategoryId) => UserIndustrySubcategory.create({ userId, industrySubcategoryId })),
+    ...industrySubsubIds.map((industrySubsubCategoryId) => UserIndustrySubsubCategory.create({ userId, industrySubsubCategoryId })),
+  ]);
+
+  return getState(userId);
+}
+
+module.exports = { getState, setIdentities, setCategories, setGoals, setIndustries };

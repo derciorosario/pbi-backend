@@ -4,20 +4,12 @@ module.exports = (sequelize, DataTypes) => {
   const UserIndustrySubsubCategory = sequelize.define(
     "UserIndustrySubsubCategory",
     {
-      id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
-      userId: { type: DataTypes.UUID, allowNull: false },
-      industrySubsubCategoryId: { type: DataTypes.UUID, allowNull: false },
+      userId: { type: DataTypes.UUID, allowNull: false, primaryKey: true },
+      industrySubsubCategoryId: { type: DataTypes.UUID, allowNull: false, primaryKey: true },
     },
     {
       tableName: "user_industry_subsubcategories",
       timestamps: true,
-      indexes: [
-        {
-          unique: true,
-          fields: ["userId", "industrySubsubCategoryId"],
-          name: "uniq_user_subsubcat", // 👈 short, safe name
-        },
-      ],
     }
   );
   return UserIndustrySubsubCategory;
