@@ -1438,6 +1438,347 @@
 
 
 
+],
+"company_identities": [
+    {
+      "name": "Business & Technology",
+      "categories": [
+        {
+          "name": "Technology",
+          "subcategories": [
+            { "name": "Software Development", "subsubs": ["SaaS", "Mobile Apps", "Web Apps"] },
+            { "name": "Hardware & Devices", "subsubs": ["Computers", "Smartphones", "Wearables"] },
+            { "name": "IT Services", "subsubs": ["Cloud Computing", "Cybersecurity", "Managed Services"] },
+            { "name": "Artificial Intelligence & Machine Learning" },
+            { "name": "Blockchain & Web3" },
+            { "name": "FinTech", "subsubs": ["Payment Solutions", "Digital Banking", "Investment Platforms"] },
+            { "name": "E-commerce Platforms" }
+          ]
+        },
+        {
+          "name": "Engineering",
+          "subcategories": [
+            { "name": "Civil Engineering", "subsubs": ["Construction", "Infrastructure", "Urban Planning"] },
+            { "name": "Mechanical Engineering", "subsubs": ["Automotive", "Aerospace", "Robotics", "Manufacturing"] },
+            { "name": "Electrical & Electronics Engineering", "subsubs": ["Power Systems", "Microelectronics", "Telecommunications"] },
+            { "name": "Chemical Engineering", "subsubs": ["Petrochemical", "Pharmaceuticals", "Food Processing"] },
+            { "name": "Software Engineering", "subsubs": ["Embedded Systems", "Enterprise Software"] },
+            { "name": "Environmental Engineering", "subsubs": ["Waste Management", "Renewable Energy", "Sustainability Solutions"] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health & Insurance",
+      "categories": [
+        {
+          "name": "Healthcare",
+          "subcategories": [
+            { "name": "Healthcare Providers", "subsubs": ["Hospitals", "Clinics", "Telemedicine"] },
+            { "name": "Pharmaceuticals & Biotech" },
+            { "name": "Health Tech", "subsubs": ["Wearables", "Health Apps", "Diagnostic Tools"] }
+          ]
+        },
+        {
+          "name": "Insurance",
+          "subcategories": [
+            { "name": "Health Insurance" },
+            { "name": "Life Insurance" },
+            { "name": "Property & Casualty Insurance" },
+            { "name": "Auto Insurance" },
+            { "name": "Travel Insurance" }
+          ]
+        },
+        {
+          "name": "Wellness & Fitness",
+          "subcategories": [
+            { "name": "Gyms" },
+            { "name": "Mental Health Services" },
+            { "name": "Nutrition Companies" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Finance & Banking",
+      "categories": [
+        {
+          "name": "Financial Services",
+          "subcategories": [
+            { "name": "Retail Banking" },
+            { "name": "Investment Banking" },
+            { "name": "Asset & Wealth Management" },
+            { "name": "Venture Capital & Private Equity" },
+            { "name": "Microfinance & Lending" },
+            { "name": "Financial Advisory Services" },
+            { "name": "Digital Banking & Neobanks" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Retail & Consumer Goods",
+      "categories": [
+        {
+          "name": "Retail & Products",
+          "subcategories": [
+            { "name": "E-commerce Stores" },
+            { "name": "Fashion & Apparel" },
+            { "name": "Food & Beverage", "subsubs": ["Restaurants", "FMCG", "Packaged Foods"] },
+            { "name": "Electronics & Appliances" },
+            { "name": "Beauty & Personal Care" },
+            { "name": "Luxury Goods" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Energy & Utilities",
+      "categories": [
+        {
+          "name": "Energy",
+          "subcategories": [
+            { "name": "Oil & Gas" },
+            { "name": "Renewable Energy", "subsubs": ["Solar", "Wind", "Hydro", "Biomass"] },
+            { "name": "Power Distribution & Utilities" },
+            { "name": "Mining & Natural Resources" },
+            { "name": "Energy Trading & Storage" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Real Estate & Construction",
+      "categories": [
+        {
+          "name": "Real Estate",
+          "subcategories": [
+            { "name": "Residential Real Estate" },
+            { "name": "Commercial Real Estate" },
+            { "name": "Industrial Real Estate" },
+            { "name": "Real Estate Investment Trusts (REITs)" },
+            { "name": "Property Management" }
+          ]
+        },
+        {
+          "name": "Construction & Infrastructure",
+          "subcategories": [
+            { "name": "Construction & Infrastructure Development" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Media & Entertainment",
+      "categories": [
+        {
+          "name": "Entertainment",
+          "subcategories": [
+            { "name": "Film & TV Production" },
+            { "name": "Music Industry" },
+            { "name": "Gaming & Esports" },
+            { "name": "Digital Content Creators", "subsubs": ["Influencers", "Streaming Platforms"] },
+            { "name": "Publishing", "subsubs": ["Books", "Magazines", "Online Media"] },
+            { "name": "Advertising & Marketing Agencies" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Non-Profit Organizations",
+      "categories": [
+        {
+          "name": "Humanitarian & Relief NGOs",
+          "subcategories": [
+            { "name": "Disaster Relief" },
+            { "name": "Refugee Support" },
+            { "name": "Emergency Aid" },
+            { "name": "Crisis Response" }
+          ]
+        },
+        {
+          "name": "Health NGOs",
+          "subcategories": [
+            { "name": "Public Health" },
+            { "name": "Hospitals" },
+            { "name": "HIV/AIDS" },
+            { "name": "Malaria" },
+            { "name": "Maternal & Child Health" },
+            { "name": "Mental Health" },
+            { "name": "Medical Research" }
+          ]
+        },
+        {
+          "name": "Education NGOs",
+          "subcategories": [
+            { "name": "Literacy Programs" },
+            { "name": "School Support" },
+            { "name": "Scholarships" },
+            { "name": "Teacher Training" },
+            { "name": "E-learning" },
+            { "name": "Special Education" }
+          ]
+        },
+        {
+          "name": "Environmental NGOs",
+          "subcategories": [
+            { "name": "Climate Change" },
+            { "name": "Conservation" },
+            { "name": "Wildlife Protection" },
+            { "name": "Deforestation" },
+            { "name": "Renewable Energy" },
+            { "name": "Pollution Control" }
+          ]
+        },
+        {
+          "name": "Human Rights & Advocacy NGOs",
+          "subcategories": [
+            { "name": "Gender Equality" },
+            { "name": "Child Rights" },
+            { "name": "Disability Rights" },
+            { "name": "LGBTQ+ Rights" },
+            { "name": "Anti-Trafficking" },
+            { "name": "Democracy Promotion" }
+          ]
+        },
+        {
+          "name": "Community Development NGOs",
+          "subcategories": [
+            { "name": "Rural Development" },
+            { "name": "Urban Development" },
+            { "name": "Housing" },
+            { "name": "Water & Sanitation" },
+            { "name": "Infrastructure Support" }
+          ]
+        },
+        {
+          "name": "Economic Development NGOs",
+          "subcategories": [
+            { "name": "Poverty Alleviation" },
+            { "name": "Microfinance" },
+            { "name": "Job Creation" },
+            { "name": "Small Business Support" },
+            { "name": "Skill Development" }
+          ]
+        },
+        {
+          "name": "Peace & Security NGOs",
+          "subcategories": [
+            { "name": "Conflict Resolution" },
+            { "name": "Peacebuilding" },
+            { "name": "Arms Control" },
+            { "name": "Anti-Corruption" },
+            { "name": "Governance & Transparency" }
+          ]
+        },
+        {
+          "name": "Cultural & Heritage NGOs",
+          "subcategories": [
+            { "name": "Cultural Preservation" },
+            { "name": "Museums & Heritage Sites" },
+            { "name": "Community Arts" }
+          ]
+        },
+        {
+          "name": "Animal Welfare NGOs",
+          "subcategories": [
+            { "name": "Animal Rescue" },
+            { "name": "Anti-Poaching" },
+            { "name": "Pet Welfare" },
+            { "name": "Farm Animal Protection" }
+          ]
+        },
+        {
+          "name": "Faith-Based NGOs" },
+        {
+          "name": "International Development NGOs",
+          "subcategories": [
+            { "name": "Global Poverty Reduction" },
+            { "name": "UN Partnership Programs" },
+            { "name": "Sustainable Development Goals (SDGs)" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Government & Public Sector",
+      "categories": [
+        {
+          "name": "Government Bodies",
+          "subcategories": [
+            { "name": "Central/Federal Government Agencies" },
+            { "name": "State/Regional Government Agencies" },
+            { "name": "Local/Municipal Government" },
+            { "name": "Public Enterprises / SOEs" },
+            { "name": "Regulatory Authorities" },
+            { "name": "Military & Defense Organizations" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Educational & Research Organizations",
+      "categories": [
+        {
+          "name": "Institutions",
+          "subcategories": [
+            { "name": "Schools", "subsubs": ["Public", "Private"] },
+            { "name": "Colleges & Universities" },
+            { "name": "Research Institutes" },
+            { "name": "Think Tanks" },
+            { "name": "Training Centers" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Healthcare Organizations",
+      "categories": [
+        {
+          "name": "Providers",
+          "subcategories": [
+            { "name": "Public Hospitals" },
+            { "name": "Private Hospitals & Clinics" },
+            { "name": "Health NGOs" },
+            { "name": "International Health Orgs", "subsubs": ["WHO", "Médecins Sans Frontières"] },
+            { "name": "Biotech & Medical Research Institutes" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "International & Intergovernmental Organizations",
+      "categories": [
+        {
+          "name": "Global Orgs",
+          "subcategories": [
+            { "name": "United Nations & Agencies", "subsubs": ["UNICEF", "WHO", "UNESCO"] },
+            { "name": "World Bank & IMF" },
+            { "name": "World Trade Organization (WTO)" },
+            { "name": "African Union (AU)" },
+            { "name": "European Union (EU)" },
+            { "name": "ASEAN" },
+            { "name": "NATO" },
+            { "name": "OPEC" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hybrid / Special Organizations",
+      "categories": [
+        {
+          "name": "Types",
+          "subcategories": [
+            { "name": "Social Enterprises" },
+            { "name": "Professional Associations" },
+            { "name": "Labor Unions" },
+            { "name": "Cooperatives" },
+            { "name": "Community Development Organizations" }
+          ]
+        }
+      ]
+    }
 ]
 
 

@@ -45,6 +45,10 @@ exports.create = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     } = req.body;
 
     // Basic validation
@@ -82,6 +86,10 @@ exports.create = async (req, res) => {
       country,
       tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
       images: Array.isArray(images) ? images : [],
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     });
 
     // Set audience associations
@@ -127,6 +135,9 @@ exports.update = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
       ...body
     } = req.body;
 
@@ -166,14 +177,17 @@ exports.update = async (req, res) => {
     // Simple update
     Object.assign(product, {
       title: body.title ?? product.title,
-      categoryId: body.categoryId ?? product.categoryId,
-      subcategoryId: body.subcategoryId ?? product.subcategoryId,
+      categoryId: body.categoryId === '' ? null : (body.categoryId ?? product.categoryId),
+      subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? product.subcategoryId),
       price: body.price !== undefined ? (body.price ? Number(body.price) : null) : product.price,
       quantity: body.quantity !== undefined ? (body.quantity ? Number(body.quantity) : null) : product.quantity,
       description: body.description ?? product.description,
       country: body.country ?? product.country,
       tags,
       images,
+      generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
+      generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
+      generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
     });
 
     await product.save();

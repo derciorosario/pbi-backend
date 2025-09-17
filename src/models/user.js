@@ -37,7 +37,7 @@ module.exports = (sequelize, DataTypes) => {
 
       provider: { type: DataTypes.ENUM("local", "google"), allowNull: false, defaultValue: "local" },
       googleId: { type: DataTypes.STRING(64), allowNull: true },
-      avatarUrl: { type: DataTypes.STRING(512), allowNull: true, validate: { isUrl: true } },
+      avatarUrl: { type: DataTypes.TEXT('long'), allowNull: true},
 
     },
     {

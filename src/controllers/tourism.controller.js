@@ -41,6 +41,10 @@ exports.create = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     } = req.body;
 
     // Basic validation
@@ -81,6 +85,10 @@ exports.create = async (req, res) => {
       budgetRange: budgetRange || null,
       tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
       images: Array.isArray(images) ? images : [],
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     });
 
     // Set audience associations
@@ -126,6 +134,10 @@ exports.update = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
       ...body
     } = req.body;
 
@@ -173,6 +185,9 @@ exports.update = async (req, res) => {
       budgetRange: body.budgetRange ?? tourism.budgetRange,
       tags,
       images,
+      generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
+      generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
+      generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
     });
 
     await tourism.save();

@@ -10,4 +10,6 @@ router.get("/users/:id/public", auth(false), C.getPublicProfile);
 // Search users (requires authentication)
 router.get("/users/search", auth(), C.searchUsers);
 
+router.get("/companies", auth(), C.listCompanies);
+
 module.exports = router;

@@ -50,6 +50,9 @@ exports.create = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     } = req.body;
 
     // Basic validation
@@ -109,6 +112,9 @@ exports.create = async (req, res) => {
       attachments: Array.isArray(attachments) ? attachments : [],
       categoryId: primaryCategoryId,
       subcategoryId: primarySubcategoryId,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     });
 
     // Set audience associations
@@ -156,6 +162,9 @@ exports.update = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
       ...body
     } = req.body;
     
@@ -202,10 +211,13 @@ exports.update = async (req, res) => {
       deliveryTime: body.deliveryTime ?? service.deliveryTime,
       locationType: body.locationType ?? service.locationType,
       experienceLevel: body.experienceLevel ?? service.experienceLevel,
-      categoryId: body.categoryId ?? service.categoryId,
-      subcategoryId: body.subcategoryId ?? service.subcategoryId,
+      categoryId: body.categoryId === '' ? null : (body.categoryId ?? service.categoryId),
+      subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? service.subcategoryId),
       skills,
       attachments,
+      generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
+      generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
+      generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
     });
 
     // Handle location fields based on locationType

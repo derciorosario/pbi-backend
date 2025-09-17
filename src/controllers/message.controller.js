@@ -302,10 +302,7 @@ async function sendMessage(req, res, next) {
       // Check if receiver has enabled email notifications for messages
       const isEnabled = await isEmailNotificationEnabled(receiverId, 'messages');
 
-      console.log({isEnabled})
-
-      return
-      
+   
       if (isEnabled) {
         const sender = await User.findByPk(senderId, { attributes: ["id", "name", "email"] });
         const baseUrl = process.env.WEBSITE_URL || "https://54links.com";

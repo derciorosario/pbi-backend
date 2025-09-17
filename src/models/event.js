@@ -52,7 +52,7 @@ module.exports = (sequelize, DataTypes) => {
       coverImageBase64: { type: DataTypes.TEXT('long'), allowNull: true },
 
       // Media
-      coverImageUrl: { type: DataTypes.STRING(500), allowNull: true },
+      coverImageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
       // status etc. can be added later
     },
     {

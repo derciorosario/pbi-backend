@@ -1,5 +1,15 @@
 const router = require("express").Router();
 const { resetAndRestart } = require("../utils/restart");
+const adminController = require("../controllers/admin.controller");
+const auth = require("../middleware/auth");
+
+// Admin middleware to check if user is admin
+const isAdmin = (req, res, next) => {
+  if (req.user && req.user.accountType === "admin") {
+    return next();
+  }
+  return res.status(403).json({ message: "Unauthorized: Admin access required" });
+};
 
 // Simple guard: only allow in development
 router.get("/restart", async (req, res) => {
@@ -14,5 +24,13 @@ router.get("/restart", async (req, res) => {
     resetAndRestart();
   }, 500);
 });
+
+// User management routes
+router.get("/admin/users", auth(), isAdmin, adminController.getAllUsers);
+router.get("/admin/users/export", auth(), isAdmin, adminController.exportUsers);
+router.get("/admin/users/:id", auth(), isAdmin, adminController.getUserById);
+router.put("/admin/users/:id", auth(), isAdmin, adminController.updateUser);
+router.delete("/admin/users/:id", auth(), isAdmin, adminController.deleteUser);
+router.put("/admin/users/:id/suspension", auth(), isAdmin, adminController.toggleUserSuspension);
 
 module.exports = router;

@@ -4,7 +4,12 @@ module.exports = (sequelize, DataTypes) => {
     "Identity",
     {
       id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
-      name: { type: DataTypes.STRING(200), allowNull: false, unique: true },
+      name: { type: DataTypes.STRING(200), allowNull: false },
+      type: { 
+        type: DataTypes.ENUM("individual", "company","none"),
+        allowNull: false,
+        defaultValue: "individual"
+      },
     },
     { tableName: "identities", timestamps: true }
   );

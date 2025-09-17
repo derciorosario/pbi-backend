@@ -22,7 +22,7 @@ const COUNTRIES  = ["All African Countries", "Nigeria", "Ghana", "Kenya", "South
 
 const BULK_ARTICLES = [
   {
-    authorEmail: "company@pbi.africa",
+    authorEmail: "company@54links.com",
     title: "Market Intelligence: Top 10 Growth Sectors in West Africa (2025)",
     category: "Business",
     countryFocus: "All African Countries",
@@ -30,7 +30,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "afri-agro@pbi.africa",
+    authorEmail: "afri-agro@54links.com",
     title: "AgriTech Innovations Boost Yields for Smallholders",
     category: "Technology",
     countryFocus: "Ghana",
@@ -38,7 +38,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "sa-renew@pbi.africa",
+    authorEmail: "sa-renew@54links.com",
     title: "Renewables Roundup: Utility-Scale Solar in SADC",
     category: "Trade",
     countryFocus: "South Africa",
@@ -46,7 +46,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "naija-fintech@pbi.africa",
+    authorEmail: "naija-fintech@54links.com",
     title: "Payments Interoperability: What It Means for SMEs",
     category: "Policy",
     countryFocus: "Nigeria",
@@ -54,7 +54,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "kenya-logistics@pbi.africa",
+    authorEmail: "kenya-logistics@54links.com",
     title: "Cross-Border Logistics: Lessons from E-commerce",
     category: "Trade",
     countryFocus: "Kenya",
@@ -62,7 +62,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "content.admin@pbi.africa",
+    authorEmail: "content.admin@54links.com",
     title: "Creative Economy Spotlight: Film & Games",
     category: "Culture",
     countryFocus: "Morocco",
@@ -70,7 +70,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "ops.admin@pbi.africa",
+    authorEmail: "ops.admin@54links.com",
     title: "Policy Tracker: Data Protection & AI Governance",
     category: "Policy",
     countryFocus: "Rwanda",
@@ -78,7 +78,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "individual@pbi.africa",
+    authorEmail: "individual@54links.com",
     title: "How to Pitch to African VCs",
     category: "Business",
     countryFocus: "All African Countries",
@@ -86,7 +86,7 @@ const BULK_ARTICLES = [
     status: "draft",
   },
   {
-    authorEmail: "amara.dev@pbi.africa",
+    authorEmail: "amara.dev@54links.com",
     title: "Frontend Patterns for High-Performance Dashboards",
     category: "Technology",
     countryFocus: "Kenya",
@@ -94,7 +94,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "youssef.data@pbi.africa",
+    authorEmail: "youssef.data@54links.com",
     title: "Data Storytelling for Marketplace Growth",
     category: "Business",
     countryFocus: "Morocco",
@@ -102,7 +102,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "helena.events@pbi.africa",
+    authorEmail: "helena.events@54links.com",
     title: "Event Playbook: Sponsorships That Work",
     category: "Business",
     countryFocus: "South Africa",
@@ -110,7 +110,7 @@ const BULK_ARTICLES = [
     status: "published",
   },
   {
-    authorEmail: "chinedu.hr@pbi.africa",
+    authorEmail: "chinedu.hr@54links.com",
     title: "Hiring in Pan-African Teams: Process & Tools",
     category: "Business",
     countryFocus: "Nigeria",
@@ -123,10 +123,10 @@ const BULK_ARTICLES = [
 
 while (BULK_ARTICLES.length < 24) {
   const authorPool = [
-    "company@pbi.africa", "afri-agro@pbi.africa", "sa-renew@pbi.africa",
-    "naija-fintech@pbi.africa", "kenya-logistics@pbi.africa", "content.admin@pbi.africa",
-    "ops.admin@pbi.africa", "individual@pbi.africa", "amara.dev@pbi.africa",
-    "youssef.data@pbi.africa", "helena.events@pbi.africa", "chinedu.hr@pbi.africa",
+    "company@54links.com", "afri-agro@54links.com", "sa-renew@54links.com",
+    "naija-fintech@54links.com", "kenya-logistics@54links.com", "content.admin@54links.com",
+    "ops.admin@54links.com", "individual@54links.com", "amara.dev@54links.com",
+    "youssef.data@54links.com", "helena.events@54links.com", "chinedu.hr@54links.com",
   ];
   const cat = pick(CATEGORIES);
   const ctry = pick(COUNTRIES);

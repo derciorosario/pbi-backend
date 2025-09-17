@@ -62,7 +62,7 @@ async function getTransport() {
  * @param {object} opts.context - handlebars variables available to template
  */
 async function sendTemplatedEmail({ to, subject, template, context = {} }) {
-  const from = process.env.EMAIL_FROM || "54Links <no-reply@pbi.africa>";
+  const from = process.env.EMAIL_FROM || "54Links <no-reply@54links.com>";
   const transport = await getTransport();
 
   console.log({ to, subject,context,transport })

@@ -10,6 +10,7 @@ const {
   Connection, ConnectionRequest,
   MeetingRequest
 } = require("../models");
+const { getBlockStatus } = require("../utils/blocking");
 
 const normalizePair = (id1, id2) => {
   const a = String(id1);
@@ -115,17 +116,29 @@ exports.getPublicProfile = async (req, res) => {
       connectionStatus = "self";
     }
 
-    const meetings = await MeetingRequest.findAll({
-      where: {
-        [Op.or]: [{ fromUserId: user.id }, { toUserId: user.id }],
-      },
-      order: [["scheduledAt", "DESC"]],
-      limit: 5,
-      include: [
-        { model: User, as: "requester", attributes: ["id", "name", "avatarUrl", "city", "country"] },
-        { model: User, as: "recipient", attributes: ["id", "name", "avatarUrl", "city", "country"] },
-      ],
-    });
+   
+    let meetings = [];
+    if (viewerId && String(viewerId) !== String(user.id)) {
+      meetings = await MeetingRequest.findAll({
+        where: {
+          [Op.or]: [
+            { [Op.and]: [{ fromUserId: user.id },   { toUserId: viewerId }] },
+            { [Op.and]: [{ fromUserId: viewerId },  { toUserId: user.id  }] },
+          ],
+          // Optional: only show accepted meetings
+          // status: "accepted",
+        },
+        order: [["scheduledAt", "DESC"]],
+        limit: 5,
+        include: [
+          { model: User, as: "requester", attributes: ["id", "name", "avatarUrl", "city", "country"] },
+          { model: User, as: "recipient", attributes: ["id", "name", "avatarUrl", "city", "country"] },
+        ],
+      });
+    } else {
+      meetings = [];
+    }
+
 
 
     // build meeting block
@@ -162,6 +175,9 @@ exports.getPublicProfile = async (req, res) => {
         categories: user.categories?.map(c => c.name) || [],
       };
     }
+
+    const block = await getBlockStatus(viewerId, user.id);
+    //connectionStatus = normalizeConnectionStatusForBlock(connectionStatus, block);
 
     // --- Build Payload ---
     const payload = {
@@ -217,7 +233,7 @@ exports.getPublicProfile = async (req, res) => {
 
       ...accountDetails,
       meetings: meetingsBlock,
-
+      block,
       connectionStatus,
     };
 
@@ -277,5 +293,50 @@ exports.searchUsers = async (req, res, next) => {
     res.json(formattedUsers);
   } catch (error) {
     next(error);
+  }
+};
+
+
+/**
+ * GET /companies
+ * List users whose accountType === "company"
+ * Optional ?q= filter by name/email (frontend does client-side search too)
+ */
+exports.listCompanies = async (req, res, next) => {
+  try {
+    const { q, limit } = req.query;
+    const where = { accountType: "company" };
+
+    if (q && q.trim()) {
+      where[Op.or] = [
+        { name: { [Op.like]: `%${q.trim()}%` } },
+        { email: { [Op.like]: `%${q.trim()}%` } },
+      ];
+    }
+
+    const max = Math.min(Number(limit) || 2000, 5000);
+
+    const rows = await User.findAll({
+      where,
+      attributes: ["id", "name", "email", "city", "country", "avatarUrl"],
+      include: [
+        { model: Profile, as: "profile", attributes: ["avatarUrl"], required: false },
+      ],
+      order: [["name", "ASC"]],
+      limit: max,
+    });
+
+    const companies = rows.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      city: u.city || null,
+      country: u.country || null,
+      avatarUrl: u.profile?.avatarUrl || u.avatarUrl || null,
+    }));
+
+    res.json({ companies });
+  } catch (err) {
+    next(err);
   }
 };

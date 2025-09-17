@@ -4,6 +4,7 @@ const {
   Connection,
   ConnectionRequest,
   Notification,
+  UserBlock
 } = require("../models");
 const { sendTemplatedEmail } = require("../utils/email");
 const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
@@ -15,6 +16,52 @@ function normalizePair(a, b) {
     : { userOneId: b, userTwoId: a };
 }
 
+
+
+
+
+exports.removeConnection = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const otherUserId = req.params.otherUserId || req.body.otherUserId;
+    const note = (req.body?.note || "").slice(0, 500);
+
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!otherUserId) return res.status(400).json({ message: "otherUserId is required" });
+    if (userId === otherUserId) return res.status(400).json({ message: "Cannot remove yourself" });
+
+    const pair = normalizePair(userId, otherUserId);
+
+    // 1) Remove the connection if it exists
+    const conn = await Connection.findOne({ where: pair });
+    if (conn) await conn.destroy();
+
+    // 2) Also remove any PENDING connection request between these users (any direction)
+    await ConnectionRequest.destroy({
+      where: {
+        [Op.or]: [
+          { fromUserId: userId,      toUserId: otherUserId },
+          { fromUserId: otherUserId, toUserId: userId }
+        ],
+      },
+    });
+
+    // Optional: notify the other user
+    await Notification.create({
+      userId: otherUserId,
+      type: "connection.removed",
+      payload: { byUserId: userId, note }
+    }).catch(() => {});
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to remove connection" });
+  }
+};
+
+
+
 exports.createRequest = async (req, res) => {
   try {
     const fromUserId = req.user?.id;
@@ -23,6 +70,18 @@ exports.createRequest = async (req, res) => {
     if (!fromUserId) return res.status(401).json({ message: "Unauthorized" });
     if (!toUserId)   return res.status(400).json({ message: "toUserId is required" });
     if (fromUserId === toUserId) return res.status(400).json({ message: "Cannot connect to yourself" });
+
+
+    const blocked = await UserBlock.findOne({
+      where: {
+        [Op.or]: [
+          { blockerId: fromUserId, toUserId },      // I blocked them
+          { blockerId: toUserId,   blockedId: fromUserId }, // they blocked me
+        ].map(o => ({ blockerId: Object.values(o)[0], blockedId: Object.values(o)[1] }))
+      }
+    });
+    
+    if (blocked) return res.status(403).json({ message: "You cannot connect with this user." });
 
     // já conectados?
     const pair = normalizePair(fromUserId, toUserId);
@@ -132,66 +191,84 @@ exports.getMyPending = async (req, res) => {
   }
 };
 
+
+
 exports.respond = async (req, res) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
     const { action } = req.body; // "accept" | "reject"
 
-    
-
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
     const row = await ConnectionRequest.findByPk(id);
     if (!row || row.toUserId !== userId) return res.status(404).json({ message: "Request not found" });
     if (row.status !== "pending") return res.status(400).json({ message: "Already handled" });
 
     if (action === "accept") {
       const pair = normalizePair(row.fromUserId, row.toUserId);
-      const exists = await Connection.findOne({ where: pair });
-      if (!exists) await Connection.create(pair);
 
+      // Ensure the Connection exists (idempotent)
+      await Connection.findOrCreate({ where: pair, defaults: pair });
+
+      // If another accepted already exists for this direction, dedupe and exit
+      const alreadyAccepted = await ConnectionRequest.findOne({
+        where: { fromUserId: row.fromUserId, toUserId: row.toUserId, status: "accepted" },
+        attributes: ["id"],
+      });
+      if (alreadyAccepted && alreadyAccepted.id !== row.id) {
+        await row.destroy();
+        return res.json({ ok: true, status: "accepted", deduped: true });
+      }
+
+      // Try to flip this row to accepted
       row.status = "accepted";
       row.respondedAt = new Date();
-      await row.save();
 
-      // Get user details for email
+      try {
+        await row.save();
+      } catch (e) {
+        const isDup =
+          e?.name === "SequelizeUniqueConstraintError" ||
+          e?.parent?.code === "ER_DUP_ENTRY";
+        if (isDup) {
+          // Another accepted was created in the meantime; remove this pending
+          await row.destroy();
+          return res.json({ ok: true, status: "accepted", deduped: true });
+        }
+        throw e;
+      }
+
+      // Side-effects (best-effort)
       const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
       const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
-      
-      // Create notification
-      await Notification.create({
+
+      Notification.create({
         userId: row.fromUserId,
         type: "connection.accepted",
         payload: { byUserId: userId, requestId: row.id },
-      });
-      
-      // Send email notification if enabled
-      try {
-        // Check if requester has enabled email notifications for connection updates
-        const isEnabled = await isEmailNotificationEnabled(row.fromUserId, 'connectionUpdates');
-        
-        if (isEnabled) {
-          const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
-          const profileLink = `${baseUrl}/profile/${userId}`;
-          
-          await sendTemplatedEmail({
-            to: requester.email,
-            subject: `${responder?.name || "Someone"} Accepted Your Connection Request`,
-            template: "connection-response",
-            context: {
-              name: requester.name,
-              responderName: responder?.name || "Someone",
-              accepted: true,
-              profileLink
-            }
-          });
-        } else {
-          console.log(`Email notification skipped for user ${row.fromUserId} (connectionUpdates disabled)`);
-        }
-      } catch (emailErr) {
-        console.error("Failed to send connection acceptance email:", emailErr);
-        // Continue even if email fails
-      }
+      }).catch(() => {});
+
+      (async () => {
+        try {
+          const isEnabled = await isEmailNotificationEnabled(row.fromUserId, "connectionUpdates");
+          if (isEnabled) {
+            const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+            const profileLink = `${baseUrl}/profile/${userId}`;
+            await sendTemplatedEmail({
+              to: requester.email,
+              subject: `${responder?.name || "Someone"} Accepted Your Connection Request`,
+              template: "connection-response",
+              context: {
+                name: requester.name,
+                responderName: responder?.name || "Someone",
+                accepted: true,
+                profileLink,
+              },
+            });
+          }
+        } catch {}
+      })();
 
       return res.json({ ok: true, status: "accepted" });
     }
@@ -201,40 +278,32 @@ exports.respond = async (req, res) => {
       row.respondedAt = new Date();
       await row.save();
 
-      // Get user details for email
       const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
       const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
-      
-      // Create notification
-      await Notification.create({
+
+      Notification.create({
         userId: row.fromUserId,
         type: "connection.rejected",
         payload: { byUserId: userId, requestId: row.id },
-      });
-      
-      // Send email notification if enabled
-      try {
-        // Check if requester has enabled email notifications for connection updates
-        const isEnabled = await isEmailNotificationEnabled(row.fromUserId, 'connectionUpdates');
-        
-        if (isEnabled) {
-          await sendTemplatedEmail({
-            to: requester.email,
-            subject: `${responder?.name || "Someone"} Declined Your Connection Request`,
-            template: "connection-response",
-            context: {
-              name: requester.name,
-              responderName: responder?.name || "Someone",
-              accepted: false
-            }
-          });
-        } else {
-          console.log(`Email notification skipped for user ${row.fromUserId} (connectionUpdates disabled)`);
-        }
-      } catch (emailErr) {
-        console.error("Failed to send connection rejection email:", emailErr);
-        // Continue even if email fails
-      }
+      }).catch(() => {});
+
+      (async () => {
+        try {
+          const isEnabled = await isEmailNotificationEnabled(row.fromUserId, "connectionUpdates");
+          if (isEnabled) {
+            await sendTemplatedEmail({
+              to: requester.email,
+              subject: `${responder?.name || "Someone"} Declined Your Connection Request`,
+              template: "connection-response",
+              context: {
+                name: requester.name,
+                responderName: responder?.name || "Someone",
+                accepted: false,
+              },
+            });
+          }
+        } catch {}
+      })();
 
       return res.json({ ok: true, status: "rejected" });
     }
@@ -242,9 +311,12 @@ exports.respond = async (req, res) => {
     return res.status(400).json({ message: "Invalid action" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to respond" });
+    return res.status(500).json({ message: "Failed to respond" });
   }
 };
+
+
+
 
 exports.getMyConnections = async (req, res) => {
   try {

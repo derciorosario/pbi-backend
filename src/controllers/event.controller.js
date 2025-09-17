@@ -75,6 +75,11 @@ exports.create = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     } = req.body;
 
     if (!title || !description) return res.status(400).json({ message: "Title and description are required" });
@@ -141,7 +146,10 @@ exports.create = async (req, res) => {
       capacity: capacity || null,
       registrationDeadline: regDeadline,
       coverImageUrl: coverImageUrl || null,
-      coverImageBase64:coverImageBase64 || null
+      coverImageBase64:coverImageBase64 || null,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     });
 
     // Set audience associations
@@ -189,6 +197,9 @@ exports.update = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
       ...body
     } = req.body;
     
@@ -225,8 +236,8 @@ exports.update = async (req, res) => {
       title: body.title ?? event.title,
       description: body.description ?? event.description,
       eventType: body.eventType ?? event.eventType,
-      categoryId: body.categoryId ?? event.categoryId,
-      subcategoryId: body.subcategoryId ?? event.subcategoryId,
+      categoryId: body.categoryId === '' ? null : (body.categoryId ?? event.categoryId),
+      subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? event.subcategoryId),
       timezone: body.timezone ?? event.timezone,
       locationType: body.locationType ?? event.locationType,
       country: body.country ?? event.country,
@@ -239,6 +250,9 @@ exports.update = async (req, res) => {
       capacity: body.capacity ?? event.capacity,
       registrationDeadline: body.registrationDeadline ? new Date(`${body.registrationDeadline}T23:59:00Z`) : event.registrationDeadline,
       coverImageUrl: body.coverImageUrl ?? event.coverImageUrl,
+      generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
+      generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
+      generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
     });
 
     await event.save();

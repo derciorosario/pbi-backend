@@ -9,13 +9,18 @@ module.exports = (sequelize, DataTypes) => {
       name: { type: DataTypes.STRING(160), allowNull: false },
       sort: { type: DataTypes.INTEGER, defaultValue: 0 },
       meta: { type: DataTypes.JSON, allowNull: true },
+      type: { 
+        type: DataTypes.ENUM("individual", "company"),
+        allowNull: false,
+        defaultValue: "individual"
+      },
     },
     {
       tableName: "categories",
       timestamps: true,
       indexes: [
         { fields: ["identityId"] },
-        { fields: ["name"] },
+        //{ fields: ["name"] },
       ],
     }
   );

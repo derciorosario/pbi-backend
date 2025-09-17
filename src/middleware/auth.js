@@ -20,10 +20,10 @@ module.exports = (required = true) => {
       if (!sub) return res.status(401).json({ message: "Invalid token (no subject)" });
 
       // (optional) verify user exists
-      const user = await User.findByPk(sub, { attributes: ["id"] });
+      const user = await User.findByPk(sub, { attributes: ["id", "accountType"] });
       if (!user) return res.status(401).json({ message: "User not found" });
 
-      req.user = { sub: user.id,id: user.id };
+      req.user = { sub: user.id, id: user.id, accountType: user.accountType };
       next();
     } catch (e) {
       if (required) return res.status(401).json({ message: "Invalid token" });

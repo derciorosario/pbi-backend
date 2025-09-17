@@ -49,6 +49,11 @@ exports.create = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     } = req.body;
 
     // Basic validation
@@ -102,6 +107,10 @@ exports.create = async (req, res) => {
       images: Array.isArray(images) ? images : [],
       status: status || "draft",
       visibility: visibility || "public",
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
     });
 
     // Set audience associations
@@ -148,6 +157,10 @@ exports.update = async (req, res) => {
       categoryIds: _categoryIds,
       subcategoryIds: _subcategoryIds,
       subsubCategoryIds: _subsubCategoryIds,
+
+      generalCategoryId,
+      generalSubcategoryId,
+      generalSubsubCategoryId,
       ...body
     } = req.body;
 
@@ -191,7 +204,7 @@ exports.update = async (req, res) => {
     // Simple update
     Object.assign(funding, {
       title: body.title ?? funding.title,
-      categoryId: body.categoryId ?? funding.categoryId,
+      categoryId: body.categoryId === '' ? null : (body.categoryId ?? funding.categoryId),
       country: body.country ?? funding.country,
       city: body.city ?? funding.city,
       goal: body.goal !== undefined ? Number(body.goal) : funding.goal,
@@ -208,6 +221,10 @@ exports.update = async (req, res) => {
       tags,
       links,
       images,
+
+      generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
+      generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
+      generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
     });
 
     await funding.save();

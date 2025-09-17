@@ -1,6 +1,8 @@
 // src/routes/public.routes.js
 const router = require("express").Router();
 const { Category, Subcategory, Goal } = require("../models");
+const auth = require("../middleware/auth"); // auth(true) -> requires token
+
 
 router.get("/categories", async (req, res) => {
   const cats = await Category.findAll({
@@ -20,7 +22,7 @@ router.get("/goals", async (req, res) => {
 
 const { getIdentityCatalog } = require("../controllers/public.controller");
 
-router.get("/identities", getIdentityCatalog);
+router.get("/identities",auth(false),getIdentityCatalog);
 
 
 module.exports = router;

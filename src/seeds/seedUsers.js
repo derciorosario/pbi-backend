@@ -22,7 +22,6 @@ const {
 } = require("../models");
 
 const bcrypt = require("bcryptjs");
-
 /* -------------------------------- Catalogs -------------------------------- */
 
 // Load data from identity_category_map.json
@@ -369,7 +368,7 @@ async function upsertUserWithProfile({
 const BULK_USERS = [
   // Companies
   {
-    email: "afri-agro@pbi.africa",
+    email: "afri-agro@54links.com",
     password: "Company@123",
     name: "AfriAgro Ltd.",
     phone: "+234 01 222 7788",
@@ -407,7 +406,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Partnerships", "Raise Capital"],
   },
   {
-    email: "tech-innovate@pbi.africa",
+    email: "tech-innovate@54links.com",
     password: "Company@123",
     name: "TechInnovate Solutions",
     phone: "+27 11 555 1234",
@@ -444,7 +443,7 @@ const BULK_USERS = [
     goals: ["Hire Engineers", "Find Clients", "Raise Capital"],
   },
   {
-    email: "green-energy@pbi.africa",
+    email: "green-energy@54links.com",
     password: "Company@123",
     name: "GreenEnergy Africa",
     phone: "+254 20 555 6789",
@@ -481,7 +480,7 @@ const BULK_USERS = [
     goals: ["Find Investors", "Partnerships", "Raise Capital"],
   },
   {
-    email: "sa-renew@pbi.africa",
+    email: "sa-renew@54links.com",
     password: "Company@123",
     name: "SA Renewables",
     phone: "+27 21 555 9000",
@@ -506,7 +505,7 @@ const BULK_USERS = [
     goals: ["Find Investors", "Partnerships"],
   },
   {
-    email: "naija-fintech@pbi.africa",
+    email: "naija-fintech@54links.com",
     password: "Company@123",
     name: "NaijaPay",
     phone: "+234 80 777 2222",
@@ -532,7 +531,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Hire Engineers", "Raise Capital"],
   },
   {
-    email: "kenya-logistics@pbi.africa",
+    email: "kenya-logistics@54links.com",
     password: "Company@123",
     name: "Kilima Logistics",
     phone: "+254 700 111 333",
@@ -559,7 +558,7 @@ const BULK_USERS = [
 
   // Individuals
   {
-    email: "amara.dev@pbi.africa",
+    email: "amara.dev@54links.com",
     password: "User@123",
     name: "Amara N.",
     phone: "+234 803 555 1010",
@@ -591,7 +590,7 @@ const BULK_USERS = [
     goals: ["Job Opportunities", "Mentorship"],
   },
   {
-    email: "samuel.data@pbi.africa",
+    email: "samuel.data@54links.com",
     password: "User@123",
     name: "Samuel K.",
     phone: "+27 71 555 8989",
@@ -627,7 +626,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Mentorship", "Partnerships"],
   },
   {
-    email: "fatima.finance@pbi.africa",
+    email: "fatima.finance@54links.com",
     password: "User@123",
     name: "Fatima M.",
     phone: "+212 661 555 4321",
@@ -662,7 +661,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   {
-    email: "amina.designer@pbi.africa",
+    email: "amina.designer@54links.com",
     password: "User@123",
     name: "Amina A.",
     phone: "+254 712 555 1212",
@@ -687,7 +686,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   {
-    email: "youssef.data@pbi.africa",
+    email: "youssef.data@54links.com",
     password: "User@123",
     name: "Youssef E.",
     phone: "+212 600 777 888",
@@ -712,7 +711,7 @@ const BULK_USERS = [
     goals: ["Find Clients", "Mentorship"],
   },
   {
-    email: "chinedu.hr@pbi.africa",
+    email: "chinedu.hr@54links.com",
     password: "User@123",
     name: "Chinedu O.",
     phone: "+234 802 999 1234",
@@ -734,7 +733,7 @@ const BULK_USERS = [
     goals: ["Recruitment", "Find Clients"],
   },
   {
-    email: "helena.events@pbi.africa",
+    email: "helena.events@54links.com",
     password: "User@123",
     name: "Helena M.",
     phone: "+27 71 333 2222",
@@ -761,7 +760,7 @@ const BULK_USERS = [
 
   // Social Entrepreneurs
   {
-    email: "eco-solutions@pbi.africa",
+    email: "eco-solutions@54links.com",
     password: "User@123",
     name: "EcoSolutions Africa",
     phone: "+255 755 555 1234",
@@ -798,7 +797,7 @@ const BULK_USERS = [
   
   // Freelancers
   {
-    email: "zainab.design@pbi.africa",
+    email: "zainab.design@54links.com",
     password: "User@123",
     name: "Zainab H.",
     phone: "+20 100 555 7890",
@@ -835,7 +834,7 @@ const BULK_USERS = [
   
   // Students
   {
-    email: "kwame.student@pbi.africa",
+    email: "kwame.student@54links.com",
     password: "User@123",
     name: "Kwame O.",
     phone: "+233 24 555 6789",
@@ -872,7 +871,7 @@ const BULK_USERS = [
   
   // Investors
   {
-    email: "venture-capital@pbi.africa",
+    email: "venture-capital@54links.com",
     password: "User@123",
     name: "Pan-African Ventures",
     phone: "+27 11 555 9876",
@@ -910,7 +909,7 @@ const BULK_USERS = [
   
   // Admins (não aparecem em sugestões/feeds para usuário)
   {
-    email: "ops.admin@pbi.africa",
+    email: "ops.admin@54links.com",
     password: "Admin@123",
     name: "54Links Ops",
     phone: "+27 10 200 0000",
@@ -935,7 +934,7 @@ const BULK_USERS = [
     goals: ["Recruitment"],
   },
   {
-    email: "content.admin@pbi.africa",
+    email: "content.admin@54links.com",
     password: "Admin@123",
     name: "54Links Content Admin",
     phone: "+27 10 200 0001",
@@ -1019,7 +1018,7 @@ async function seedUsersFromIdentityCategoryMap() {
       }
       
       // Create a user for this identity
-      const email = `${identityName.toLowerCase().replace(/[^a-z0-9]/g, "-")}@pbi.africa`;
+      const email = `${identityName.toLowerCase().replace(/[^a-z0-9]/g, "-")}@54links.com`;
       
       // Check if user already exists
       const existingUser = await User.findOne({ where: { email } });

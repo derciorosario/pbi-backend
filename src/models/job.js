@@ -9,13 +9,38 @@ module.exports = (sequelize, DataTypes) => {
       // Basic
       title:          { type: DataTypes.STRING(180), allowNull: false },
       companyName:    { type: DataTypes.STRING(180), allowNull: false },
+      // New: selected company user id (accounts having accountType = "company")
+      companyId: { type: DataTypes.UUID, allowNull: true },
       make_company_name_private: { type: DataTypes.BOOLEAN, defaultValue: false },
       department:     { type: DataTypes.STRING(120) },
       experienceLevel:{ type: DataTypes.ENUM("Junior","Mid-level","Senior","Lead"), allowNull: true },
 
       // Details
-      jobType:        { type: DataTypes.ENUM("Full-time","Part-time","Contract","Internship","Temporary"), allowNull: false },
-      workMode:       { type: DataTypes.ENUM("On-site","Remote","Hybrid"), allowNull: false },
+     
+      jobType: {
+        type: DataTypes.STRING(), // e.g. "Full-Time"
+        allowNull: false,
+      },
+
+      workLocation: {
+        type: DataTypes.STRING(), // e.g. "Remote"
+        allowNull: true,
+      },
+
+      workSchedule: {
+        type: DataTypes.STRING(), // e.g. "Day Shift"
+        allowNull: true,
+      },
+
+      careerLevel: {
+        type: DataTypes.STRING(), // e.g. "Entry-Level"
+        allowNull: true,
+      },
+
+      paymentType: {
+        type: DataTypes.STRING(), // e.g. "Salaried Jobs"
+        allowNull: true,
+      },
       description:    { type: DataTypes.TEXT, allowNull: false },
       requiredSkills: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
 
@@ -28,6 +53,8 @@ module.exports = (sequelize, DataTypes) => {
 
       benefits:      { type: DataTypes.STRING(500) },
 
+      
+
       // Application
       applicationDeadline:   { type: DataTypes.DATEONLY },
       positions:             { type: DataTypes.INTEGER, defaultValue: 1 },
@@ -39,7 +66,13 @@ module.exports = (sequelize, DataTypes) => {
       categoryId:     { type: DataTypes.UUID, allowNull: false },      // industry
       subcategoryId:  { type: DataTypes.UUID, allowNull: true },       // optional
 
+
       status:         { type: DataTypes.ENUM("draft","published"), defaultValue: "published" },
+      
+      moderation_status: {
+        type: DataTypes.ENUM("approved", "reported", "under_review", "removed", "suspended"),
+        defaultValue: "approved"
+      },
 
       coverImageBase64: { type: DataTypes.TEXT('long'), allowNull: true },
     },
@@ -52,6 +85,16 @@ module.exports = (sequelize, DataTypes) => {
 
   Job.associate = (models) => {
     Job.belongsTo(models.User, { foreignKey: "postedByUserId", as: "postedBy" });
+
+    // New association to the company user (accountType: "company")
+     // ✅ NEW: link a Job to a company User via jobs.companyId
+    Job.belongsTo(models.User, {
+      as: "company",
+      foreignKey: { name: "companyId", allowNull: true,as:'company' },
+      onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
+      
     Job.belongsTo(Category, {
     as: "category",
     foreignKey: { name: "categoryId", allowNull: false },

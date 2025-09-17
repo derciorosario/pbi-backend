@@ -38,6 +38,9 @@ const {
   JobSubcategory,
   JobSubsubCategory,
   JobIdentity,
+  GeneralCategory,
+  GeneralSubcategory,
+  GeneralSubsubCategory,
 } = require("../models");
 
 /** ------------------------- Helpers ------------------------- **/
@@ -102,6 +105,42 @@ async function getUserIdByEmail(email) {
   const u = await User.findOne({ where: { email } });
   if (!u) throw new Error(`User not found for email: ${email}`);
   return u.id;
+}
+
+async function upsertGeneralCategoryByName(name, type) {
+  if (!name || !type) return null;
+  let cat = await GeneralCategory.findOne({ where: { name, type } });
+  if (!cat) {
+    cat = await GeneralCategory.create({ name, type });
+    console.log(`➕ General Category created: ${name} (${type})`);
+  }
+  return cat;
+}
+
+async function upsertGeneralSubcategoryByName(categoryName, subName, type) {
+  if (!categoryName || !subName || !type) return null;
+  const cat = await upsertGeneralCategoryByName(categoryName, type);
+  let sub = await GeneralSubcategory.findOne({
+    where: { name: subName, generalCategoryId: cat.id },
+  });
+  if (!sub) {
+    sub = await GeneralSubcategory.create({ name: subName, generalCategoryId: cat.id });
+    console.log(`   ↳ General Subcategory created: ${categoryName} > ${subName}`);
+  }
+  return sub;
+}
+
+async function upsertGeneralSubsubCategoryByName(categoryName, subcategoryName, subsubName, type) {
+  if (!categoryName || !subcategoryName || !subsubName || !type) return null;
+  const sub = await upsertGeneralSubcategoryByName(categoryName, subcategoryName, type);
+  let subsub = await GeneralSubsubCategory.findOne({
+    where: { name: subsubName, generalSubcategoryId: sub.id },
+  });
+  if (!subsub) {
+    subsub = await GeneralSubsubCategory.create({ name: subsubName, generalSubcategoryId: sub.id });
+    console.log(`      ↳ General SubsubCategory created: ${categoryName} > ${subcategoryName} > ${subsubName}`);
+  }
+  return subsub;
 }
 
 // Generic function to associate entities with audience
@@ -262,9 +301,11 @@ const PRODUCT_SEEDS = [
       "https://images.unsplash.com/photo-1590874103328-eac38a683ce7",
       "https://images.unsplash.com/photo-1622560480605-d83c853bc5c3"
     ],
-    sellerEmail: "kenya-logistics@pbi.africa",
+    sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Accessories",
+    generalCategoryName: "Fashion & Apparel",
+    generalSubcategoryName: "Bags",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -289,9 +330,11 @@ const PRODUCT_SEEDS = [
       "https://images.unsplash.com/photo-1534137667199-675a46e143f3",
       "https://images.unsplash.com/photo-1589891685391-c1c1a2c4f1df"
     ],
-    sellerEmail: "afri-agro@pbi.africa",
+    sellerEmail: "afri-agro@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Textiles",
+    generalCategoryName: "Fashion & Apparel",
+    generalSubcategoryName: "Textiles",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -313,9 +356,11 @@ const PRODUCT_SEEDS = [
       "https://images.unsplash.com/photo-1581147036324-c17ac41dfa6c",
       "https://images.unsplash.com/photo-1617704548623-340376564e68"
     ],
-    sellerEmail: "sa-renew@pbi.africa",
+    sellerEmail: "sa-renew@54links.com",
     categoryName: "Technology",
     subcategoryName: "Gadgets & Accessories",
+    generalCategoryName: "Electronics & Technology",
+    generalSubcategoryName: "Smart Home Devices",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Technology", "Energy"],
@@ -337,7 +382,7 @@ const PRODUCT_SEEDS = [
       "https://images.unsplash.com/photo-1598662972299-5408ddb8a3dc",
       "https://images.unsplash.com/photo-1571781565036-d3f759be73e4"
     ],
-    sellerEmail: "afri-agro@pbi.africa",
+    sellerEmail: "afri-agro@54links.com",
     categoryName: "Health & Beauty",
     subcategoryName: "Skincare",
     createdAtDaysAgo: 8,
@@ -363,7 +408,7 @@ const PRODUCT_SEEDS = [
       "https://images.unsplash.com/photo-1632164566668-7b0d0c92b10a",
       "https://images.unsplash.com/photo-1611486212557-88be5ff6f941"
     ],
-    sellerEmail: "kenya-logistics@pbi.africa",
+    sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Home & Living",
     subcategoryName: "Home Decor",
     createdAtDaysAgo: 12,
@@ -396,9 +441,11 @@ const SERVICE_SEEDS = [
       "https://images.unsplash.com/photo-1547658719-da2b51169166",
       "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e"
     ],
-    providerEmail: "naija-fintech@pbi.africa",
+    providerEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Web Development",
+    generalCategoryName: "Technology & IT Services",
+    generalSubcategoryName: "Web Development",
     createdAtDaysAgo: 3,
     audience: {
       categories: ["Technology", "Service Providers"],
@@ -425,7 +472,7 @@ const SERVICE_SEEDS = [
       "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40",
       "https://images.unsplash.com/photo-1552664730-d307ca884978"
     ],
-    providerEmail: "sa-renew@pbi.africa",
+    providerEmail: "sa-renew@54links.com",
     categoryName: "Business",
     subcategoryName: "Consulting & Strategy",
     createdAtDaysAgo: 7,
@@ -454,7 +501,7 @@ const SERVICE_SEEDS = [
       "https://images.unsplash.com/photo-1626785774573-4b799315345d",
       "https://images.unsplash.com/photo-1634942537034-2531766767d1"
     ],
-    providerEmail: "kenya-logistics@pbi.africa",
+    providerEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Branding & Creative Strategy",
     createdAtDaysAgo: 10,
@@ -483,7 +530,7 @@ const SERVICE_SEEDS = [
       "https://images.unsplash.com/photo-1625246333195-78d9c38ad449",
       "https://images.unsplash.com/photo-1592982537447-7440770cbfc9"
     ],
-    providerEmail: "afri-agro@pbi.africa",
+    providerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Farming & Crop Production",
     createdAtDaysAgo: 5,
@@ -512,7 +559,7 @@ const SERVICE_SEEDS = [
       "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7",
       "https://images.unsplash.com/photo-1611162616475-46b635cb6868"
     ],
-    providerEmail: "naija-fintech@pbi.africa",
+    providerEmail: "naija-fintech@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
     createdAtDaysAgo: 8,
@@ -543,9 +590,12 @@ const TOURISM_SEEDS = [
       "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e",
       "https://images.unsplash.com/photo-1535941339077-2dd1c7963098"
     ],
-    authorEmail: "kenya-logistics@pbi.africa",
+    authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Wildlife & Safari",
+    generalCategoryName: "Tourist Attractions",
+    generalSubcategoryName: "Natural Attractions",
+    generalSubsubCategoryName: "National Parks & Reserves",
     createdAtDaysAgo: 4,
     audience: {
       categories: ["Tourism & Travel"],
@@ -569,7 +619,7 @@ const TOURISM_SEEDS = [
       "https://images.unsplash.com/photo-1504279577054-acfeccf8fc52",
       "https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb"
     ],
-    authorEmail: "sa-renew@pbi.africa",
+    authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Food & Wine",
     createdAtDaysAgo: 7,
@@ -595,7 +645,7 @@ const TOURISM_SEEDS = [
       "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5",
       "https://images.unsplash.com/photo-1523805009345-7448845a9e53"
     ],
-    authorEmail: "kenya-logistics@pbi.africa",
+    authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Cultural Tourism",
     createdAtDaysAgo: 10,
@@ -621,7 +671,7 @@ const TOURISM_SEEDS = [
       "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5",
       "https://images.unsplash.com/photo-1565622871630-8e818e5bd4a6"
     ],
-    authorEmail: "sa-renew@pbi.africa",
+    authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Natural Wonders",
     createdAtDaysAgo: 15,
@@ -647,7 +697,7 @@ const TOURISM_SEEDS = [
       "https://images.unsplash.com/photo-1518005068251-37900150dfca",
       "https://images.unsplash.com/photo-1504609813442-a8924e83f76e"
     ],
-    authorEmail: "naija-fintech@pbi.africa",
+    authorEmail: "naija-fintech@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Adventure Tourism",
     createdAtDaysAgo: 9,
@@ -685,8 +735,11 @@ const FUNDING_SEEDS = [
       "https://images.unsplash.com/photo-1625246333195-78d9c38ad449",
       "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8"
     ],
-    creatorEmail: "afri-agro@pbi.africa",
+    creatorEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
+    generalCategoryName: "Grants & Funding",
+    generalSubcategoryName: "Innovation & Startup Funding",
+    generalSubsubCategoryName: "Seed Funding",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Agriculture", "Energy"],
@@ -719,7 +772,7 @@ const FUNDING_SEEDS = [
       "https://images.unsplash.com/photo-1576091160550-2173dba999ef",
       "https://images.unsplash.com/photo-1579684385127-1ef15d508118"
     ],
-    creatorEmail: "naija-fintech@pbi.africa",
+    creatorEmail: "naija-fintech@54links.com",
     categoryName: "Healthcare",
     createdAtDaysAgo: 10,
     audience: {
@@ -752,7 +805,7 @@ const FUNDING_SEEDS = [
       "https://images.unsplash.com/photo-1497440001374-f26997328c1b",
       "https://images.unsplash.com/photo-1473341304170-971dccb5ac1e"
     ],
-    creatorEmail: "sa-renew@pbi.africa",
+    creatorEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
     createdAtDaysAgo: 15,
@@ -786,7 +839,7 @@ const FUNDING_SEEDS = [
       "https://images.unsplash.com/photo-1588072432836-e10032774350",
       "https://images.unsplash.com/photo-1497633762265-9d179a990aa6"
     ],
-    creatorEmail: "afri-agro@pbi.africa",
+    creatorEmail: "afri-agro@54links.com",
     categoryName: "Education",
     createdAtDaysAgo: 8,
     audience: {
@@ -820,7 +873,7 @@ const FUNDING_SEEDS = [
       "https://images.unsplash.com/photo-1589891685391-c1c1a2c4f1df",
       "https://images.unsplash.com/photo-1509319117193-57bab727e09d"
     ],
-    creatorEmail: "kenya-logistics@pbi.africa",
+    creatorEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
     createdAtDaysAgo: 12,
     audience: {
@@ -858,9 +911,11 @@ const EVENT_SEEDS = [
       "https://images.unsplash.com/photo-1540575467063-178a50c2df87",
       "https://images.unsplash.com/photo-1515187029135-18ee286d815b"
     ],
-    organizerEmail: "kenya-logistics@pbi.africa",
+    organizerEmail: "kenya-logistics@54links.com",
     categoryName: "Technology",
     subcategoryName: "Tech Events",
+    generalCategoryName: "Technology & Innovation",
+    generalSubcategoryName: "Developer Meetups",
     createdAtDaysAgo: 60,
     audience: {
       categories: ["Technology", "Business"],
@@ -894,7 +949,7 @@ const EVENT_SEEDS = [
       "https://images.unsplash.com/photo-1592982537447-7440770cbfc9",
       "https://images.unsplash.com/photo-1625246333195-78d9c38ad449"
     ],
-    organizerEmail: "afri-agro@pbi.africa",
+    organizerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Technology",
     createdAtDaysAgo: 75,
@@ -930,7 +985,7 @@ const EVENT_SEEDS = [
       "https://images.unsplash.com/photo-1509391366360-2e959784a276",
       "https://images.unsplash.com/photo-1497440001374-f26997328c1b"
     ],
-    organizerEmail: "sa-renew@pbi.africa",
+    organizerEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
     createdAtDaysAgo: 90,
@@ -966,7 +1021,7 @@ const EVENT_SEEDS = [
       "https://images.unsplash.com/photo-1534137667199-675a46e143f3",
       "https://images.unsplash.com/photo-1589891685391-c1c1a2c4f1df"
     ],
-    organizerEmail: "naija-fintech@pbi.africa",
+    organizerEmail: "naija-fintech@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Fashion Events",
     createdAtDaysAgo: 120,
@@ -1002,7 +1057,7 @@ const EVENT_SEEDS = [
       "https://images.unsplash.com/photo-1584982751601-97dcc096659c",
       "https://images.unsplash.com/photo-1576091160550-2173dba999ef"
     ],
-    organizerEmail: "afri-agro@pbi.africa",
+    organizerEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
     createdAtDaysAgo: 100,
@@ -1034,7 +1089,7 @@ const JOB_SEEDS = [
     companyName: "AfriPay Solutions", 
     applicationDeadline: daysAgo(-30),
     tags: ["software engineering", "fintech", "node.js", "react", "aws"],
-    postedByEmail: "naija-fintech@pbi.africa",
+    postedByEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Software Development",
     createdAtDaysAgo: 5,
@@ -1062,7 +1117,7 @@ const JOB_SEEDS = [
     companyName: "EastAfrica AgriDev",
     applicationDeadline: daysAgo(-45),
     tags: ["agriculture", "project management", "sustainable farming", "east africa"],
-    postedByEmail: "afri-agro@pbi.africa",
+    postedByEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Management",
     createdAtDaysAgo: 10,
@@ -1090,7 +1145,7 @@ const JOB_SEEDS = [
     companyName: "SolarWindAfrica",
     applicationDeadline: daysAgo(-60),
     tags: ["renewable energy", "solar", "wind", "engineering", "off-grid"],
-    postedByEmail: "sa-renew@pbi.africa",
+    postedByEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
     createdAtDaysAgo: 15,
@@ -1118,7 +1173,7 @@ const JOB_SEEDS = [
     companyName: "AfriStyle Collective",
     applicationDeadline: daysAgo(-30),
     tags: ["marketing", "fashion", "social media", "digital marketing"],
-    postedByEmail: "kenya-logistics@pbi.africa",
+    postedByEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
     createdAtDaysAgo: 7,
@@ -1146,7 +1201,7 @@ const JOB_SEEDS = [
     companyName: "WestAfrica HealthTech Consulting",
     applicationDeadline: daysAgo(-45),
     tags: ["healthcare", "technology", "telemedicine", "consulting", "EHR"],
-    postedByEmail: "afri-agro@pbi.africa",
+    postedByEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
     createdAtDaysAgo: 12,
@@ -1184,6 +1239,21 @@ async function run(){
         ? await upsertSubcategoryByName(p.categoryName, p.subcategoryName)
         : null;
 
+      // Handle general categories for products
+      let generalCat = null;
+      let generalSub = null;
+      let generalSubsub = null;
+
+      if (p.generalCategoryName) {
+        generalCat = await upsertGeneralCategoryByName(p.generalCategoryName, 'product');
+        if (p.generalSubcategoryName) {
+          generalSub = await upsertGeneralSubcategoryByName(p.generalCategoryName, p.generalSubcategoryName, 'product');
+          if (p.generalSubsubCategoryName) {
+            generalSubsub = await upsertGeneralSubsubCategoryByName(p.generalCategoryName, p.generalSubcategoryName, p.generalSubsubCategoryName, 'product');
+          }
+        }
+      }
+
       const [product, created] = await Product.findOrCreate({
         where: {
           title: p.title,
@@ -1197,6 +1267,11 @@ async function run(){
           tags: p.tags || [],
           images: p.images || [],
           sellerUserId,
+          categoryId: cat ? cat.id : null,
+          subcategoryId: sub ? sub.id : null,
+          generalCategoryId: generalCat ? generalCat.id : null,
+          generalSubcategoryId: generalSub ? generalSub.id : null,
+          generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
           createdAt: daysAgo(p.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1225,6 +1300,21 @@ async function run(){
         ? await upsertSubcategoryByName(s.categoryName, s.subcategoryName)
         : null;
 
+      // Handle general categories for services
+      let generalCat = null;
+      let generalSub = null;
+      let generalSubsub = null;
+
+      if (s.generalCategoryName) {
+        generalCat = await upsertGeneralCategoryByName(s.generalCategoryName, 'service');
+        if (s.generalSubcategoryName) {
+          generalSub = await upsertGeneralSubcategoryByName(s.generalCategoryName, s.generalSubcategoryName, 'service');
+          if (s.generalSubsubCategoryName) {
+            generalSubsub = await upsertGeneralSubsubCategoryByName(s.generalCategoryName, s.generalSubcategoryName, s.generalSubsubCategoryName, 'service');
+          }
+        }
+      }
+
       const [service, created] = await Service.findOrCreate({
         where: {
           title: s.title,
@@ -1244,6 +1334,9 @@ async function run(){
           attachments: s.attachments || [],
           categoryId: cat ? cat.id : null,
           subcategoryId: sub ? sub.id : null,
+          generalCategoryId: generalCat ? generalCat.id : null,
+          generalSubcategoryId: generalSub ? generalSub.id : null,
+          generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
           createdAt: daysAgo(s.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1272,6 +1365,21 @@ async function run(){
         ? await upsertSubcategoryByName(t.categoryName, t.subcategoryName)
         : null;
 
+      // Handle general categories for tourism
+      let generalCat = null;
+      let generalSub = null;
+      let generalSubsub = null;
+
+      if (t.generalCategoryName) {
+        generalCat = await upsertGeneralCategoryByName(t.generalCategoryName, 'tourism');
+        if (t.generalSubcategoryName) {
+          generalSub = await upsertGeneralSubcategoryByName(t.generalCategoryName, t.generalSubcategoryName, 'tourism');
+          if (t.generalSubsubCategoryName) {
+            generalSubsub = await upsertGeneralSubsubCategoryByName(t.generalCategoryName, t.generalSubcategoryName, t.generalSubsubCategoryName, 'tourism');
+          }
+        }
+      }
+
       const [tourism, created] = await Tourism.findOrCreate({
         where: {
           title: t.title,
@@ -1286,6 +1394,11 @@ async function run(){
           budgetRange: t.budgetRange || null,
           tags: t.tags || [],
           images: t.images || [],
+          categoryId: cat ? cat.id : null,
+          subcategoryId: sub ? sub.id : null,
+          generalCategoryId: generalCat ? generalCat.id : null,
+          generalSubcategoryId: generalSub ? generalSub.id : null,
+          generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
           createdAt: daysAgo(t.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1314,6 +1427,21 @@ async function run(){
         ? await upsertSubcategoryByName(f.categoryName, f.subcategoryName)
         : null;
 
+      // Handle general categories for funding
+      let generalCat = null;
+      let generalSub = null;
+      let generalSubsub = null;
+
+      if (f.generalCategoryName) {
+        generalCat = await upsertGeneralCategoryByName(f.generalCategoryName, 'funding');
+        if (f.generalSubcategoryName) {
+          generalSub = await upsertGeneralSubcategoryByName(f.generalCategoryName, f.generalSubcategoryName, 'funding');
+          if (f.generalSubsubCategoryName) {
+            generalSubsub = await upsertGeneralSubsubCategoryByName(f.generalCategoryName, f.generalSubcategoryName, f.generalSubsubCategoryName, 'funding');
+          }
+        }
+      }
+
       const [funding, created] = await Funding.findOrCreate({
         where: {
           title: f.title,
@@ -1337,6 +1465,10 @@ async function run(){
           links: f.links || [],
           images: f.images || [],
           categoryId: cat ? cat.id : null,
+          subcategoryId: sub ? sub.id : null,
+          generalCategoryId: generalCat ? generalCat.id : null,
+          generalSubcategoryId: generalSub ? generalSub.id : null,
+          generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
           createdAt: daysAgo(f.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },
@@ -1365,6 +1497,21 @@ async function run(){
         ? await upsertSubcategoryByName(e.categoryName, e.subcategoryName)
         : null;
 
+      // Handle general categories for events
+      let generalCat = null;
+      let generalSub = null;
+      let generalSubsub = null;
+
+      if (e.generalCategoryName) {
+        generalCat = await upsertGeneralCategoryByName(e.generalCategoryName, 'event');
+        if (e.generalSubcategoryName) {
+          generalSub = await upsertGeneralSubcategoryByName(e.generalCategoryName, e.generalSubcategoryName, 'event');
+          if (e.generalSubsubCategoryName) {
+            generalSubsub = await upsertGeneralSubsubCategoryByName(e.generalCategoryName, e.generalSubcategoryName, e.generalSubsubCategoryName, 'event');
+          }
+        }
+      }
+
       const [event, created] = await Event.findOrCreate({
         where: {
           title: e.title,
@@ -1387,6 +1534,9 @@ async function run(){
           coverImageUrl: e.coverImageUrl || null,
           categoryId: cat ? cat.id : null,
           subcategoryId: sub ? sub.id : null,
+          generalCategoryId: generalCat ? generalCat.id : null,
+          generalSubcategoryId: generalSub ? generalSub.id : null,
+          generalSubsubCategoryId: generalSubsub ? generalSubsub.id : null,
           createdAt: daysAgo(e.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),
         },

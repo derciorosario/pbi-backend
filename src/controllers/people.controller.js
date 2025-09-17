@@ -1,5 +1,5 @@
 // src/controllers/people.controller.js
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const {
   User,
   Profile,
@@ -7,7 +7,6 @@ const {
   Subcategory,
   Goal,
   UserCategory,
-  UserGoal,
   Connection,
   ConnectionRequest,
   UserCategoryInterest,
@@ -15,22 +14,15 @@ const {
   UserSubsubCategoryInterest,
   UserIdentityInterest,
   Identity,
-  SubsubCategory
+  SubsubCategory,
+  UserBlock,
 } = require("../models");
 
-function like(v) {
-  return { [Op.like]: `%${v}%` };
-}
-
+function like(v) { return { [Op.like]: `%${v}%` }; }
 function ensureArray(val) {
   if (!val) return [];
   if (Array.isArray(val)) return val.filter(Boolean);
-  if (typeof val === "string") {
-    return val
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
+  if (typeof val === "string") return val.split(",").map((s) => s.trim()).filter(Boolean);
   return [val];
 }
 
@@ -42,28 +34,6 @@ exports.searchPeople = async (req, res) => {
       accountType,
       city,
       categoryId,
-      cats, // multiple category ids (comma-separated)
-      subcategoryId,
-      goalId,
-      experienceLevel, // Added experienceLevel filter
-      connectionStatus, // NEW: filter (comma-separated): connected,incoming_pending,outgoing_pending,none
-      
-      // Audience filters from AudienceTree
-      identityIds,
-      audienceCategoryIds,
-      audienceSubcategoryIds,
-      audienceSubsubCategoryIds,
-      limit = 20,
-      offset = 0,
-
-    } = req.query;
-
-
-    console.log("People search request:", {
-      q,
-      country,
-      city,
-      categoryId,
       cats,
       subcategoryId,
       goalId,
@@ -73,21 +43,16 @@ exports.searchPeople = async (req, res) => {
       audienceCategoryIds,
       audienceSubcategoryIds,
       audienceSubsubCategoryIds,
-      limit,
-      offset
-    });
+      limit = 20,
+      offset = 0,
+    } = req.query;
 
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
-
     const currentUserId = req.user?.id || null;
 
-    // ---- Load viewer defaults to prioritize if NO explicit filters ----
-    let myCategoryIds = [];
-    let mySubcategoryIds = [];
-    let myGoalIds = [];
-    let myCountry = null;
-    let myCity = null;
+    let myCategoryIds = [], mySubcategoryIds = [], myGoalIds = [];
+    let myCountry = null, myCity = null;
 
     if (currentUserId) {
       const me = await User.findByPk(currentUserId, {
@@ -106,108 +71,117 @@ exports.searchPeople = async (req, res) => {
       }
     }
 
-    // ---- Effective interest filters from client ----
     const catsList = ensureArray(cats);
     const effCategoryIds = ensureArray(categoryId).concat(catsList).filter(Boolean);
     const effSubcategoryIds = ensureArray(subcategoryId).filter(Boolean);
     const effGoalIds = ensureArray(goalId).filter(Boolean);
-    
-    // Parse audience filter IDs
+
     const effIdentityIds = ensureArray(identityIds).filter(Boolean);
     const effAudienceCategoryIds = ensureArray(audienceCategoryIds).filter(Boolean);
     const effAudienceSubcategoryIds = ensureArray(audienceSubcategoryIds).filter(Boolean);
     const effAudienceSubsubCategoryIds = ensureArray(audienceSubsubCategoryIds).filter(Boolean);
-    
-    // Log audience filter parameters for debugging
-    console.log("Audience filter parameters:", {
-      identityIds: effIdentityIds,
-      audienceCategoryIds: effAudienceCategoryIds,
-      audienceSubcategoryIds: effAudienceSubcategoryIds,
-      audienceSubsubCategoryIds: effAudienceSubsubCategoryIds
-    });
 
-    // ---- Base WHERE: hide admins and (if logged in) self ----
-   const whereUser = {
-      ...(currentUserId ? { id: { [Op.ne]: currentUserId } } : {})
+    // --- Blocklist exclusion (both directions) ---
+    let excludeIds = [];
+    if (currentUserId) {
+      const [iBlock, theyBlock] = await Promise.all([
+        UserBlock.findAll({ where: { blockerId: currentUserId }, attributes: ["blockedId"] }),
+        UserBlock.findAll({ where: { blockedId: currentUserId }, attributes: ["blockerId"] }),
+      ]);
+      excludeIds = [
+        ...new Set([
+          ...iBlock.map((r) => String(r.blockedId)),
+          ...theyBlock.map((r) => String(r.blockerId)),
+        ]),
+      ];
     }
 
-    whereUser.accountType = { [Op.ne]: "admin" }
+    // =============== WHERE (User) =================
+    const andClauses = [];
+    const whereUser = { accountType: { [Op.ne]: "admin" } };
+    if (currentUserId) whereUser.id = { [Op.notIn]: [String(currentUserId), ...excludeIds] };
+
+   
 
     if (accountType) {
-      const types = ensureArray(accountType)
-        .map(t => t.toLowerCase())
-        .filter(t => ["company", "individual"].includes(t))
-      if (types.length > 0) {
-        whereUser.accountType = {
-          [Op.and]: [
-            { [Op.ne]: "admin" },
-            { [Op.in]: types }
-          ]
-        }
-      }
+      const types = ensureArray(accountType).map((t) => t.toLowerCase()).filter((t) => ["company", "individual"].includes(t));
+      if (types.length) andClauses.push({ accountType: { [Op.in]: types } });
     }
 
-    // Enhanced flexible location matching
     if (country && city) {
-      whereUser[Op.or] = [
-        // Direct matches
-        { country: country },
-        { city: like(city) },
-        
-        // Cross matches (city value in country field or country value in city field)
-        { country: like(city) },
-        { city: like(country) },
-      ];
-    }
-    // If only country is provided
-    else if (country) {
-      whereUser[Op.or] = [
-        { country: country },
-        { city: like(country) }, // Also match country name in city field
-      ];
-    }
-    // If only city is provided
-    else if (city) {
-      whereUser[Op.or] = [
-        { city: like(city) },
-        { country: like(city) }, // Also match city name in country field
-      ];
+      andClauses.push({
+        [Op.or]: [
+          { country },
+          { city: like(city) },
+          { country: like(city) },
+          { city: like(country) },
+        ],
+      });
+    } else if (country) {
+      andClauses.push({ [Op.or]: [{ country }, { city: like(country) }] });
+    } else if (city) {
+      andClauses.push({ [Op.or]: [{ city: like(city) }, { country: like(city) }] });
     }
 
+    // --- q filter: user fields OR profile fields using $profile.field$ syntax ---
     if (q) {
-      whereUser[Op.or] = [
+      const qOr = [
         { name: like(q) },
         { email: like(q) },
         { phone: like(q) },
         { biography: like(q) },
         { nationality: like(q) },
+        { country: like(q) },
+        { city: like(q) },
+        { countryOfResidence: like(q) },
         { "$profile.professionalTitle$": like(q) },
         { "$profile.about$": like(q) },
         { "$profile.primaryIdentity$": like(q) },
-        { country: like(q) }, // Also match country names
-        { city: like(q) }, // Also match city names
-        { countryOfResidence: like(q) }, // Also match country of residence
       ];
+      andClauses.push({ [Op.or]: qOr });
     }
 
-    // ---- Profile WHERE conditions ----
-    const whereProfile = {};
+    if (andClauses.length) whereUser[Op.and] = andClauses;
+
+    // =============== WHERE (Profile) ===============
+    // Always require a non-empty professionalTitle
+    // Require profile.professionalTitle OR profile.about to be non-empty
+      const whereProfile = {
+        [Op.or]: [
+          {
+            [Op.and]: [
+              { professionalTitle: { [Op.ne]: null } },
+              Sequelize.where(
+                Sequelize.fn("char_length", Sequelize.fn("trim", Sequelize.col("profile.professionalTitle"))),
+                { [Op.gt]: 0 }
+              ),
+            ],
+          },
+          {
+            [Op.and]: [
+              { about: { [Op.ne]: null } },
+              Sequelize.where(
+                Sequelize.fn("char_length", Sequelize.fn("trim", Sequelize.col("profile.about"))),
+                { [Op.gt]: 0 }
+              ),
+            ],
+          },
+        ],
+      };
+
+
     if (experienceLevel) {
-      // Handle multiple experience levels (comma-separated)
-      const experienceLevels = experienceLevel.split(',').filter(Boolean);
-      if (experienceLevels.length > 0) {
-        whereProfile.experienceLevel = { [Op.in]: experienceLevels };
+      const levels = experienceLevel.split(",").filter(Boolean);
+      if (levels.length) {
+        whereProfile.experienceLevel = { [Op.in]: levels };
       }
     }
 
-
-    // ---- Include for interests (categories/subcategories) ----
+    // =============== Includes =====================
+    // Interests include
     const interestsWhere = {};
-    
-    // Combine regular category filters with audience category filters
     const allCategoryIds = [...new Set([...effCategoryIds, ...effAudienceCategoryIds])];
     const allSubcategoryIds = [...new Set([...effSubcategoryIds, ...effAudienceSubcategoryIds])];
-    
     if (allCategoryIds.length) interestsWhere.categoryId = { [Op.in]: allCategoryIds };
     if (allSubcategoryIds.length) interestsWhere.subcategoryId = { [Op.in]: allSubcategoryIds };
 
@@ -222,10 +196,9 @@ exports.searchPeople = async (req, res) => {
       ],
     };
 
-    // ---- Include for goals ----
+    // Goals include
     const goalsWhere = {};
     if (effGoalIds.length) goalsWhere.id = { [Op.in]: effGoalIds };
-
     const goalsInclude = {
       model: Goal,
       as: "goals",
@@ -234,239 +207,144 @@ exports.searchPeople = async (req, res) => {
       through: { attributes: [] },
     };
 
-    // ---- Fetch more than limit to allow prioritization and post filtering ----
     const fetchLimit = lim * 3 + off;
 
     const rows = await User.findAll({
       where: whereUser,
       include: [
+        // IMPORTANT: include profile as required so title filter applies
         {
           model: Profile,
           as: "profile",
-          required: Object.keys(whereProfile).length > 0, // Make profile required if filtering by profile fields
-          where: Object.keys(whereProfile).length > 0 ? whereProfile : undefined
+          required: true, // we require professionalTitle to be non-empty
+          where: whereProfile,
+          attributes: ["id", "userId", "professionalTitle", "about", "primaryIdentity", "avatarUrl", "experienceLevel"],
         },
         interestsInclude,
         goalsInclude,
-        
-        // Add includes for audience interests if filters are provided
-        ...(effIdentityIds.length > 0 ? [{
-          model: UserIdentityInterest,
-          as: "identityInterests",
-          required: true,
-          where: { identityId: { [Op.in]: effIdentityIds } },
-          include: [{ model: Identity, as: "identity" }]
-        }] : []),
-        
-        ...(effAudienceCategoryIds.length > 0 ? [{
-          model: UserCategoryInterest,
-          as: "categoryInterests",
-          required: true,
-          where: { categoryId: { [Op.in]: effAudienceCategoryIds } },
-          include: [{ model: Category, as: "category" }]
-        }] : []),
-        
-        ...(effAudienceSubcategoryIds.length > 0 ? [{
-          model: UserSubcategoryInterest,
-          as: "subcategoryInterests",
-          required: true,
-          where: { subcategoryId: { [Op.in]: effAudienceSubcategoryIds } },
-          include: [{ model: Subcategory, as: "subcategory" }]
-        }] : []),
-        
-        ...(effAudienceSubsubCategoryIds.length > 0 ? [{
-          model: UserSubsubCategoryInterest,
-          as: "subsubCategoryInterests",
-          required: true,
-          where: { subsubCategoryId: { [Op.in]: effAudienceSubsubCategoryIds } },
-          include: [{ model: SubsubCategory, as: "subsubCategory" }]
-        }] : []),
+        ...(effIdentityIds.length
+          ? [{
+              model: UserIdentityInterest,
+              as: "identityInterests",
+              required: true,
+              where: { identityId: { [Op.in]: effIdentityIds } },
+              include: [{ model: Identity, as: "identity" }],
+            }]
+          : []),
+        ...(effAudienceCategoryIds.length
+          ? [{
+              model: UserCategoryInterest,
+              as: "categoryInterests",
+              required: true,
+              where: { categoryId: { [Op.in]: effAudienceCategoryIds } },
+              include: [{ model: Category, as: "category" }],
+            }]
+          : []),
+        ...(effAudienceSubcategoryIds.length
+          ? [{
+              model: UserSubcategoryInterest,
+              as: "subcategoryInterests",
+              required: true,
+              where: { subcategoryId: { [Op.in]: effAudienceSubcategoryIds } },
+              include: [{ model: Subcategory, as: "subcategory" }],
+            }]
+          : []),
+        ...(effAudienceSubsubCategoryIds.length
+          ? [{
+              model: UserSubsubCategoryInterest,
+              as: "subsubCategoryInterests",
+              required: true,
+              where: { subsubCategoryId: { [Op.in]: effAudienceSubsubCategoryIds } },
+              include: [{ model: SubsubCategory, as: "subsubCategory" }],
+            }]
+          : []),
       ],
       order: [["createdAt", "DESC"]],
       limit: fetchLimit,
+      subQuery: false,     // <-- required for $profile.*$ in WHERE
+      distinct: true,
     });
 
-    // ---- Compute connection sets (connected/pending) for the viewer ----
-    const filterStatuses = ensureArray(connectionStatus).map((s) => s.toLowerCase());
-    let connectedSet = new Set();
-    let outgoingPendingSet = new Set();
-    let incomingPendingSet = new Set();
+    // =============== Connection status sets ===============
+    const filterStatusesArr = ensureArray(connectionStatus).map((s) => s.toLowerCase());
+    let connectedSet = new Set(), outgoingPendingSet = new Set(), incomingPendingSet = new Set();
 
     if (currentUserId) {
-      // Accepted connections
       const cons = await Connection.findAll({
         where: { [Op.or]: [{ userOneId: currentUserId }, { userTwoId: currentUserId }] },
         attributes: ["userOneId", "userTwoId"],
       });
       cons.forEach((c) => {
-        const other =
-          String(c.userOneId) === String(currentUserId) ? String(c.userTwoId) : String(c.userOneId);
+        const other = String(c.userOneId) === String(currentUserId) ? String(c.userTwoId) : String(c.userOneId);
         connectedSet.add(other);
       });
 
-      // Pending requests (outgoing / incoming)
       const [outgoingReqs, incomingReqs] = await Promise.all([
-        ConnectionRequest.findAll({
-          where: { fromUserId: currentUserId, status: "pending" },
-          attributes: ["toUserId"],
-        }),
-        ConnectionRequest.findAll({
-          where: { toUserId: currentUserId, status: "pending" },
-          attributes: ["fromUserId"],
-        }),
+        ConnectionRequest.findAll({ where: { fromUserId: currentUserId, status: "pending" }, attributes: ["toUserId"] }),
+        ConnectionRequest.findAll({ where: { toUserId: currentUserId, status: "pending" }, attributes: ["fromUserId"] }),
       ]);
-      outgoingReqs.forEach((r) => outgoingPendingSet.add(String(r.toUserId)));
-      incomingReqs.forEach((r) => incomingPendingSet.add(String(r.fromUserId)));
+      outgoingPendingSet = new Set(outgoingReqs.map((r) => String(r.toUserId)));
+      incomingPendingSet = new Set(incomingReqs.map((r) => String(r.fromUserId)));
     }
 
-    // ---- Scoring for prioritization when NO explicit filters ----
-    const hasExplicitFilter =
-      !!(effGoalIds.length || effCategoryIds.length || effSubcategoryIds.length ||
-         effIdentityIds.length || effAudienceCategoryIds.length ||
-         effAudienceSubcategoryIds.length || effAudienceSubsubCategoryIds.length ||
-         country || city || q || experienceLevel);
-    
-    console.log(`Has explicit filters: ${hasExplicitFilter}, found ${rows.length} users matching criteria`);
-    
-    // Calculate match percentage between current user and another user
-    const calculateMatchPercentage = (user) => {
-      // If no user is logged in, return default percentage
-      if (!currentUserId) return 20;
-      
-      // Extract user's taxonomies
-      const userGoalIds = (user.goals || []).map((g) => String(g.id));
-      const userCats = (user.interests || []).map((i) => String(i.categoryId)).filter(Boolean);
-      const userSubs = (user.interests || []).map((i) => String(i.subcategoryId)).filter(Boolean);
-      
-      // Define maximum possible score and required factors
-      const MAX_SCORE = 100;
-      
-      // Always require at least these many factors for a 100% match
-      const REQUIRED_FACTORS = 3;
-      
-      // Define weights for different match types (total should be 100)
-      const WEIGHTS = {
-        category: 30,       // Category match
-        subcategory: 35,    // Subcategory match
-        goal: 25,           // Goal match
-        location: 10,       // Location match (country/city)
-      };
-      
-      // Calculate score for each factor
-      let totalScore = 0;
-      let matchedFactors = 0;
-      
-      // Category matches
-      // Add audience category IDs to the matching criteria
-      const allMyCategoryIds = [...new Set([...myCategoryIds, ...effAudienceCategoryIds])];
-      
-      if (allMyCategoryIds.length > 0 && userCats.length > 0) {
-        const catMatches = userCats.filter(id => allMyCategoryIds.includes(id));
-        
-        if (catMatches.length > 0) {
-          // Calculate percentage of matching categories
-          const catMatchPercentage = Math.min(1, catMatches.length /
-            Math.max(myCategoryIds.length, userCats.length));
-          
-          totalScore += WEIGHTS.category * catMatchPercentage;
-          matchedFactors++;
-        }
-      }
-      
-      // Subcategory matches
-      // Add audience subcategory IDs to the matching criteria
-      const allMySubcategoryIds = [...new Set([...mySubcategoryIds, ...effAudienceSubcategoryIds])];
-      
-      if (allMySubcategoryIds.length > 0 && userSubs.length > 0) {
-        const subMatches = userSubs.filter(id => allMySubcategoryIds.includes(id));
-        
-        if (subMatches.length > 0) {
-          // Calculate percentage of matching subcategories
-          const subMatchPercentage = Math.min(1, subMatches.length /
-            Math.max(mySubcategoryIds.length, userSubs.length));
-          
-          totalScore += WEIGHTS.subcategory * subMatchPercentage;
-          matchedFactors++;
-        }
-      }
-      
-      // Goal matches
-      if (myGoalIds.length > 0 && userGoalIds.length > 0) {
-        const goalMatches = userGoalIds.filter(id => myGoalIds.includes(id));
-        
-        if (goalMatches.length > 0) {
-          // Calculate percentage of matching goals
-          const goalMatchPercentage = Math.min(1, goalMatches.length /
-            Math.max(myGoalIds.length, userGoalIds.length));
-          
-          totalScore += WEIGHTS.goal * goalMatchPercentage;
-          matchedFactors++;
-        }
-      }
-      
-      // Location match (country and city)
-      let locationScore = 0;
-      if (myCountry && user.country && String(myCountry) === String(user.country)) {
-        locationScore += 0.6; // 60% of location score for country match
-      }
-      
-      if (myCity && user.city) {
-        const myLowerCity = String(myCity).toLowerCase();
-        const userLowerCity = String(user.city).toLowerCase();
-        
-        if (userLowerCity === myLowerCity) {
-          locationScore += 0.4; // 40% of location score for exact city match
-        } else if (userLowerCity.includes(myLowerCity) || myLowerCity.includes(userLowerCity)) {
-          locationScore += 0.2; // 20% of location score for partial city match
-        }
-      }
-      
-      if (locationScore > 0) {
-        totalScore += WEIGHTS.location * locationScore;
-        matchedFactors++;
-      }
-      
-      // Apply a penalty if fewer than REQUIRED_FACTORS matched
-      if (matchedFactors < REQUIRED_FACTORS) {
-        // Apply a scaling factor based on how many factors matched
-        const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
-        totalScore = totalScore * scalingFactor;
-      }
-      
-      // Ensure the score is between 20 and 100
-      // We use 20 as minimum to ensure all users have some match percentage
-      return Math.max(20, Math.min(100, Math.round(totalScore)));
-    };
+    const hasExplicitFilter = !!(
+      effGoalIds.length ||
+      effCategoryIds.length ||
+      effSubcategoryIds.length ||
+      effIdentityIds.length ||
+      effAudienceCategoryIds.length ||
+      effAudienceSubcategoryIds.length ||
+      effAudienceSubsubCategoryIds.length ||
+      country || city || q || experienceLevel
+    );
 
-    const scored = rows.map((u) => {
+    // =============== Match % ===============
+    const calculateMatchPercentage = (u) => {
+      if (!currentUserId) return 20;
       const userGoalIds = (u.goals || []).map((g) => String(g.id));
       const userCats = (u.interests || []).map((i) => String(i.categoryId)).filter(Boolean);
       const userSubs = (u.interests || []).map((i) => String(i.subcategoryId)).filter(Boolean);
 
-      // Calculate match percentage
-      const matchPercentage = calculateMatchPercentage(u);
-      
-      // Legacy scoring for sorting when no explicit filters
-      let score = 0;
-      if (currentUserId && !hasExplicitFilter) {
-        const sharedGoals = userGoalIds.filter((g) => myGoalIds.includes(g)).length;
-        const sharedCats = userCats.filter((c) => myCategoryIds.includes(c)).length;
-        const sharedSubs = userSubs.filter((s) => mySubcategoryIds.includes(s)).length;
+      const REQUIRED_FACTORS = 3;
+      const WEIGHTS = { category: 30, subcategory: 35, goal: 25, location: 10 };
+      let totalScore = 0, matchedFactors = 0;
 
-        score += sharedGoals * 100;
-        score += sharedCats * 10;
-        score += sharedSubs * 5;
-
-        if (myCountry && u.country && String(myCountry) === String(u.country)) score += 2;
-        if (
-          myCity &&
-          u.city &&
-          String(u.city).toLowerCase().startsWith(String(myCity).toLowerCase())
-        )
-          score += 3;
+      const allMyCategoryIds = [...new Set([...myCategoryIds, ...effAudienceCategoryIds])];
+      if (allMyCategoryIds.length && userCats.length) {
+        const catMatches = userCats.filter((id) => allMyCategoryIds.includes(id));
+        if (catMatches.length) {
+          const pct = Math.min(1, catMatches.length / Math.max(myCategoryIds.length, userCats.length));
+          totalScore += WEIGHTS.category * pct; matchedFactors++;
+        }
       }
 
-      // Connection status relative to viewer
+      const allMySubcategoryIds = [...new Set([...mySubcategoryIds, ...effAudienceSubcategoryIds])];
+      if (allMySubcategoryIds.length && userSubs.length) {
+        const subMatches = userSubs.filter((id) => allMySubcategoryIds.includes(id));
+        if (subMatches.length) {
+          const pct = Math.min(1, subMatches.length / Math.max(mySubcategoryIds.length, userSubs.length));
+          totalScore += WEIGHTS.subcategory * pct; matchedFactors++;
+        }
+      }
+
+      const myGoalSet = new Set(myGoalIds);
+      const goalMatches = userGoalIds.filter((id) => myGoalSet.has(id)).length;
+      if (goalMatches) { totalScore += WEIGHTS.goal * Math.min(1, goalMatches / Math.max(myGoalIds.length, userGoalIds.length)); matchedFactors++; }
+
+      let locationScore = 0;
+      if (myCountry && u.country && String(myCountry) === String(u.country)) locationScore += 0.6;
+      if (myCity && u.city) {
+        const a = String(myCity).toLowerCase(), b = String(u.city).toLowerCase();
+        if (a === b) locationScore += 0.4; else if (a.includes(b) || b.includes(a)) locationScore += 0.2;
+      }
+      if (locationScore) { totalScore += WEIGHTS.location * locationScore; matchedFactors++; }
+
+      if (matchedFactors < REQUIRED_FACTORS) totalScore *= Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
+      return Math.max(20, Math.min(100, Math.round(totalScore)));
+    };
+
+    let items = rows.map((u) => {
+      const matchPercentage = calculateMatchPercentage(u);
       let cStatus = "none";
       if (currentUserId) {
         const uid = String(u.id);
@@ -481,8 +359,7 @@ exports.searchPeople = async (req, res) => {
 
       return {
         raw: u,
-        score,
-        connectionStatus: cStatus,
+        score: 0,
         out: {
           id: u.id,
           name: u.name,
@@ -498,44 +375,29 @@ exports.searchPeople = async (req, res) => {
           about: u.profile?.about || null,
           createdAt: u.createdAt,
           connectionStatus: cStatus,
-          accountType:u.accountType,
-          matchPercentage: matchPercentage, // Add match percentage to output
+          accountType: u.accountType,
+          matchPercentage,
         },
       };
     });
 
-    // ---- Order by matchPercentage (highest first) ----
-    let ordered = scored.sort((a, b) => {
-      // First sort by matchPercentage (highest first)
-      if (a.out.matchPercentage !== b.out.matchPercentage) {
-        return b.out.matchPercentage - a.out.matchPercentage;
-      }
-      
-      // If matchPercentage is the same, use legacy score for additional sorting
-      if (b.score !== a.score) {
-        return b.score - a.score;
-      }
-      
-      // If both matchPercentage and score are the same, sort by creation date
+    // Sort by matchPercentage then recency
+    items.sort((a, b) => {
+      if (a.out.matchPercentage !== b.out.matchPercentage) return b.out.matchPercentage - a.out.matchPercentage;
       return new Date(b.raw.createdAt) - new Date(a.raw.createdAt);
     });
 
-    // ---- Optional filter by connectionStatus (works only meaningfully if logged in) ----
-    let filtered = ordered;
-    if (filterStatuses.length) {
-      const allow = new Set(filterStatuses);
-      filtered = ordered.filter((x) => allow.has(x.connectionStatus));
+    // Optional connection status filter
+    if (ensureArray(connectionStatus).length) {
+      const allow = new Set(ensureArray(connectionStatus).map((s) => s.toLowerCase()));
+      items = items.filter((x) => allow.has(x.out.connectionStatus));
     }
 
-    const windowed = filtered.slice(off, off + lim).map((x) => x.out);
-
-    res.json({
-      count: filtered.length,
-      items: windowed,
-      sortedBy: "matchPercentage" // Add information about sorting method
-    });
+    const windowed = items.slice(off, off + lim).map((x) => x.out);
+    return res.json({ count: items.length, items: windowed, sortedBy: "matchPercentage" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to search people" });
+    return res.status(500).json({ message: "Failed to search people" });
   }
 };
+

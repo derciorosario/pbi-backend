@@ -28,6 +28,13 @@ const Conversation = require("./conversation")(sequelize, DataTypes);
 const MeetingRequest = require("./meetingRequest")(sequelize, DataTypes);
 const UserSettings = require("./userSettings")(sequelize, DataTypes);
 
+const UserBlock = require("./userBlock")(sequelize, DataTypes);
+const Report = require("./report")(sequelize, DataTypes);
+
+// Social interaction models
+const Like = require("./like")(sequelize, DataTypes);
+const Comment = require("./comment")(sequelize, DataTypes);
+const Repost = require("./repost")(sequelize, DataTypes);
 /* ============ Associations ============ */
 // User ↔ Profile (1:1)
 User.hasOne(Profile, { foreignKey: "userId", as: "profile", onDelete: "CASCADE" });
@@ -138,6 +145,23 @@ ConnectionRequest.belongsTo(User, { as: "to", foreignKey: "toUserId" });
 User.hasMany(ConnectionRequest, { as: "incomingRequests", foreignKey: "toUserId" });
 User.hasMany(ConnectionRequest, { as: "outgoingRequests", foreignKey: "fromUserId" });
 
+// Social interaction associations
+// Like associations
+Like.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Like, { foreignKey: "userId", as: "likes" });
+
+// Comment associations
+Comment.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Comment, { foreignKey: "userId", as: "comments" });
+Comment.hasMany(Comment, { foreignKey: "parentCommentId", as: "replies" });
+Comment.belongsTo(Comment, { foreignKey: "parentCommentId", as: "parentComment" });
+
+// Repost associations
+Repost.belongsTo(User, { foreignKey: "userId", as: "user" });
+User.hasMany(Repost, { foreignKey: "userId", as: "reposts" });
+
+// Report associations (already defined above)
+
 // For connections
 // (no strict includes needed; we query by ids)
 const Identity           = require("./identity")(sequelize, DataTypes);
@@ -173,6 +197,12 @@ const JobIdentity       = require("./JobIdentity")(sequelize, DataTypes);
 const JobCategory       = require("./JobCategory")(sequelize, DataTypes);
 const JobSubcategory    = require("./JobSubcategory")(sequelize, DataTypes);
 const JobSubsubCategory = require("./jobSubsubCategory")(sequelize, DataTypes);
+
+
+const GeneralCategory = require("./GeneralCategory")(sequelize, DataTypes);
+const GeneralSubcategory = require("./GeneralSubcategory")(sequelize, DataTypes);
+const GeneralSubsubCategory = require("./GeneralSubsubCategory")(sequelize, DataTypes);
+
 
 // Event audience association models
 const EventIdentity       = require("./EventIdentity")(sequelize, DataTypes);
@@ -583,6 +613,99 @@ SubsubCategory.belongsToMany(Funding, {
 
 
 
+// GeneralCategory ↔ GeneralSubcategory
+GeneralCategory.hasMany(GeneralSubcategory, {
+  foreignKey: "generalCategoryId",
+  as: "subcategories",
+  onDelete: "CASCADE",
+});
+GeneralSubcategory.belongsTo(GeneralCategory, {
+  foreignKey: "generalCategoryId",
+  as: "category",
+});
+
+// GeneralSubcategory ↔ GeneralSubsubCategory
+GeneralSubcategory.hasMany(GeneralSubsubCategory, {
+  foreignKey: "generalSubcategoryId",
+  as: "subsubcategories",
+  onDelete: "CASCADE",
+});
+GeneralSubsubCategory.belongsTo(GeneralSubcategory, {
+  foreignKey: "generalSubcategoryId",
+  as: "subcategory",
+});
+
+
+
+
+/***
+ * // Jobs ↔ General taxonomy
+Job.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Job.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Job.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+// Events ↔ General taxonomy
+Event.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Event.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Event.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+// Services ↔ General taxonomy
+Service.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Service.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Service.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+// Products ↔ General taxonomy
+Product.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Product.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Product.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+// Tourism ↔ General taxonomy
+Tourism.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Tourism.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Tourism.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+// Funding ↔ General taxonomy
+Funding.belongsTo(GeneralCategory, { as: "generalCategory", foreignKey: "generalCategoryId" });
+Funding.belongsTo(GeneralSubcategory, { as: "generalSubcategory", foreignKey: "generalSubcategoryId" });
+Funding.belongsTo(GeneralSubsubCategory, { as: "generalSubsubCategory", foreignKey: "generalSubsubCategoryId" });
+
+ */
+
+
+
+
+// General taxonomy ↔ All main content types
+const attachGeneralTaxonomy = (Model) => {
+  Model.belongsTo(GeneralCategory, {
+    as: "generalCategory",
+    foreignKey: { name: "generalCategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+  Model.belongsTo(GeneralSubcategory, {
+    as: "generalSubcategory",
+    foreignKey: { name: "generalSubcategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+  Model.belongsTo(GeneralSubsubCategory, {
+    as: "generalSubsubCategory",
+    foreignKey: { name: "generalSubsubCategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+};
+
+// Attach to all main models
+//attachGeneralTaxonomy(Job);
+attachGeneralTaxonomy(Event);
+attachGeneralTaxonomy(Service);
+attachGeneralTaxonomy(Product);
+attachGeneralTaxonomy(Tourism);
+attachGeneralTaxonomy(Funding);
+
+
+
+
+
+
 
 // --- Interest associations (optional but nice to have) ---
 User.hasMany(UserIdentityInterest, { as: "identityInterests", foreignKey: "userId", onDelete: "CASCADE" });
@@ -602,11 +725,133 @@ UserSubsubCategoryInterest.belongsTo(User, { as: "user", foreignKey: "userId" })
 UserSubsubCategoryInterest.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
 
 
+
+
+const IndustryCategory = require("./IndustryCategory")(sequelize, DataTypes);
+const IndustrySubcategory = require("./IndustrySubcategory")(sequelize, DataTypes);
+const IndustrySubsubCategory = require("./IndustrySubsubCategory")(sequelize, DataTypes);
+
+
+// IndustryCategory ↔ IndustrySubcategory
+IndustryCategory.hasMany(IndustrySubcategory, {
+  foreignKey: "industryCategoryId",
+  as: "subcategories",
+  onDelete: "CASCADE",
+});
+IndustrySubcategory.belongsTo(IndustryCategory, {
+  foreignKey: "industryCategoryId",
+  as: "category",
+});
+
+// IndustrySubcategory ↔ IndustrySubsubCategory
+IndustrySubcategory.hasMany(IndustrySubsubCategory, {
+  foreignKey: "industrySubcategoryId",
+  as: "subsubs",
+  onDelete: "CASCADE",
+});
+IndustrySubsubCategory.belongsTo(IndustrySubcategory, {
+  foreignKey: "industrySubcategoryId",
+  as: "subcategory",
+});
+
+
+const attachIndustryTaxonomy = (Model) => {
+  Model.belongsTo(IndustryCategory, {
+    as: "industryCategory",
+    foreignKey: { name: "industryCategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+  Model.belongsTo(IndustrySubcategory, {
+    as: "industrySubcategory",
+    foreignKey: { name: "industrySubcategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+  Model.belongsTo(IndustrySubsubCategory, {
+    as: "industrySubsubCategory",
+    foreignKey: { name: "industrySubsubCategoryId", allowNull: true },
+    onDelete: "SET NULL",
+  });
+};
+
+// Attach to all main entities
+attachIndustryTaxonomy(Job);
+attachIndustryTaxonomy(Event);
+attachIndustryTaxonomy(Service);
+attachIndustryTaxonomy(Product);
+attachIndustryTaxonomy(Tourism);
+attachIndustryTaxonomy(Funding);
+
+
+const UserIndustryCategory = require("./userIndustryCategory")(sequelize, DataTypes);
+const UserIndustrySubcategory = require("./userIndustrySubcategory")(sequelize, DataTypes);
+const UserIndustrySubsubCategory = require("./userIndustrySubsubCategory")(sequelize, DataTypes);
+
+
+// User ↔ IndustryCategory (M:N)
+User.belongsToMany(IndustryCategory, {
+  through: UserIndustryCategory,
+  as: "industryCategories",
+  foreignKey: "userId",
+  otherKey: "industryCategoryId",
+  uniqueKey: false, // 👈 stop Sequelize from making its own long unique key
+});
+
+IndustryCategory.belongsToMany(User, {
+  through: UserIndustryCategory,
+  as: "users",
+  foreignKey: "industryCategoryId",
+  otherKey: "userId",
+  uniqueKey: false, // 👈 same here
+});
+
+
+// User ↔ IndustrySubcategory (M:N)
+User.belongsToMany(IndustrySubcategory, {
+  through: UserIndustrySubcategory,
+  foreignKey: "userId",
+  otherKey: "industrySubcategoryId",
+  as: "industrySubcategories",
+});
+IndustrySubcategory.belongsToMany(User, {
+  through: UserIndustrySubcategory,
+  foreignKey: "industrySubcategoryId",
+  otherKey: "userId",
+  as: "users",
+});
+
+User.belongsToMany(IndustrySubsubCategory, {
+  through: "user_industry_subsubcategories",
+  as: "industrySubsubCategories",
+  foreignKey: "userId",
+  otherKey: "industrySubsubCategoryId",
+  uniqueKey: false, // ✅ stop Sequelize from naming it too long
+});
+
+IndustrySubsubCategory.belongsToMany(User, {
+  through: "user_industry_subsubcategories",
+  as: "users",
+  foreignKey: "industrySubsubCategoryId",
+  otherKey: "userId",
+  uniqueKey: false,
+});
+
+
+
 module.exports = {
    UserIdentityInterest,
   UserCategoryInterest,
   UserSubcategoryInterest,
   UserSubsubCategoryInterest,
+
+    UserIndustryCategory,
+  UserIndustrySubcategory,
+  UserIndustrySubsubCategory,
+
+
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
+
 
 
   UserSubcategory, UserSubsubCategory,
@@ -661,4 +906,14 @@ module.exports = {
   MeetingRequest,
   // Export user settings model
   UserSettings,
+  Report,
+  UserBlock,
+  // Social interaction models
+  Like,
+  Comment,
+  Repost,
+
+  GeneralCategory,
+  GeneralSubcategory,
+  GeneralSubsubCategory,
 };

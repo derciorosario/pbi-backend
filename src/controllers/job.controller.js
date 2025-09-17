@@ -7,10 +7,12 @@ exports.createJob = async (req, res) => {
 
     const {
       title, companyName, department, experienceLevel,
-      jobType, workMode, description, requiredSkills,
+      jobType, workLocation, workSchedule,
+      careerLevel, paymentType, description, requiredSkills,
       country, city, minSalary, maxSalary, currency, benefits,
       applicationDeadline, positions, applicationInstructions, contactEmail,
-      categoryId, subcategoryId, status,
+      categoryId, subcategoryId, status,coverImageBase64,companyId,
+
 
       // NEW (arrays are accepted as arrays or CSV):
       identityIds: _identityIds,
@@ -54,7 +56,8 @@ exports.createJob = async (req, res) => {
     // create job
     const job = await Job.create({
       title, companyName, department, experienceLevel,
-      jobType, workMode, description,
+      jobType, workLocation, workSchedule,
+      careerLevel, paymentType, description,
       requiredSkills: skills,
       country, city,
       minSalary: minS, maxSalary: maxS, currency, benefits,
@@ -65,6 +68,8 @@ exports.createJob = async (req, res) => {
       subcategoryId: primarySubcategoryId,
       status: status || "published",
       postedByUserId: req.user.id,
+      coverImageBase64,
+      companyId
     });
 
     // attach audience sets (include the primary ones if arrays were empty)
@@ -126,6 +131,13 @@ exports.updateJob = async (req, res) => {
     if (data.minSalary !== null && data.maxSalary !== null && data.minSalary > data.maxSalary) {
       return res.status(400).json({ message: "minSalary cannot be greater than maxSalary" });
     }
+    
+    // Convert empty strings to null for foreign key fields
+    if (data.categoryId === '') data.categoryId = null;
+    if (data.subcategoryId === '') data.subcategoryId = null;
+    if (data.generalCategoryId === '') data.generalCategoryId = null;
+    if (data.generalSubcategoryId === '') data.generalSubcategoryId = null;
+    if (data.generalSubsubCategoryId === '') data.generalSubsubCategoryId = null;
 
     // primary pair validation (legacy)
     const nextCategoryId = data.categoryId ?? job.categoryId;
