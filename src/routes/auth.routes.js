@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const validate = require("../middleware/validate");
 const auth = require("../middleware/auth");
-const { register, signIn, verify, resend, me, googleSignIn, forgotPassword, confirmResetPassword } = require("../controllers/auth.controller");
+const { register, signIn, verify, resend, me, googleSignIn, checkGoogleUserStatus, forgotPassword, confirmResetPassword } = require("../controllers/auth.controller");
 const rules = require("../validations/auth.validation");
 
 // Signup + email verification flow
@@ -16,6 +16,7 @@ router.post("/login", validate(rules.login), signIn);
 router.get("/me", auth(true), me);
 
 router.post("/google", validate(rules.googleLogin), googleSignIn);
+router.post("/google/check-status", checkGoogleUserStatus);
 
 
 // 🔐 Password reset flow

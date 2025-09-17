@@ -448,6 +448,51 @@ function makeFundingInclude(/* { categoryId, subcategoryId, subsubCategoryId } *
   ];
 }
 
+/* ---- NEW: sorting + diversification helpers ---- */
+function sortByMatchThenRecency(arr) {
+  return arr.sort(
+    (a, b) =>
+      (b.matchPercentage || 0) - (a.matchPercentage || 0) ||
+      new Date(b.createdAt) - new Date(a.createdAt)
+  );
+}
+
+/**
+ * Diversify a list by item.kind so you don't see a long run of the same kind.
+ * maxSeq = maximum allowed consecutive items of the same kind.
+ */
+function diversifyFeed(items, { maxSeq = 1 } = {}) {
+  const pool = items.slice(); // already sorted by matchPercentage desc
+  const out = [];
+  let lastKind = null;
+  let streak = 0;
+
+  while (pool.length) {
+    // try to pick the first item that doesn't break maxSeq rule
+    let pickIdx = pool.findIndex((it) => {
+      if (!lastKind) return true;
+      if (it.kind !== lastKind) return true;
+      return streak < maxSeq; // allow if streak still below cap
+    });
+
+    if (pickIdx === -1) {
+      // no alternative found; fallback to the first (keeps progress)
+      pickIdx = 0;
+    }
+
+    const [picked] = pool.splice(pickIdx, 1);
+    if (picked.kind === lastKind) {
+      streak += 1;
+    } else {
+      lastKind = picked.kind;
+      streak = 1;
+    }
+    out.push(picked);
+  }
+
+  return out;
+}
+
 exports.getFeed = async (req, res) => {
   try {
     const {
@@ -1683,7 +1728,7 @@ exports.getFeed = async (req, res) => {
     };
 
     // ---------------- Flows ----------------
-    // (A) No user → filters only and sort by date
+    // (A) No user → filters only; still compute match % (default 20) then sort by match % and diversify
     if (!currentUserId) {
       console.log("No user logged in, using filters only");
 
@@ -1696,7 +1741,9 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items: await getConStatusItems(events.map(mapEvent)) });
+        const mapped = events.map(mapEvent);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
       if (tab === "jobs") {
@@ -1709,7 +1756,9 @@ exports.getFeed = async (req, res) => {
           offset: off,
         });
         const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
-        return res.json({ items: await getConStatusItems(jobs.map((j) => mapJob(j, companyMap))) });
+        const mapped = jobs.map((j) => mapJob(j, companyMap));
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
       if (tab === "services") {
@@ -1721,7 +1770,9 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items: await getConStatusItems(services.map(mapService)) });
+        const mapped = services.map(mapService);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
       if (tab === "products") {
@@ -1733,7 +1784,9 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items: await getConStatusItems(products.map(mapProduct)) });
+        const mapped = products.map(mapProduct);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
       if (tab === "tourism") {
@@ -1745,7 +1798,9 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items: await getConStatusItems(tourism.map(mapTourism)) });
+        const mapped = tourism.map(mapTourism);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
       if (tab === "funding") {
@@ -1757,61 +1812,63 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        return res.json({ items: await getConStatusItems(funding.map(mapFunding)) });
+        const mapped = funding.map(mapFunding);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
       }
 
+      // ---------- All (no user): build a larger buffer, sort by match %, diversify, then window ----------
       const [
-  jobsAll,
-  eventsAll,
-  servicesAll,
-  productsAll,
-  tourismAll,
-  fundingAll,
-] = await Promise.all([
-  Job.findAll({
-    subQuery: false,
-    where: whereJob,
-    include: includeCategoryRefs,
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-  Event.findAll({
-    subQuery: false,
-    where: whereEvent,
-    include: includeEventRefs,
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-  Service.findAll({
-    subQuery: false,
-    where: whereService,
-    include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-  Product.findAll({
-    subQuery: false,
-    where: whereProduct,
-    include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-  Tourism.findAll({
-    subQuery: false,
-    where: whereTourism,
-    include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-  Funding.findAll({
-    subQuery: false,
-    where: categoryId ? { ...whereFunding, categoryId } : whereFunding,
-    include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: lim * 2,
-  }),
-]);
-
+        jobsAll,
+        eventsAll,
+        servicesAll,
+        productsAll,
+        tourismAll,
+        fundingAll,
+      ] = await Promise.all([
+        Job.findAll({
+          subQuery: false,
+          where: whereJob,
+          include: includeCategoryRefs,
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Event.findAll({
+          subQuery: false,
+          where: whereEvent,
+          include: includeEventRefs,
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Service.findAll({
+          subQuery: false,
+          where: whereService,
+          include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Product.findAll({
+          subQuery: false,
+          where: whereProduct,
+          include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Tourism.findAll({
+          subQuery: false,
+          where: whereTourism,
+          include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Funding.findAll({
+          subQuery: false,
+          where: categoryId ? { ...whereFunding, categoryId } : whereFunding,
+          include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+      ]);
 
       const applyTextMatchFlag = (items) => {
         if (!hasTextSearch) return items;
@@ -1843,19 +1900,16 @@ exports.getFeed = async (req, res) => {
         ...applyTextMatchFlag(fundingAll.map(mapFunding)),
       ];
 
-      if (hasTextSearch && currentUserId) {
-        const scored = merged.map((x) => ({ ...x, _score: scoreItem(x) }));
-        scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-        const windowed = scored.slice(off, off + lim).map(({ _score, _textMatch, ...rest }) => rest);
-        return res.json({ items: await getConStatusItems(windowed) });
-      }
+      // Primary: match %, Secondary: recency
+      sortByMatchThenRecency(merged);
 
-      merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = merged.slice(off, off + lim);
+      // Diversify so you don't get long runs of the same kind
+      const diversified = diversifyFeed(merged, { maxSeq: 1 });
+      const windowed = diversified.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
-    // (B) User is logged in → apply filters first, then score
+    // (B) User is logged in → apply filters first, compute match %, sort by match %, diversify for "All"
     const bufferFactor = 3;
     const bufferLimit = lim * bufferFactor;
 
@@ -1869,9 +1923,10 @@ exports.getFeed = async (req, res) => {
       });
 
       const mapped = events.map(mapEvent);
-      const scored = mapped.map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      // still compute additional score if needed (not used in ordering now)
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1884,9 +1939,10 @@ exports.getFeed = async (req, res) => {
         limit: bufferLimit,
       });
       const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
-      const scored = jobs.map((j) => mapJob(j, companyMap)).map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      const mapped = jobs.map((j) => mapJob(j, companyMap));
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1898,9 +1954,10 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const scored = services.map(mapService).map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      const mapped = services.map(mapService);
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1912,9 +1969,10 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const scored = products.map(mapProduct).map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      const mapped = products.map(mapProduct);
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1926,9 +1984,10 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const scored = tourism.map(mapTourism).map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      const mapped = tourism.map(mapTourism);
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1940,66 +1999,65 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const scored = funding.map(mapFunding).map((x) => ({ ...x, _score: scoreItem(x) }));
-      scored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
-      const windowed = scored.slice(off, off + lim).map(({ _score, ...rest }) => rest);
+      const mapped = funding.map(mapFunding);
+      mapped.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(mapped);
+      const windowed = mapped.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
-    // "All" tab
-  
+    // ---------- "All" tab (logged-in): buffer, map, compute match %, sort by match %, diversify, window ----------
     const [
-  jobsBuf,
-  eventsBuf,
-  servicesBuf,
-  productsBuf,
-  tourismBuf,
-  fundingBuf,
-] = await Promise.all([
-  Job.findAll({
-    subQuery: false,
-    where: whereJob,
-    include: includeCategoryRefs,
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-  Event.findAll({
-    subQuery: false,
-    where: whereEvent,
-    include: includeEventRefs,
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-  Service.findAll({
-    subQuery: false,
-    where: whereService,
-    include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-  Product.findAll({
-    subQuery: false,
-    where: whereProduct,
-    include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-  Tourism.findAll({
-    subQuery: false,
-    where: whereTourism,
-    include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-  Funding.findAll({
-    subQuery: false,
-    where: whereFunding,
-    include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
-    order: [["createdAt", "DESC"]],
-    limit: bufferLimit,
-  }),
-]);
-
+      jobsBuf,
+      eventsBuf,
+      servicesBuf,
+      productsBuf,
+      tourismBuf,
+      fundingBuf,
+    ] = await Promise.all([
+      Job.findAll({
+        subQuery: false,
+        where: whereJob,
+        include: includeCategoryRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Event.findAll({
+        subQuery: false,
+        where: whereEvent,
+        include: includeEventRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Service.findAll({
+        subQuery: false,
+        where: whereService,
+        include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Product.findAll({
+        subQuery: false,
+        where: whereProduct,
+        include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Tourism.findAll({
+        subQuery: false,
+        where: whereTourism,
+        include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Funding.findAll({
+        subQuery: false,
+        where: whereFunding,
+        include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+    ]);
 
     const applyTextMatchFlag = (items) => {
       if (!hasTextSearch) return items;
@@ -2029,11 +2087,15 @@ exports.getFeed = async (req, res) => {
       ...applyTextMatchFlag(productsBuf.map(mapProduct)),
       ...applyTextMatchFlag(tourismBuf.map(mapTourism)),
       ...applyTextMatchFlag(fundingBuf.map(mapFunding)),
-    ].map((x) => ({ ...x, _score: scoreItem(x) }));
+    ].map((x) => ({ ...x, _score: scoreItem(x) })); // _score kept for debugging/secondary uses
 
-    mergedScored.sort((a, b) => b._score - a._score || new Date(b.createdAt) - new Date(a.createdAt));
+    // Primary: match %, Secondary: recency
+    sortByMatchThenRecency(mergedScored);
 
-    const windowed = mergedScored.slice(off, off + lim).map(({ _score, _textMatch, ...rest }) => rest);
+    // Diversify so you don't get long runs of the same kind
+    const diversified = diversifyFeed(mergedScored, { maxSeq: 1 });
+
+    const windowed = diversified.slice(off, off + lim);
 
     return res.json({ items: await getConStatusItems(windowed) });
   } catch (err) {

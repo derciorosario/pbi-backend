@@ -116,6 +116,8 @@ app.use("/api/test", require("./src/routes/test.routes"));
 
 app.use("/api/general-categories", require("./src/routes/generalCategory.routes"));
 
+app.use("/api/industry-categories", require("./src/routes/industryCategory.routes"));
+
 
 app.use("/api", require("./src/routes/block.routes"))
 app.use("/api", require("./src/routes/report.routes"))

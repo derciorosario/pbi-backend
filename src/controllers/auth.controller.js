@@ -47,10 +47,72 @@ async function me(req, res, next) {
 }
 
 
+async function checkGoogleUserStatus(req, res, next) {
+  try {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+      return res.status(400).json({ message: "Access token is required" });
+    }
+
+    // Fetch user info from Google
+    const axios = require('axios');
+    const profile = await axios.get(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+
+    const { sub: googleId, email, email_verified: emailVerified, name, picture } = profile.data;
+
+    if (!email || emailVerified === false) {
+      return res.status(400).json({ message: "Invalid Google account" });
+    }
+
+    // Check if user already exists
+    const { User } = require("../models");
+    let user = await User.findOne({ where: { googleId } });
+    if (!user) user = await User.findOne({ where: { email } });
+
+    if (user) {
+      // User exists, proceed with login
+      const { loginWithGoogle } = require("../services/auth.service");
+      const { user: loggedInUser, token } = await loginWithGoogle({
+        accessToken,
+        accountType: user.accountType
+      });
+
+      return res.json({
+        token,
+        user: {
+          id: loggedInUser.id,
+          name: loggedInUser.name,
+          email: loggedInUser.email,
+          accountType: loggedInUser.accountType,
+          avatarUrl: loggedInUser.avatarUrl,
+          provider: loggedInUser.provider,
+        },
+      });
+    } else {
+      // User doesn't exist, return user info for account type selection
+      return res.json({
+        requiresAccountType: true,
+        userInfo: {
+          googleId,
+          email,
+          name,
+          picture,
+        },
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function googleSignIn(req, res, next) {
   try {
-    const { idToken, accountType,accessToken } = req.body;
-    const { user, token } = await loginWithGoogle({ idToken, accountType,accessToken });
+    const { idToken, accountType, accessToken } = req.body;
+    const { user, token } = await loginWithGoogle({ idToken, accountType, accessToken });
     res.json({
       token,
       user: {
@@ -90,5 +152,14 @@ async function confirmResetPassword(req, res, next) {
 }
 
 
-module.exports = { forgotPassword,
-confirmResetPassword,register, verify, resend, signIn, me , googleSignIn};
+module.exports = {
+  forgotPassword,
+  confirmResetPassword,
+  register,
+  verify,
+  resend,
+  signIn,
+  me,
+  googleSignIn,
+  checkGoogleUserStatus
+};
