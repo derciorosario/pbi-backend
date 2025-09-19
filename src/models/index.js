@@ -28,8 +28,14 @@ const Conversation = require("./conversation")(sequelize, DataTypes);
 const MeetingRequest = require("./meetingRequest")(sequelize, DataTypes);
 const UserSettings = require("./userSettings")(sequelize, DataTypes);
 
+const Moment = require("./moment")(sequelize, DataTypes);
+const Need = require("./need")(sequelize, DataTypes);
+
 const UserBlock = require("./userBlock")(sequelize, DataTypes);
 const Report = require("./report")(sequelize, DataTypes);
+
+// Portfolio models
+const WorkSample = require("./workSample")(sequelize, DataTypes);
 
 // Social interaction models
 const Like = require("./like")(sequelize, DataTypes);
@@ -39,6 +45,10 @@ const Repost = require("./repost")(sequelize, DataTypes);
 // User ↔ Profile (1:1)
 User.hasOne(Profile, { foreignKey: "userId", as: "profile", onDelete: "CASCADE" });
 Profile.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+// Profile ↔ WorkSample (1:N)
+Profile.hasMany(WorkSample, { foreignKey: "profileId", as: "workSamples", onDelete: "CASCADE" });
+WorkSample.belongsTo(Profile, { foreignKey: "profileId", as: "profile" });
 
 // User ↔ UserSettings (1:1)
 User.hasOne(UserSettings, { foreignKey: "userId", as: "settings", onDelete: "CASCADE" });
@@ -104,6 +114,10 @@ Tourism.belongsTo(User, { foreignKey: "authorUserId", as: "author" });
 User.hasMany(Funding, { foreignKey: "creatorUserId", as: "fundingProjects" });
 Funding.belongsTo(User, { foreignKey: "creatorUserId", as: "creator" });
 Funding.belongsTo(Category, { foreignKey: "categoryId", as: "category" });
+
+// Moment
+User.hasMany(Moment, { foreignKey: "userId", as: "moments" });
+// Note: Moment.belongsTo(User) is defined in Moment.associate
 
 
 const Connection        = require("./connection")(sequelize, DataTypes);
@@ -233,6 +247,18 @@ const FundingIdentity       = require("./FundingIdentity")(sequelize, DataTypes)
 const FundingCategory       = require("./FundingCategory")(sequelize, DataTypes);
 const FundingSubcategory    = require("./FundingSubcategory")(sequelize, DataTypes);
 const FundingSubsubCategory = require("./FundingSubsubCategory")(sequelize, DataTypes);
+
+// Moment audience association models
+const MomentIdentity       = require("./MomentIdentity")(sequelize, DataTypes);
+const MomentCategory       = require("./MomentCategory")(sequelize, DataTypes);
+const MomentSubcategory    = require("./MomentSubcategory")(sequelize, DataTypes);
+const MomentSubsubCategory = require("./MomentSubsubCategory")(sequelize, DataTypes);
+
+// Need audience association models
+const NeedIdentity       = require("./NeedIdentity")(sequelize, DataTypes);
+const NeedCategory       = require("./NeedCategory")(sequelize, DataTypes);
+const NeedSubcategory    = require("./NeedSubcategory")(sequelize, DataTypes);
+const NeedSubsubCategory = require("./NeedSubsubCategory")(sequelize, DataTypes);
 
 
 // Interest join-tables (what the user is looking for)
@@ -610,6 +636,160 @@ SubsubCategory.belongsToMany(Funding, {
   as: "fundingProjects",
 });
 
+// Moment audience associations
+Moment.belongsToMany(Identity, {
+  through: {
+    model: "moment_identities",
+    timestamps: false
+  },
+  foreignKey: "momentId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Moment, {
+  through: {
+    model: "moment_identities",
+    timestamps: false
+  },
+  foreignKey: "identityId",
+  otherKey: "momentId",
+  as: "moments",
+});
+
+Moment.belongsToMany(Category, {
+  through: {
+    model: "moment_categories",
+    timestamps: false
+  },
+  foreignKey: "momentId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Moment, {
+  through: {
+    model: "moment_categories",
+    timestamps: false
+  },
+  foreignKey: "categoryId",
+  otherKey: "momentId",
+  as: "moments",
+});
+
+Moment.belongsToMany(Subcategory, {
+  through: {
+    model: "moment_subcategories",
+    timestamps: false
+  },
+  foreignKey: "momentId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Moment, {
+  through: {
+    model: "moment_subcategories",
+    timestamps: false
+  },
+  foreignKey: "subcategoryId",
+  otherKey: "momentId",
+  as: "moments",
+});
+
+Moment.belongsToMany(SubsubCategory, {
+  through: {
+    model: "moment_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "momentId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Moment, {
+  through: {
+    model: "moment_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "subsubCategoryId",
+  otherKey: "momentId",
+  as: "moments",
+});
+
+// Need audience associations
+Need.belongsToMany(Identity, {
+  through: {
+    model: "need_identities",
+    timestamps: false
+  },
+  foreignKey: "needId",
+  otherKey: "identityId",
+  as: "audienceIdentities",
+});
+Identity.belongsToMany(Need, {
+  through: {
+    model: "need_identities",
+    timestamps: false
+  },
+  foreignKey: "identityId",
+  otherKey: "needId",
+  as: "needs",
+});
+
+Need.belongsToMany(Category, {
+  through: {
+    model: "need_categories",
+    timestamps: false
+  },
+  foreignKey: "needId",
+  otherKey: "categoryId",
+  as: "audienceCategories",
+});
+Category.belongsToMany(Need, {
+  through: {
+    model: "need_categories",
+    timestamps: false
+  },
+  foreignKey: "categoryId",
+  otherKey: "needId",
+  as: "needs",
+});
+
+Need.belongsToMany(Subcategory, {
+  through: {
+    model: "need_subcategories",
+    timestamps: false
+  },
+  foreignKey: "needId",
+  otherKey: "subcategoryId",
+  as: "audienceSubcategories",
+});
+Subcategory.belongsToMany(Need, {
+  through: {
+    model: "need_subcategories",
+    timestamps: false
+  },
+  foreignKey: "subcategoryId",
+  otherKey: "needId",
+  as: "needs",
+});
+
+Need.belongsToMany(SubsubCategory, {
+  through: {
+    model: "need_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "needId",
+  otherKey: "subsubCategoryId",
+  as: "audienceSubsubs",
+});
+SubsubCategory.belongsToMany(Need, {
+  through: {
+    model: "need_subsubcategories",
+    timestamps: false
+  },
+  foreignKey: "subsubCategoryId",
+  otherKey: "needId",
+  as: "needs",
+});
+
 
 
 
@@ -700,6 +880,8 @@ attachGeneralTaxonomy(Service);
 attachGeneralTaxonomy(Product);
 attachGeneralTaxonomy(Tourism);
 attachGeneralTaxonomy(Funding);
+attachGeneralTaxonomy(Moment);
+attachGeneralTaxonomy(Need);
 
 
 
@@ -780,6 +962,8 @@ attachIndustryTaxonomy(Service);
 attachIndustryTaxonomy(Product);
 attachIndustryTaxonomy(Tourism);
 attachIndustryTaxonomy(Funding);
+attachIndustryTaxonomy(Moment);
+attachIndustryTaxonomy(Need);
 
 
 const UserIndustryCategory = require("./userIndustryCategory")(sequelize, DataTypes);
@@ -836,6 +1020,33 @@ IndustrySubsubCategory.belongsToMany(User, {
 });
 
 
+// Call associate methods for models that have them
+if (Need.associate) {
+  Need.associate({
+    User,
+    Category,
+    Subcategory,
+    SubsubCategory,
+    Identity,
+    Comment,
+    IndustryCategory,
+    IndustrySubcategory,
+    IndustrySubsubCategory,
+  });
+}
+
+if (Moment.associate) {
+  Moment.associate({
+    User,
+    Category,
+    Subcategory,
+    SubsubCategory,
+    IndustryCategory,
+    IndustrySubcategory,
+    IndustrySubsubCategory,
+    Comment,
+  });
+}
 
 module.exports = {
    UserIdentityInterest,
@@ -846,6 +1057,7 @@ module.exports = {
     UserIndustryCategory,
   UserIndustrySubcategory,
   UserIndustrySubsubCategory,
+
 
 
   IndustryCategory,
@@ -902,12 +1114,27 @@ module.exports = {
   FundingCategory,
   FundingSubcategory,
   FundingSubsubCategory,
+  // Export moment model and audience association models
+  Moment,
+  MomentIdentity,
+  MomentCategory,
+  MomentSubcategory,
+  MomentSubsubCategory,
+  // Export need model and audience association models
+  Need,
+  NeedIdentity,
+  NeedCategory,
+  NeedSubcategory,
+  NeedSubsubCategory,
   // Export meeting request model
   MeetingRequest,
   // Export user settings model
   UserSettings,
   Report,
   UserBlock,
+  // Portfolio models
+  WorkSample,
+
   // Social interaction models
   Like,
   Comment,

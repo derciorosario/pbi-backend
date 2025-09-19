@@ -1022,7 +1022,7 @@ const EVENT_SEEDS = [
   },
   {
     title: "Pan-African Agricultural Innovation Forum",
-    eventType: "Forum",
+    eventType: "Conference",
     description: "A forum focused on agricultural innovation, sustainable farming practices, and technology adoption in African agriculture. Connect with experts, policymakers, and agribusiness leaders.",
     startDate: daysAgo(-45),
     endDate: daysAgo(-47),
@@ -1060,7 +1060,7 @@ const EVENT_SEEDS = [
   },
   {
     title: "African Renewable Energy Summit",
-    eventType: "Summit",
+    eventType: "Conference",
     description: "Summit focused on renewable energy development in Africa. Discuss policy, investment, and technology for solar, wind, hydro, and other renewable energy sources.",
     startDate: daysAgo(-60),
     endDate: daysAgo(-62),
@@ -1098,7 +1098,7 @@ const EVENT_SEEDS = [
   },
   {
     title: "African Fashion Week",
-    eventType: "Exhibition",
+    eventType: "Networking",
     description: "Showcase of African fashion, textiles, and design. Connect with designers, retailers, and fashion industry professionals from across the continent.",
     startDate: daysAgo(-20),
     endDate: daysAgo(-26),
@@ -1602,11 +1602,11 @@ async function run(){
       let generalSubsub = null;
 
       if (f.generalCategoryName) {
-        generalCat = await upsertGeneralCategoryByName(f.generalCategoryName, 'funding');
+        generalCat = await upsertGeneralCategoryByName(f.generalCategoryName, 'opportunity');
         if (f.generalSubcategoryName) {
-          generalSub = await upsertGeneralSubcategoryByName(f.generalCategoryName, f.generalSubcategoryName, 'funding');
+          generalSub = await upsertGeneralSubcategoryByName(f.generalCategoryName, f.generalSubcategoryName, 'opportunity');
           if (f.generalSubsubCategoryName) {
-            generalSubsub = await upsertGeneralSubsubCategoryByName(f.generalCategoryName, f.generalSubcategoryName, f.generalSubsubCategoryName, 'funding');
+            generalSubsub = await upsertGeneralSubsubCategoryByName(f.generalCategoryName, f.generalSubcategoryName, f.generalSubsubCategoryName, 'opportunity');
           }
         }
       }

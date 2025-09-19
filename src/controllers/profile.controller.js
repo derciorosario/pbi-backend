@@ -3,6 +3,7 @@ const {
   sequelize,
   User,
   Profile,
+  WorkSample,
   Identity,
   Category,
   Subcategory,
@@ -343,10 +344,165 @@ async function updateIndustrySelections(req, res, next) {
   }
 }
 
+/* PUT /api/profile/portfolio */
+async function updatePortfolio(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { cvBase64, cvFileName } = req.body;
+
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    profile.cvBase64 = cvBase64 || null;
+    profile.cvFileName = cvFileName || null;
+    await profile.save();
+
+    return getMe(req, res, next);
+  } catch (e) { next(e); }
+}
+
+/* PUT /api/profile/availability */
+async function updateAvailability(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { isOpenToWork } = req.body;
+
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    profile.isOpenToWork = Boolean(isOpenToWork);
+    await profile.save();
+
+    return getMe(req, res, next);
+  } catch (e) { next(e); }
+}
+
+/* GET /api/profile/work-samples */
+async function getWorkSamples(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    const workSamples = await WorkSample.findAll({
+      where: { profileId: profile.id },
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ workSamples });
+  } catch (e) { next(e); }
+}
+
+/* POST /api/profile/work-samples */
+async function createWorkSample(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    const {
+      title,
+      description,
+      projectUrl,
+      imageBase64,
+      imageFileName,
+      category,
+      technologies,
+      attachments,
+      completionDate,
+      isPublic
+    } = req.body;
+
+    const workSample = await WorkSample.create({
+      profileId: profile.id,
+      title,
+      description: description || null,
+      projectUrl: projectUrl || null,
+      imageBase64: imageBase64 || null,
+      imageFileName: imageFileName || null,
+      category: category || null,
+      technologies: Array.isArray(technologies) ? technologies : [],
+      attachments: Array.isArray(attachments) ? attachments : [],
+      completionDate: completionDate || null,
+      isPublic: isPublic !== undefined ? isPublic : true,
+    });
+
+    return res.json({ workSample });
+  } catch (e) { next(e); }
+}
+
+/* PUT /api/profile/work-samples/:id */
+async function updateWorkSample(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    const workSample = await WorkSample.findOne({
+      where: { id, profileId: profile.id }
+    });
+    if (!workSample) return res.status(404).json({ message: "Work sample not found" });
+
+    const {
+      title,
+      description,
+      projectUrl,
+      imageBase64,
+      imageFileName,
+      category,
+      technologies,
+      attachments,
+      completionDate,
+      isPublic
+    } = req.body;
+
+    workSample.title = title || workSample.title;
+    workSample.description = description !== undefined ? description : workSample.description;
+    workSample.projectUrl = projectUrl !== undefined ? projectUrl : workSample.projectUrl;
+    workSample.imageBase64 = imageBase64 !== undefined ? imageBase64 : workSample.imageBase64;
+    workSample.imageFileName = imageFileName !== undefined ? imageFileName : workSample.imageFileName;
+    workSample.category = category !== undefined ? category : workSample.category;
+    workSample.technologies = Array.isArray(technologies) ? technologies : workSample.technologies;
+    workSample.attachments = Array.isArray(attachments) ? attachments : workSample.attachments;
+    workSample.completionDate = completionDate !== undefined ? completionDate : workSample.completionDate;
+    workSample.isPublic = isPublic !== undefined ? isPublic : workSample.isPublic;
+
+    await workSample.save();
+
+    return res.json({ workSample });
+  } catch (e) { next(e); }
+}
+
+/* DELETE /api/profile/work-samples/:id */
+async function deleteWorkSample(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+    const profile = await Profile.findOne({ where: { userId } });
+    if (!profile) return res.status(404).json({ message: "Profile not found" });
+
+    const workSample = await WorkSample.findOne({
+      where: { id, profileId: profile.id }
+    });
+    if (!workSample) return res.status(404).json({ message: "Work sample not found" });
+
+    await workSample.destroy();
+
+    return res.json({ message: "Work sample deleted successfully" });
+  } catch (e) { next(e); }
+}
+
 module.exports = {
   getMe,
   updatePersonal,
   updateProfessional,
+  updatePortfolio,
+  updateAvailability,
+  getWorkSamples,
+  createWorkSample,
+  updateWorkSample,
+  deleteWorkSample,
   updateDoSelections,
   updateInterestSelections,
   updateIndustrySelections,

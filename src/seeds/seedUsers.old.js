@@ -64,23 +64,7 @@ async function ensureCategoriesIfEmpty() {
   const categories = new Set();
   const categorySubcategories = new Map();
 
-  // Process individual identities
   for (const identity of identityCategoryMap.identities || []) {
-    for (const category of identity.categories || []) {
-      categories.add(category.name);
-      
-      if (!categorySubcategories.has(category.name)) {
-        categorySubcategories.set(category.name, new Set());
-      }
-      
-      for (const subcategory of category.subcategories || []) {
-        categorySubcategories.get(category.name).add(subcategory.name);
-      }
-    }
-  }
-
-  // Process company identities
-  for (const identity of identityCategoryMap.company_identities || []) {
     for (const category of identity.categories || []) {
       categories.add(category.name);
       
@@ -119,22 +103,10 @@ async function ensureIdentitiesIfEmpty() {
   const count = await Identity.count();
   if (count > 0) return;
   
-  // Process individual identities
-  const individualIdentities = identityCategoryMap.identities || [];
-  await Identity.bulkCreate(individualIdentities.map(identity => ({
-    name: identity.name,
-    type: "individual"
-  })));
+  const identities = identityCategoryMap.identities || [];
+  await Identity.bulkCreate(identities.map(identity => ({ name: identity.name })));
   
-  // Process company identities
-  const companyIdentities = identityCategoryMap.company_identities || [];
-  await Identity.bulkCreate(companyIdentities.map(identity => ({
-    name: identity.name,
-    type: "company"
-  })));
-  
-  const totalIdentities = individualIdentities.length + companyIdentities.length;
-  console.log(`✅ Seeded ${totalIdentities} identities (${individualIdentities.length} individual, ${companyIdentities.length} company) because DB had none.`);
+  console.log(`✅ Seeded ${identities.length} identities (because DB had none).`);
 }
 
 async function findCategoryIdsByNames(names = []) {
@@ -1161,7 +1133,7 @@ const BULK_USERS = [
 // Function to seed users with identities, categories, subcategories, and subsubcategories from identity_category_map.json
 async function seedUsersFromIdentityCategoryMap() {
   try {
-    // Create sample users for individual identities
+    // Create a sample user for each identity
     for (const identity of identityCategoryMap.identities || []) {
       const identityName = identity.name;
       
@@ -1251,100 +1223,7 @@ async function seedUsersFromIdentityCategoryMap() {
         industrySubcategories: [{ categoryName: "Services", subName: "Professional Services" }], // Default industry subcategory
       });
       
-      console.log(`Created sample user for individual identity: ${identityName}`);
-    }
-    
-    // Create sample users for company identities
-    for (const identity of identityCategoryMap.company_identities || []) {
-      const identityName = identity.name;
-      
-      // Create sample categories, subcategories, and subsubcategories for this identity
-      const sampleCategories = [];
-      const sampleSubcategories = [];
-      const sampleSubsubcategories = [];
-      
-      // Take up to 2 categories for each identity
-      const categoriesToUse = identity.categories.slice(0, 2);
-      
-      for (const category of categoriesToUse) {
-        sampleCategories.push(category.name);
-        
-        // Take up to 2 subcategories for each category
-        const subcategoriesToUse = (category.subcategories || []).slice(0, 2);
-        
-        for (const subcategory of subcategoriesToUse) {
-          sampleSubcategories.push({
-            categoryName: category.name,
-            subName: subcategory.name
-          });
-          
-          // Take up to 2 subsubcategories for each subcategory if they exist
-          if (subcategory.subsubs && subcategory.subsubs.length > 0) {
-            const subsubsToUse = subcategory.subsubs.slice(0, 2);
-            
-            for (const subsubName of subsubsToUse) {
-              sampleSubsubcategories.push({
-                categoryName: category.name,
-                subName: subcategory.name,
-                subsubName: subsubName
-              });
-              console.log(`Adding subsubcategory: ${subsubName} in subcategory ${subcategory.name}`);
-            }
-          } else {
-            // If no subsubs exist, create a default one
-            const defaultSubsubName = `Default ${subcategory.name}`;
-            sampleSubsubcategories.push({
-              categoryName: category.name,
-              subName: subcategory.name,
-              subsubName: defaultSubsubName
-            });
-            console.log(`Adding default subsubcategory: ${defaultSubsubName} in subcategory ${subcategory.name}`);
-          }
-        }
-      }
-      
-      // Create a user for this identity
-      const email = `company-${identityName.toLowerCase().replace(/[^a-z0-9]/g, "-")}@54links.com`;
-      
-      // Check if user already exists
-      const existingUser = await User.findOne({ where: { email } });
-      if (existingUser) {
-        console.log(`User ${email} already exists, skipping...`);
-        continue;
-      }
-      
-      await upsertUserWithProfile({
-        email,
-        password: "Company@123",
-        name: `${identityName} Company`,
-        phone: "+1234567890",
-        nationality: "African",
-        country: "South Africa",
-        countryOfResidence: "South Africa",
-        city: "Johannesburg",
-        accountType: "company",
-        profile: {
-          primaryIdentity: identityName,
-          professionalTitle: `${identityName} Organization`,
-          about: `A sample company with ${identityName} identity.`,
-          experienceLevel: "Mid",
-          skills: ["Sample Skill 1", "Sample Skill 2"],
-          languages: [{ name: "English", level: "Advanced" }],
-        },
-        identities: [identityName],
-        categories: sampleCategories,
-        subcategories: sampleSubcategories,
-        subsubcategories: sampleSubsubcategories,
-        categoryInterests: sampleCategories,
-        subcategoryInterests: sampleSubcategories,
-        subsubcategoryInterests: sampleSubsubcategories,
-        identityInterests: [identityName],
-        goals: identityCategoryMap.goals.slice(0, 3), // Take first 3 goals
-        industryCategories: ["Services"], // Default industry category
-        industrySubcategories: [{ categoryName: "Services", subName: "Professional Services" }], // Default industry subcategory
-      });
-      
-      console.log(`Created sample user for company identity: ${identityName}`);
+      console.log(`Created sample user for identity: ${identityName}`);
     }
     
     console.log("✅ Sample users from identity_category_map.json created successfully.");

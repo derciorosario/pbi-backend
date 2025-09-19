@@ -19,6 +19,7 @@ module.exports = (sequelize, DataTypes) => {
 
       // Location
       country: { type: DataTypes.STRING(80), allowNull: true },
+      city: { type: DataTypes.STRING(80), allowNull: true },
 
       // Tags & Images
       tags: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },

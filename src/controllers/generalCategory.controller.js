@@ -25,15 +25,19 @@ exports.getTree = async (req, res) => {
         },
       ],
       order: [
-        ["name", "ASC"],
-        [{ model: GeneralSubcategory, as: "subcategories" }, "name", "ASC"],
-        [
-          { model: GeneralSubcategory, as: "subcategories" },
-          { model: GeneralSubsubCategory, as: "subsubcategories" },
-          "name",
-          "ASC",
-        ],
-      ],
+  // parents (GeneralCategory): by date
+  ["createdAt", "ASC"],
+
+  // children: keep alphabetical
+  [{ model: GeneralSubcategory, as: "subcategories" }, "name", "ASC"],
+  [
+    { model: GeneralSubcategory, as: "subcategories" },
+    { model: GeneralSubsubCategory, as: "subsubcategories" },
+    "name",
+    "ASC",
+  ],
+]
+
     });
 
     res.json({ generalCategories: rows, type });

@@ -3,6 +3,8 @@ const { Op } = require("sequelize");
 const {
   Job,
   Event,
+  Need,
+  Moment,
   Category,
   Subcategory,
   User,
@@ -25,6 +27,9 @@ const {
   GeneralCategory,
   GeneralSubcategory,
   GeneralSubsubCategory,
+  IndustryCategory,
+  IndustrySubcategory,
+  IndustrySubsubCategory,
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 
@@ -183,6 +188,44 @@ const includeEventRefs = [
     attributes: ["id", "name", "avatarUrl"],
     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
   },
+  // Audience associations
+  {
+    model: Category,
+    as: "audienceCategories",
+    attributes: ["id", "name"],
+    through: { attributes: [] },
+  },
+  {
+    model: Subcategory,
+    as: "audienceSubcategories",
+    attributes: ["id", "name"],
+    through: { attributes: [] },
+  },
+  {
+    model: SubsubCategory,
+    as: "audienceSubsubs",
+    attributes: ["id", "name"],
+    through: { attributes: [] },
+  },
+  {
+    model: Identity,
+    as: "audienceIdentities",
+    attributes: ["id", "name"],
+    through: { attributes: [] },
+  },
+];
+
+const includeNeedRefs = [
+  {
+    model: User,
+    as: "user",
+    attributes: ["id", "name", "avatarUrl"],
+    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+  },
+  // General taxonomy
+  { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
+  { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
+  { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
   // Audience associations
   {
     model: Category,
@@ -403,6 +446,61 @@ function makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   return include;
 }
 
+// [MOMENT] include → author + general taxonomy + audience M2M with enhanced associations
+function makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }) {
+  const include = [
+    {
+      model: User,
+      as: "user",
+      attributes: ["id", "name", "avatarUrl"],
+      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+    },
+    // Industry associations
+    { model: IndustryCategory, as: "industryCategory", attributes: ["id", "name"], required: false },
+    { model: IndustrySubcategory, as: "industrySubcategory", attributes: ["id", "name"], required: false },
+    { model: IndustrySubsubCategory, as: "industrySubsubCategory", attributes: ["id", "name"], required: false },
+    // General taxonomy
+    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"], required: false },
+    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"], required: false },
+    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"], required: false },
+    // Audience associations (many-to-many from models/index.js)
+    {
+      model: Category,
+      as: "audienceCategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: Subcategory,
+      as: "audienceSubcategories",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: SubsubCategory,
+      as: "audienceSubsubs",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+    {
+      model: Identity,
+      as: "audienceIdentities",
+      attributes: ["id", "name"],
+      through: { attributes: [] },
+      required: false,
+    },
+  ];
+
+  if (categoryId) include[3] = { ...include[3], required: true, where: { id: categoryId } };
+  if (subcategoryId) include[4] = { ...include[4], required: true, where: { id: subcategoryId } };
+  if (subsubCategoryId) include[5] = { ...include[5], required: true, where: { id: subsubCategoryId } };
+
+  return include;
+}
+
 // [FUNDING] include → creator + direct category + audience M2M with enhanced associations
 function makeFundingInclude(/* { categoryId, subcategoryId, subsubCategoryId } */) {
   return [
@@ -494,60 +592,75 @@ function diversifyFeed(items, { maxSeq = 1 } = {}) {
 }
 
 exports.getFeed = async (req, res) => {
-  try {
-    const {
-      tab,
-      q,
-      country,
-      city,
-      categoryId,
-      subcategoryId,
-      subsubCategoryId,
-      identityId,
+   try {
+     const {
+       tab,
+       q,
+       country,
+       city,
+       categoryId,
+       subcategoryId,
+       subsubCategoryId,
+       identityId,
 
-      // Industry filters
-      industryIds,
+       // Industry filters
+       industryIds,
 
-      // General taxonomy filters
-      generalCategoryIds,
-      generalSubcategoryIds,
-      generalSubsubCategoryIds,
+       // General taxonomy filters
+       generalCategoryIds,
+       generalSubcategoryIds,
+       generalSubsubCategoryIds,
 
-      // Audience filters from AudienceTree
-      audienceIdentityIds,
-      audienceCategoryIds,
-      audienceSubcategoryIds,
-      audienceSubsubCategoryIds,
+       // Audience filters from AudienceTree
+       audienceIdentityIds,
+       audienceCategoryIds,
+       audienceSubcategoryIds,
+       audienceSubsubCategoryIds,
 
-      // products
-      price,              // field: price
-      // services
-      serviceType,        // field: serviceType
-      priceType,          // field: priceType
-      deliveryTime,       // field: deliveryTime
+       // products
+       price,              // field: price
+       // services
+       serviceType,        // field: serviceType
+       priceType,          // field: priceType
+       deliveryTime,       // field: deliveryTime
 
-      // shared (Jobs, Services)
-      experienceLevel,    // field: experienceLevel
-      locationType,       // field: locationType
-      // jobs
-      jobType,            // field: jobType
-      workMode,           // field: workMode
-      // tourism
-      postType,           // field: postType
-      season,             // field: season
-      budgetRange,        // field: budgetRange
-      // funding
-      fundingGoal,        // field: goal
-      amountRaised,       // field: raised
-      deadline,           // field: deadline
-      // events
-      date,
-      eventType,          // field: eventType
-      registrationType,   // field: registrationType
+       // shared (Jobs, Services)
+       experienceLevel,    // field: experienceLevel
+       locationType,       // field: locationType
+       // jobs
+       jobType,            // field: jobType
+       workMode,           // field: workMode
+       // tourism
+       postType,           // field: postType
+       season,             // field: season
+       budgetRange,        // field: budgetRange
+       // funding
+       fundingGoal,        // field: goal
+       amountRaised,       // field: raised
+       deadline,           // field: deadline
+       // events
+       date,
+       eventType,          // field: eventType
+       registrationType,   // field: registrationType
 
-      limit = 20,
-      offset = 0,
-    } = req.query;
+       limit = 20,
+       offset = 0,
+     } = req.query;
+
+     // Mapping from plural tab names to singular relatedEntityType values
+     const tabToEntityTypeMap = {
+       'jobs': 'job',
+       'events': 'event',
+       'services': 'service',
+       'products': 'product',
+       'tourism': 'tourism',
+       'funding': 'funding',
+       'needs': 'need',
+       'moments': 'moment'
+     };
+
+     // Get the singular entity type for the current tab
+     const relatedEntityType = tabToEntityTypeMap[tab];
 
     // Parse city as array to support multiple cities
     const cities = ensureArray(city);
@@ -765,6 +878,7 @@ exports.getFeed = async (req, res) => {
     const whereJob = { ...whereCommon };
     const whereEvent = { ...whereCommon };
     const whereService = { ...whereCommon };
+    const whereNeed = { ...whereCommon };
 
     // Apply general taxonomy filters to whereService
     if (effGeneralCategoryIds.length > 0) {
@@ -775,6 +889,17 @@ exports.getFeed = async (req, res) => {
     }
     if (effGeneralSubsubCategoryIds.length > 0) {
       whereService.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
+    }
+
+    // Apply general taxonomy filters to whereNeed
+    if (effGeneralCategoryIds.length > 0) {
+      whereNeed.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
+    }
+    if (effGeneralSubcategoryIds.length > 0) {
+      whereNeed.generalSubcategoryId = { [Op.in]: effGeneralSubcategoryIds };
+    }
+    if (effGeneralSubsubCategoryIds.length > 0) {
+      whereNeed.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
     }
 
     // Apply general taxonomy filters to whereEvent
@@ -846,6 +971,7 @@ exports.getFeed = async (req, res) => {
       whereProduct.sellerUserId = { [Op.notIn]: excludedUserIds };
       whereTourism.authorUserId = { [Op.notIn]: excludedUserIds };
       whereFunding.creatorUserId = { [Op.notIn]: excludedUserIds };
+      whereNeed.userId = { [Op.notIn]: excludedUserIds };
     }
 
     // Funding-specific filters
@@ -857,14 +983,17 @@ exports.getFeed = async (req, res) => {
     if (categoryId) {
       whereJob.categoryId = categoryId;
       whereEvent.categoryId = categoryId;
+      whereNeed.categoryId = categoryId;
     }
     if (subcategoryId) {
       whereJob.subcategoryId = subcategoryId;
       whereEvent.subcategoryId = subcategoryId;
+      whereNeed.subcategoryId = subcategoryId;
     }
     if (subsubCategoryId) {
       whereJob.subsubCategoryId = subsubCategoryId;
       whereEvent.subsubCategoryId = subsubCategoryId;
+      whereNeed.subsubCategoryId = subsubCategoryId;
     }
 
     // Industry filters
@@ -875,6 +1004,7 @@ exports.getFeed = async (req, res) => {
       whereProduct.industryCategoryId = { [Op.in]: effIndustryIds };
       whereTourism.industryCategoryId = { [Op.in]: effIndustryIds };
       whereFunding.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereNeed.industryCategoryId = { [Op.in]: effIndustryIds };
     }
 
     // Audience filters via $paths
@@ -886,6 +1016,7 @@ exports.getFeed = async (req, res) => {
       whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
       whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
       whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
+      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
     }
     if (effAudienceCategoryIdsStr.length > 0) {
       const f = { "$audienceCategories.id$": { [Op.in]: effAudienceCategoryIdsStr } };
@@ -895,6 +1026,7 @@ exports.getFeed = async (req, res) => {
       whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
       whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
       whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
+      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
     }
     if (effAudienceSubcategoryIdsStr.length > 0) {
       const f = { "$audienceSubcategories.id$": { [Op.in]: effAudienceSubcategoryIdsStr } };
@@ -904,6 +1036,7 @@ exports.getFeed = async (req, res) => {
       whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
       whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
       whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
+      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
     }
     if (effAudienceSubsubCategoryIdsStr.length > 0) {
       const f = { "$audienceSubsubs.id$": { [Op.in]: effAudienceSubsubCategoryIdsStr } };
@@ -913,6 +1046,7 @@ exports.getFeed = async (req, res) => {
       whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
       whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
       whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
+      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
     }
 
     // job-specific
@@ -1007,6 +1141,10 @@ exports.getFeed = async (req, res) => {
         ...(whereFunding[Op.or] || []),
         ...termClauses(["title", "pitch", "city", "country"]),
       ];
+      whereNeed[Op.or] = [
+        ...(whereNeed[Op.or] || []),
+        ...termClauses(["title", "description", "city", "country"]),
+      ];
     }
 
     // Add Funding audience/direct category ORs
@@ -1050,6 +1188,10 @@ exports.getFeed = async (req, res) => {
             ? it.authorUserId
             : it.kind === "funding"
             ? it.creatorUserId
+            : it.kind === "need"
+            ? it.userId
+            : it.kind === "moment"
+            ? it.userId
             : null
         )
         .filter(Boolean);
@@ -1073,6 +1215,10 @@ exports.getFeed = async (req, res) => {
             ? it.authorUserId
             : it.kind === "funding"
             ? it.creatorUserId
+            : it.kind === "need"
+            ? it.userId
+            : it.kind === "moment"
+            ? it.userId
             : null;
 
         return {
@@ -1125,7 +1271,7 @@ exports.getFeed = async (req, res) => {
       if (currentUserId) {
         jobData.matchPercentage = calculateItemMatchPercentage(jobData);
       } else {
-        jobData.matchPercentage = 20;
+        jobData.matchPercentage = Math.floor(Math.random() * 80) + 20;
       }
 
       return jobData;
@@ -1213,7 +1359,7 @@ exports.getFeed = async (req, res) => {
         audienceIdentities: (e.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
       };
 
-      eventData.matchPercentage = currentUserId ? calculateItemMatchPercentage(eventData) : 20;
+      eventData.matchPercentage = currentUserId ? calculateItemMatchPercentage(eventData) : Math.floor(Math.random() * 80) + 20;
       return eventData;
     };
 
@@ -1273,7 +1419,7 @@ exports.getFeed = async (req, res) => {
         audienceIdentities: (s.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
       };
 
-      serviceData.matchPercentage = currentUserId ? calculateItemMatchPercentage(serviceData) : 20;
+      serviceData.matchPercentage = currentUserId ? calculateItemMatchPercentage(serviceData) : Math.floor(Math.random() * 80) + 20;
       return serviceData;
     };
 
@@ -1354,7 +1500,7 @@ exports.getFeed = async (req, res) => {
         audienceIdentities: (p.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
       };
 
-      productData.matchPercentage = currentUserId ? calculateItemMatchPercentage(productData) : 20;
+      productData.matchPercentage = currentUserId ? calculateItemMatchPercentage(productData) : Math.floor(Math.random() * 80) + 20;
       return productData;
     };
 
@@ -1435,7 +1581,7 @@ exports.getFeed = async (req, res) => {
         audienceIdentities: (t.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
       };
 
-      tourismData.matchPercentage = currentUserId ? calculateItemMatchPercentage(tourismData) : 20;
+      tourismData.matchPercentage = currentUserId ? calculateItemMatchPercentage(tourismData) : Math.floor(Math.random() * 80) + 20;
       return tourismData;
     };
 
@@ -1543,30 +1689,107 @@ exports.getFeed = async (req, res) => {
         audienceIdentities: (f.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
       };
 
-      fundingData.matchPercentage = currentUserId ? calculateItemMatchPercentage(fundingData) : 20;
+      fundingData.matchPercentage = currentUserId ? calculateItemMatchPercentage(fundingData) : Math.floor(Math.random() * 80) + 20;
       return fundingData;
     };
+  
+    // [MOMENT] mapper
+    const mapMoment = (m) => {
+      const picked = m;
+      const user = picked.user || {};
 
+      let parsedImages = [];
+      try {
+        if (Array.isArray(picked.images)) parsedImages = picked.images;
+        else if (typeof picked.images === "string") parsedImages = JSON.parse(picked.images || "[]");
+      } catch (err) {
+        console.error(`Error parsing images for moment ${m.id}:`, err.message);
+      }
+
+      let parsedTags = [];
+      try {
+        if (Array.isArray(picked.tags)) parsedTags = picked.tags;
+        else if (typeof picked.tags === "string") parsedTags = JSON.parse(picked.tags || "[]");
+      } catch (err) {
+        console.error(`Error parsing tags for moment ${m.id}:`, err.message);
+      }
+
+      const momentData = {
+        kind: "moment",
+        id: m.id,
+        title: m.title,
+        description: m.description,
+        type: m.type,
+        date: m.date,
+        location: m.location,
+        country: m.country,
+        city: m.city,
+        tags: parsedTags,
+        images: parsedImages,
+        categoryId: picked.generalCategoryId ? String(picked.generalCategoryId) : "",
+        categoryName: picked.generalCategory?.name || "",
+        subcategoryId: picked.generalSubcategoryId ? String(picked.generalSubcategoryId) : "",
+        subcategoryName: picked.generalSubcategory?.name || "",
+        subsubCategoryId: picked.generalSubsubCategoryId ? String(picked.generalSubsubCategoryId) : "",
+        subsubCategoryName: picked.generalSubsubCategory?.name || "",
+        createdAt: m.createdAt,
+        timeAgo: timeAgo(m.createdAt),
+        relatedEntityType:m.relatedEntityType,
+        userId: m.userId || null,
+        userName: user.name || null,
+        avatarUrl: user.avatarUrl || user.profile?.avatarUrl || null,
+        audienceCategories: (m.audienceCategories || []).map((c) => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (m.audienceSubcategories || []).map((s) => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (m.audienceSubsubs || []).map((s) => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (m.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
+      };
+
+      momentData.matchPercentage = currentUserId ? calculateItemMatchPercentage(momentData) : Math.floor(Math.random() * 80) + 20;
+      return momentData;
+    };
+  
     // Calculate match percentage between current user and an item
+    // Now considers:
+    // - Standard taxonomy: category, subcategory, subsubcategory (audience + direct)
+    // - Identity (audience)
+    // - Location
+    // - General taxonomy (if present on item and filters provided)
+    // - Industry taxonomy (if present on item and filters provided)
     const calculateItemMatchPercentage = (item) => {
       if (!currentUserId) return 20;
 
+      // Collect item-side taxonomies
       const itemTaxonomies = {
         categories: (item.audienceCategories || []).map((c) => String(c.id)),
         subcategories: (item.audienceSubcategories || []).map((s) => String(s.id)),
         subsubcategories: (item.audienceSubsubs || []).map((s) => String(s.id)),
         identities: (item.audienceIdentities || []).map((i) => String(i.id)),
+        // direct single-value taxonomies (when the model stores FK on the row)
+        directCategory: item.categoryId ? String(item.categoryId) : null,
+        directSubcategory: item.subcategoryId ? String(item.subcategoryId) : null,
+        directSubsubCategory: item.subsubCategoryId ? String(item.subsubCategoryId) : null,
+        // general taxonomy (present on many content types)
+        generalCategory: item.generalCategoryId ? String(item.generalCategoryId) : null,
+        generalSubcategory: item.generalSubcategoryId ? String(item.generalSubcategoryId) : null,
+        generalSubsubCategory: item.generalSubsubCategoryId ? String(item.generalSubsubCategoryId) : null,
+        // industry taxonomy (present on most content types)
+        industryCategory: item.industryCategoryId ? String(item.industryCategoryId) : null,
+        industrySubcategory: item.industrySubcategoryId ? String(item.industrySubcategoryId) : null,
+        industrySubsubCategory: item.industrySubsubCategoryId ? String(item.industrySubsubCategoryId) : null,
       };
 
-      if (item.categoryId) itemTaxonomies.categories.push(String(item.categoryId));
-      if (item.subcategoryId) itemTaxonomies.subcategories.push(String(item.subcategoryId));
+      // Merge direct FK into audiences for uniform matching
+      if (itemTaxonomies.directCategory) itemTaxonomies.categories.push(itemTaxonomies.directCategory);
+      if (itemTaxonomies.directSubcategory) itemTaxonomies.subcategories.push(itemTaxonomies.directSubcategory);
+      if (itemTaxonomies.directSubsubCategory) itemTaxonomies.subsubcategories.push(itemTaxonomies.directSubsubCategory);
 
+      // Deduplicate
       itemTaxonomies.categories = [...new Set(itemTaxonomies.categories)];
       itemTaxonomies.subcategories = [...new Set(itemTaxonomies.subcategories)];
       itemTaxonomies.subsubcategories = [...new Set(itemTaxonomies.subsubcategories)];
       itemTaxonomies.identities = [...new Set(itemTaxonomies.identities)];
 
-      const REQUIRED_FACTORS = 3;
+      // Base weights (standard + identity + location)
       const WEIGHTS = {
         category: 25,
         subcategory: 30,
@@ -1575,14 +1798,32 @@ exports.getFeed = async (req, res) => {
         location: 10,
       };
 
+      // Additional weights (only applied when respective filters are provided and fields exist)
+      const GENERAL_WEIGHTS = {
+        category: 10,
+        subcategory: 12,
+        subsubcategory: 8,
+      };
+      const INDUSTRY_WEIGHTS = {
+        category: 15,
+        subcategory: 10,
+        subsubcategory: 8,
+      };
+
+      const REQUIRED_FACTORS = 3;
+
       let totalScore = 0;
       let matchedFactors = 0;
 
+      // Standard category match: user interests + selected audience filters
       const allUserCategoryIds = [...new Set([...userDefaults.interestCategoryIds, ...effAudienceCategoryIds])];
       if (allUserCategoryIds.length && itemTaxonomies.categories.length) {
         const catMatches = itemTaxonomies.categories.filter((id) => allUserCategoryIds.includes(id));
         if (catMatches.length) {
-          const pct = Math.min(1, catMatches.length / Math.max(allUserCategoryIds.length, itemTaxonomies.categories.length));
+          const pct = Math.min(
+            1,
+            catMatches.length / Math.max(allUserCategoryIds.length, itemTaxonomies.categories.length)
+          );
           totalScore += WEIGHTS.category * pct;
           matchedFactors++;
         }
@@ -1592,32 +1833,45 @@ exports.getFeed = async (req, res) => {
       if (allUserSubcategoryIds.length && itemTaxonomies.subcategories.length) {
         const subMatches = itemTaxonomies.subcategories.filter((id) => allUserSubcategoryIds.includes(id));
         if (subMatches.length) {
-          const pct = Math.min(1, subMatches.length / Math.max(allUserSubcategoryIds.length, itemTaxonomies.subcategories.length));
+          const pct = Math.min(
+            1,
+            subMatches.length / Math.max(allUserSubcategoryIds.length, itemTaxonomies.subcategories.length)
+          );
           totalScore += WEIGHTS.subcategory * pct;
           matchedFactors++;
         }
       }
 
-      const allUserSubsubCategoryIds = [...new Set([...userDefaults.interestSubsubCategoryIds, ...effAudienceSubsubCategoryIds])];
+      const allUserSubsubCategoryIds = [
+        ...new Set([...userDefaults.interestSubsubCategoryIds, ...effAudienceSubsubCategoryIds]),
+      ];
       if (allUserSubsubCategoryIds.length && itemTaxonomies.subsubcategories.length) {
         const xMatches = itemTaxonomies.subsubcategories.filter((id) => allUserSubsubCategoryIds.includes(id));
         if (xMatches.length) {
-          const pct = Math.min(1, xMatches.length / Math.max(allUserSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length));
+          const pct = Math.min(
+            1,
+            xMatches.length / Math.max(allUserSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length)
+          );
           totalScore += WEIGHTS.subsubcategory * pct;
           matchedFactors++;
         }
       }
 
+      // Identity match
       const allUserIdentityIds = [...new Set([...userDefaults.interestIdentityIds, ...effAudienceIdentityIds])];
       if (allUserIdentityIds.length && itemTaxonomies.identities.length) {
         const idMatches = itemTaxonomies.identities.filter((id) => allUserIdentityIds.includes(id));
         if (idMatches.length) {
-          const pct = Math.min(1, idMatches.length / Math.max(allUserIdentityIds.length, itemTaxonomies.identities.length));
+          const pct = Math.min(
+            1,
+            idMatches.length / Math.max(allUserIdentityIds.length, itemTaxonomies.identities.length)
+          );
           totalScore += WEIGHTS.identity * pct;
           matchedFactors++;
         }
       }
 
+      // Location match
       const itemCity = (item.city || item.location || "").toLowerCase();
       if (userDefaults.city && itemCity && itemCity === userDefaults.city.toLowerCase()) {
         totalScore += WEIGHTS.location * 0.6;
@@ -1635,14 +1889,98 @@ exports.getFeed = async (req, res) => {
         matchedFactors++;
       }
 
+      // General taxonomy match: considered only when general filters are provided (so we don't bias items arbitrarily)
+      if (Array.isArray(effGeneralCategoryIds) && effGeneralCategoryIds.length && itemTaxonomies.generalCategory) {
+        if (effGeneralCategoryIds.map(String).includes(itemTaxonomies.generalCategory)) {
+          totalScore += GENERAL_WEIGHTS.category;
+          matchedFactors++;
+        }
+      }
+      if (
+        Array.isArray(effGeneralSubcategoryIds) &&
+        effGeneralSubcategoryIds.length &&
+        itemTaxonomies.generalSubcategory
+      ) {
+        if (effGeneralSubcategoryIds.map(String).includes(itemTaxonomies.generalSubcategory)) {
+          totalScore += GENERAL_WEIGHTS.subcategory;
+          matchedFactors++;
+        }
+      }
+      if (
+        Array.isArray(effGeneralSubsubCategoryIds) &&
+        effGeneralSubsubCategoryIds.length &&
+        itemTaxonomies.generalSubsubCategory
+      ) {
+        if (effGeneralSubsubCategoryIds.map(String).includes(itemTaxonomies.generalSubsubCategory)) {
+          totalScore += GENERAL_WEIGHTS.subsubcategory;
+          matchedFactors++;
+        }
+      }
+
+      // Industry taxonomy match: considered only when industry filters are provided (category-level)
+      if (Array.isArray(effIndustryIds) && effIndustryIds.length && itemTaxonomies.industryCategory) {
+        if (effIndustryIds.map(String).includes(itemTaxonomies.industryCategory)) {
+          totalScore += INDUSTRY_WEIGHTS.category;
+          matchedFactors++;
+        }
+      }
+
+      // Adjust for sparse matches
       if (matchedFactors < REQUIRED_FACTORS) {
         const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
         totalScore = totalScore * scalingFactor;
       }
 
+      // Clamp
       return Math.max(20, Math.min(100, Math.round(totalScore)));
     };
-
+  
+    const mapNeed = (n) => {
+      const needData = {
+        kind: "need",
+        id: n.id,
+        title: n.title,
+        description: n.description,
+        budget: n.budget,
+        urgency: n.urgency,
+        location: n.location,
+        categoryId: n.generalCategoryId ? String(n.generalCategoryId) : "",
+        categoryName: n.generalCategory?.name || "",
+        subcategoryId: n.generalSubcategoryId ? String(n.generalSubcategoryId) : "",
+        subcategoryName: n.generalSubcategory?.name || "",
+        subsubCategoryId: n.generalSubsubCategoryId ? String(n.generalSubsubCategoryId) : "",
+        subsubCategoryName: n.generalSubsubCategory?.name || "",
+        city: n.city,
+        relatedEntityType:n.relatedEntityType,
+        country: n.country,
+        createdAt: n.createdAt,
+        timeAgo: timeAgo(n.createdAt),
+        userId: n.userId || null,
+        userName: n.user?.name || null,
+        tags:n.criteria,
+        userAvatarUrl: n.user?.avatarUrl || n.user?.profile?.avatarUrl || null,
+        attachments: n.attachments
+          ? typeof n.attachments === "string"
+            ? JSON.parse(n.attachments || "[]")
+            : Array.isArray(n.attachments)
+            ? n.attachments
+            : []
+          : [],
+        audienceCategories: (n.audienceCategories || []).map((c) => ({ id: String(c.id), name: c.name })),
+        audienceSubcategories: (n.audienceSubcategories || []).map((s) => ({ id: String(s.id), name: s.name })),
+        audienceSubsubs: (n.audienceSubsubs || []).map((s) => ({ id: String(s.id), name: s.name })),
+        audienceIdentities: (n.audienceIdentities || []).map((i) => ({ id: String(i.id), name: i.name })),
+      };
+  
+      if (currentUserId) {
+        needData.matchPercentage = calculateItemMatchPercentage(needData);
+      } else {
+        needData.matchPercentage = Math.floor(Math.random() * 80) + 20;
+      }
+  
+      return needData;
+    };
+  
     // ---------------- Enhanced Scoring with Prioritization ----------------
     const interestCatSet = new Set(userDefaults.interestCategoryIds || []);
     const interestSubSet = new Set(userDefaults.interestSubcategoryIds || []);
@@ -1841,6 +2179,20 @@ exports.getFeed = async (req, res) => {
         return res.json({ items: await getConStatusItems(mapped) });
       }
 
+      if (tab === "moments") {
+        const moments = await Moment.findAll({
+          subQuery: false,
+          where: whereCommon,
+          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        const mapped = moments.map(mapMoment);
+        sortByMatchThenRecency(mapped);
+        return res.json({ items: await getConStatusItems(mapped) });
+      }
+
       // ---------- All (no user): build a larger buffer, sort by match %, diversify, then window ----------
       const [
         jobsAll,
@@ -1849,6 +2201,8 @@ exports.getFeed = async (req, res) => {
         productsAll,
         tourismAll,
         fundingAll,
+        needsAll,
+        momentsAll,
       ] = await Promise.all([
         Job.findAll({
           subQuery: false,
@@ -1892,6 +2246,20 @@ exports.getFeed = async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
+        Need.findAll({
+          subQuery: false,
+          where: whereNeed,
+          include: includeNeedRefs,
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
+        Moment.findAll({
+          subQuery: false,
+          where: whereCommon,
+          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: lim * 2,
+        }),
       ]);
 
       const applyTextMatchFlag = (items) => {
@@ -1922,6 +2290,8 @@ exports.getFeed = async (req, res) => {
         ...applyTextMatchFlag(productsAll.map(mapProduct)),
         ...applyTextMatchFlag(tourismAll.map(mapTourism)),
         ...applyTextMatchFlag(fundingAll.map(mapFunding)),
+        ...applyTextMatchFlag(needsAll.map(mapNeed)),
+        ...applyTextMatchFlag(momentsAll.map(mapMoment)),
       ];
 
       // Primary: match %, Secondary: recency
@@ -1946,11 +2316,31 @@ exports.getFeed = async (req, res) => {
         limit: bufferLimit,
       });
 
-      const mapped = events.map(mapEvent);
-      // still compute additional score if needed (not used in ordering now)
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+      // Get needs and moments related to events
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'event' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'event' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedEvents = events.map(mapEvent);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedEvents, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1963,10 +2353,32 @@ exports.getFeed = async (req, res) => {
         limit: bufferLimit,
       });
       const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
-      const mapped = jobs.map((j) => mapJob(j, companyMap));
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+
+      // Get needs and moments related to jobs
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'job' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'job' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedJobs = jobs.map((j) => mapJob(j, companyMap));
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedJobs, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1978,10 +2390,32 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const mapped = services.map(mapService);
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+
+      // Get needs and moments related to services
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'service' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'service' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedServices = services.map(mapService);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedServices, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -1993,10 +2427,32 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const mapped = products.map(mapProduct);
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+
+      // Get needs and moments related to products
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'product' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'product' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedProducts = products.map(mapProduct);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedProducts, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -2008,10 +2464,32 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const mapped = tourism.map(mapTourism);
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+
+      // Get needs and moments related to tourism
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'tourism' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'tourism' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedTourism = tourism.map(mapTourism);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedTourism, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -2023,10 +2501,88 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const mapped = funding.map(mapFunding);
-      mapped.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(mapped);
-      const windowed = mapped.slice(off, off + lim);
+
+      // Get needs and moments related to funding
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'funding' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'funding' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedFunding = funding.map(mapFunding);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedFunding, ...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
+    if (tab === "needs") {
+      const needs = await Need.findAll({
+        subQuery: false,
+        where: whereNeed,
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      // Get moments related to needs
+      const relatedMoments = await Moment.findAll({
+        subQuery: false,
+        where: { ...whereCommon, relatedEntityType: 'need' },
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedNeeds = needs.map(mapNeed);
+      const mappedMoments = relatedMoments.map(mapMoment);
+
+      const combined = [...mappedNeeds, ...mappedMoments];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
+      return res.json({ items: await getConStatusItems(windowed) });
+    }
+
+    if (tab === "moments") {
+      const moments = await Moment.findAll({
+        subQuery: false,
+        where: whereCommon,
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      // Get needs related to moments
+      const relatedNeeds = await Need.findAll({
+        subQuery: false,
+        where: { ...whereNeed, relatedEntityType: 'moment' },
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      });
+
+      const mappedMoments = moments.map(mapMoment);
+      const mappedNeeds = relatedNeeds.map(mapNeed);
+
+      const combined = [...mappedMoments, ...mappedNeeds];
+      combined.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(combined);
+      const windowed = combined.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -2038,6 +2594,8 @@ exports.getFeed = async (req, res) => {
       productsBuf,
       tourismBuf,
       fundingBuf,
+      needsBuf,
+      momentsBuf,
     ] = await Promise.all([
       Job.findAll({
         subQuery: false,
@@ -2081,6 +2639,20 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
+      Need.findAll({
+        subQuery: false,
+        where: whereNeed,
+        include: includeNeedRefs,
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
+      Moment.findAll({
+        subQuery: false,
+        where: whereCommon,
+        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+        order: [["createdAt", "DESC"]],
+        limit: bufferLimit,
+      }),
     ]);
 
     const applyTextMatchFlag = (items) => {
@@ -2111,6 +2683,8 @@ exports.getFeed = async (req, res) => {
       ...applyTextMatchFlag(productsBuf.map(mapProduct)),
       ...applyTextMatchFlag(tourismBuf.map(mapTourism)),
       ...applyTextMatchFlag(fundingBuf.map(mapFunding)),
+      ...applyTextMatchFlag(needsBuf.map(mapNeed)),
+      ...applyTextMatchFlag(momentsBuf.map(mapMoment)),
     ].map((x) => ({ ...x, _score: scoreItem(x) })); // _score kept for debugging/secondary uses
 
     // Primary: match %, Secondary: recency

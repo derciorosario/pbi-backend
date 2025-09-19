@@ -46,6 +46,13 @@ module.exports = (sequelize, DataTypes) => {
       },
       skills:    { type: DataTypes.JSON, allowNull: true, defaultValue: [] }, // ["React", "Node.js"]
       languages: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }, // [{ name, level }]
+
+      // Portfolio/Showcase fields
+      cvBase64: { type: DataTypes.TEXT("long"), allowNull: true }, // CV in base64 format
+      cvFileName: { type: DataTypes.STRING, allowNull: true }, // Original CV filename
+
+      // Job availability status
+      isOpenToWork: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false }, // Indicates if user is open to work opportunities
     },
     { tableName: "profiles", timestamps: true }
   );

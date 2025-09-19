@@ -60,6 +60,9 @@ app.use("/api/onboarding", onboardingRoutes)
 const jobRoutes = require("./src/routes/job.routes");
 app.use("/api/jobs", jobRoutes)
 
+const momentRoutes = require("./src/routes/moment.routes");
+app.use("/api/moments", momentRoutes);
+
 app.use("/api/public", require("./src/routes/public.routes"));
 
 app.use("/api/categories", require("./src/routes/category.routes"));
@@ -78,6 +81,9 @@ app.use("/api/tourism", tourismRoutes);
 
 const fundingRoutes = require("./src/routes/funding.routes");
 app.use("/api/funding", fundingRoutes);
+
+const needRoutes = require("./src/routes/need.routes");
+app.use("/api/needs", needRoutes);
 
 const feedRoutes = require("./src/routes/feed.routes");
 app.use("/api", feedRoutes);
@@ -150,8 +156,8 @@ const seedAll = require("./src/seeds/seedAll");
     console.log("✅ Database connected");
 
     // Auto-sync DB tables (use migrations in production)
-    // Use force sync to recreate tables and avoid constraint issues
-    await sequelize.sync({ force: false, alter: false });
+    // Temporarily disabled to avoid schema issues during development
+    // await sequelize.sync({ force: false, alter: true });
     
     // 👉 Run seeding if needed
     //await seedIfEmpty();
@@ -190,11 +196,11 @@ const seedAll = require("./src/seeds/seedAll");
 
 
 
-  //  require('./scripts/seed.from.singlefile.js')
+   //require('./scripts/seed.from.singlefile.js')
    //require("./scripts/seedGeneralCategories.js");
    //require("./scripts/seedIndustryCategories.js");
 
-  //await seedAll();
+   //await seedAll();
    //
     // Track online users
 

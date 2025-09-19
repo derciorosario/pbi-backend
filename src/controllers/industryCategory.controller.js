@@ -20,7 +20,10 @@ async function getIndustryCategoriesTree(req, res, next) {
         },
       ],
       order: [
-        ["name", "ASC"],
+        // top-level industry categories → respect seed order via createdAt
+        ["createdAt", "ASC"],
+
+        // children alphabetical
         [{ model: IndustrySubcategory, as: "subcategories" }, "name", "ASC"],
         [
           { model: IndustrySubcategory, as: "subcategories" },
@@ -28,7 +31,7 @@ async function getIndustryCategoriesTree(req, res, next) {
           "name",
           "ASC",
         ],
-      ],
+      ]
     });
 
     res.json({

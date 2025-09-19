@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       // Basic info
       title: { type: DataTypes.STRING(180), allowNull: false },
       serviceType: { 
-        type: DataTypes.ENUM("Consulting", "Freelance Work", "Product/Service"), 
+        type: DataTypes.ENUM("Consulting", "Freelance Work", "Managed Services"), 
         allowNull: false,
         defaultValue: "Consulting"
       },
