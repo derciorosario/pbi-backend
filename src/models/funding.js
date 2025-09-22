@@ -50,6 +50,11 @@ module.exports = (sequelize, DataTypes) => {
       tags: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
       links: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
       images: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
+
+      moderation_status: {
+        type: DataTypes.ENUM("approved", "reported", "under_review", "removed", "suspended"),
+        defaultValue: "approved"
+      },
     },
     {
       tableName: "funding",

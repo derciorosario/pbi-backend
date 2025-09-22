@@ -3,6 +3,7 @@ const {
   sequelize,
   User,
   Profile,
+  UserSettings,
   WorkSample,
   Identity,
   Category,
@@ -23,9 +24,121 @@ const {
   UserIndustryCategory,
   UserIndustrySubcategory,
   UserIndustrySubsubCategory,
+  CompanyRepresentative,
+  // Applications and registrations
+  Job,
+  JobApplication,
+  Event,
+  EventRegistration,
+  // Audience associations
+  JobIdentity,
+  JobCategory,
+  JobSubcategory,
+  JobSubsubCategory,
+  EventIdentity,
+  EventCategory,
+  EventSubcategory,
+  EventSubsubCategory,
 } = require("../models");
+const IndustrySubcategory = require("../models/IndustrySubcategory");
+const IndustrySubsubCategory = require("../models/IndustrySubsubCategory");
 
 const { computeProfileProgress } = require("../utils/profileProgress");
+
+/**
+ * Calculate similarity score between user profile and job/event requirements
+ * @param {Object} userProfile - User's profile data
+ * @param {Object} entity - Job or Event object with audience associations
+ * @param {string} entityType - 'job' or 'event'
+ * @returns {Object} - Similarity score and matching details
+ */
+function calculateSimilarityScore(userProfile, entity, entityType) {
+  let score = 0;
+  let maxScore = 0;
+  const matches = {
+    identities: [],
+    categories: [],
+    subcategories: [],
+    subsubcategories: [],
+    industries: [],
+  };
+
+  // Helper function to check matches and include names
+  const checkMatches = (userIds, entityItems, matchArray, weight = 1) => {
+    const entityIds = entityItems?.map(item => item.id) || [];
+    const entityMap = new Map(entityItems?.map(item => [item.id, item.name]) || []);
+
+    const matchedIds = userIds.filter(id => entityIds.includes(id));
+    if (matchedIds.length > 0) {
+      score += matchedIds.length * weight;
+      matchedIds.forEach(id => {
+        matchArray.push({
+          id,
+          name: entityMap.get(id) || 'Unknown'
+        });
+      });
+    }
+    maxScore += Math.min(userIds.length, entityIds.length) * weight;
+  };
+
+  // Check identities
+  checkMatches(userProfile.doIdentityIds || [], entity.audienceIdentities, matches.identities, 4);
+
+  // Check categories
+  checkMatches(userProfile.doCategoryIds || [], entity.audienceCategories, matches.categories, 3);
+
+  // Check subcategories
+  checkMatches(userProfile.doSubcategoryIds || [], entity.audienceSubcategories, matches.subcategories, 2);
+
+  // Check subsubcategories
+  checkMatches(userProfile.doSubsubCategoryIds || [], entity.audienceSubsubs, matches.subsubcategories, 1);
+
+  // Check industries (for jobs only, events don't have industry fields)
+  const industryMatches = [];
+  if (entityType === 'job') {
+    if (entity.industryCategoryId && (userProfile.industryCategoryIds || []).includes(entity.industryCategoryId)) {
+      score += 2;
+      industryMatches.push({
+        id: entity.industryCategoryId,
+        name: entity.industryCategory?.name || 'Unknown Industry Category',
+        type: 'category'
+      });
+      maxScore += 2;
+    }
+
+    if (entity.industrySubcategoryId && (userProfile.industrySubcategoryIds || []).includes(entity.industrySubcategoryId)) {
+      score += 1.5;
+      industryMatches.push({
+        id: entity.industrySubcategoryId,
+        name: entity.industrySubcategory?.name || 'Unknown Industry Subcategory',
+        type: 'subcategory'
+      });
+      maxScore += 1.5;
+    }
+
+    if (entity.industrySubsubCategoryId && (userProfile.industrySubsubCategoryIds || []).includes(entity.industrySubsubCategoryId)) {
+      score += 1;
+      industryMatches.push({
+        id: entity.industrySubsubCategoryId,
+        name: entity.industrySubsubCategory?.name || 'Unknown Industry Subsubcategory',
+        type: 'subsubcategory'
+      });
+      maxScore += 1;
+    }
+  }
+
+  matches.industries = industryMatches;
+
+  // Calculate percentage
+  const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+  return {
+    score,
+    maxScore,
+    percentage,
+    matches,
+  };
+}
 
 /* Utils */
 function arr(val) {
@@ -64,11 +177,35 @@ async function getMe(req, res, next) {
     if (!userId) return res.status(401).json({ message: "Unauthenticated" });
 
     const user = await User.findByPk(userId, {
-      attributes: [
-        "id","name","email","phone",
-        "country","countryOfResidence","city","accountType","nationality","avatarUrl"
+      attributes: {
+        exclude: ["passwordHash"]
+      },
+         include: [
+        {
+          model: CompanyRepresentative,
+          as: "representativeOf",   // 👈 companies this user represents
+          include: [
+            {
+              model: User,
+              as: "company",        // 👈 must match CompanyRepresentative.belongsTo(User, { as: "company" })
+              attributes: ["id", "name", "email", "accountType", "avatarUrl"],
+            },
+          ],
+        },
+        {
+          model: CompanyRepresentative,
+          as: "companyRepresentatives", // 👈 representatives of this user’s company
+          include: [
+            {
+              model: User,
+              as: "representative", // 👈 must match CompanyRepresentative.belongsTo(User, { as: "representative" })
+              attributes: ["id", "name", "email", "accountType", "avatarUrl"],
+            },
+          ],
+        },
       ],
     });
+
     if (!user) return res.status(401).json({ message: "User not found" });
 
     const profile = await ensureProfile(userId);
@@ -77,6 +214,7 @@ async function getMe(req, res, next) {
       doIdentRows, doCatRows, doSubRows, doXRows,
       wantIdentRows, wantCatRows, wantSubRows, wantXRows,
       industryCatRows, industrySubRows, industryXRows,
+      userSettings,
     ] = await Promise.all([
       UserIdentity.findAll({ where: { userId }, attributes: ["identityId"] }),
       UserCategory.findAll({ where: { userId }, attributes: ["categoryId"] }),
@@ -91,6 +229,22 @@ async function getMe(req, res, next) {
       UserIndustryCategory.findAll({ where: { userId }, attributes: ["industryCategoryId"] }),
       UserIndustrySubcategory.findAll({ where: { userId }, attributes: ["industrySubcategoryId"] }),
       UserIndustrySubsubCategory.findAll({ where: { userId }, attributes: ["industrySubsubCategoryId"] }),
+
+      UserSettings.findOrCreate({
+        where: { userId },
+        defaults: {
+          notifications: JSON.stringify({
+            jobOpportunities: { email: true },
+            connectionInvitations: { email: true },
+            connectionRecommendations: { email: true },
+            connectionUpdates: { email: true },
+            messages: { email: true },
+            meetingRequests: { email: true }
+          }),
+          emailFrequency: "daily",
+          hideMainFeed: false
+        }
+      }).then(([settings]) => settings),
     ]);
 
     const counts = {
@@ -106,6 +260,7 @@ async function getMe(req, res, next) {
     return res.json({
       user,
       profile,
+      settings: userSettings,
       counts,
       // FAZ
       doIdentityIds:        doIdentRows.map(r => r.identityId),
@@ -135,8 +290,9 @@ async function updatePersonal(req, res, next) {
     const userId = req.user.sub;
     const {
       name, phone, nationality, country, countryOfResidence, city,
-      birthDate, professionalTitle, about, avatarUrl
+      birthDate, professionalTitle, about, avatarUrl,gender,otherCountries,webpage
     } = req.body;
+
 
     const [user, profile] = await Promise.all([
       User.findByPk(userId),
@@ -145,12 +301,15 @@ async function updatePersonal(req, res, next) {
     if (!user || !profile) return res.status(404).json({ message: "Profile not found" });
 
     if (name !== undefined) user.name = name;
+    if (gender !== undefined) user.gender = gender;
     if (phone !== undefined) user.phone = phone;
     if (nationality !== undefined) user.nationality = nationality;
     if (country !== undefined) user.country = country;
     if (countryOfResidence !== undefined) user.countryOfResidence = countryOfResidence;
     if (city !== undefined) user.city = city;
     if (avatarUrl !== undefined) user.avatarUrl = avatarUrl || null; // avatar principal do User
+    user.otherCountries=otherCountries || []
+    user.webpage=webpage || null
     await user.save();
 
     if (birthDate !== undefined) profile.birthDate = birthDate || null;
@@ -493,6 +652,192 @@ async function deleteWorkSample(req, res, next) {
   } catch (e) { next(e); }
 }
 
+/**
+ * Get job applications for company's jobs with similarity scores
+ */
+async function getJobApplicationsForCompany(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthenticated" });
+
+    // Get all job applications for jobs posted by this company
+    const applications = await JobApplication.findAll({
+      include: [
+        {
+          model: Job,
+          as: "job",
+          where: { postedByUserId: userId },
+          include: [
+            {
+              association: "audienceIdentities",
+              attributes: ["id", "name"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceCategories",
+              attributes: ["id", "name"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceSubcategories",
+              attributes: ["id", "name", "categoryId"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceSubsubs",
+              attributes: ["id", "name", "subcategoryId"],
+              through: { attributes: [] },
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "applicant",
+          attributes: ["id", "name", "email", "avatarUrl"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Calculate similarity scores for each application
+    const applicationsWithScores = await Promise.all(applications.map(async (app) => {
+      // Get applicant's profile data
+      const [
+        doIdentRows, doCatRows, doSubRows, doXRows,
+        industryCatRows, industrySubRows, industryXRows,
+      ] = await Promise.all([
+        UserIdentity.findAll({ where: { userId: app.applicant.id }, attributes: ["identityId"] }),
+        UserCategory.findAll({ where: { userId: app.applicant.id }, attributes: ["categoryId"] }),
+        UserSubcategory.findAll({ where: { userId: app.applicant.id }, attributes: ["subcategoryId"] }),
+        UserSubsubCategory.findAll({ where: { userId: app.applicant.id }, attributes: ["subsubCategoryId"] }),
+        UserIndustryCategory.findAll({ where: { userId: app.applicant.id }, attributes: ["industryCategoryId"] }),
+        UserIndustrySubcategory.findAll({ where: { userId: app.applicant.id }, attributes: ["industrySubcategoryId"] }),
+        UserIndustrySubsubCategory.findAll({ where: { userId: app.applicant.id }, attributes: ["industrySubsubCategoryId"] }),
+      ]);
+
+      const applicantProfile = {
+        doIdentityIds: doIdentRows.map(r => r.identityId),
+        doCategoryIds: doCatRows.map(r => r.categoryId),
+        doSubcategoryIds: doSubRows.map(r => r.subcategoryId),
+        doSubsubCategoryIds: doXRows.map(r => r.subsubCategoryId),
+        industryCategoryIds: industryCatRows.map(r => r.industryCategoryId),
+        industrySubcategoryIds: industrySubRows.map(r => r.industrySubcategoryId),
+        industrySubsubCategoryIds: industryXRows.map(r => r.industrySubsubCategoryId),
+      };
+
+      const similarity = calculateSimilarityScore(applicantProfile, app.job, "job");
+      return {
+        ...app.toJSON(),
+        similarityScore: similarity.percentage,
+        similarity,
+      };
+    }));
+
+    // Sort by similarity score descending
+    applicationsWithScores.sort((a, b) => b.similarityScore - a.similarityScore);
+
+    return res.json({
+      applications: applicationsWithScores,
+      total: applicationsWithScores.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
+/**
+ * Get event registrations for company's events with similarity scores
+ */
+async function getEventRegistrationsForCompany(req, res, next) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ message: "Unauthenticated" });
+
+    // Get all event registrations for events organized by this company
+    const registrations = await EventRegistration.findAll({
+      include: [
+        {
+          model: Event,
+          as: "event",
+          where: { organizerUserId: userId },
+          include: [
+            {
+              association: "audienceIdentities",
+              attributes: ["id", "name"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceCategories",
+              attributes: ["id", "name"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceSubcategories",
+              attributes: ["id", "name", "categoryId"],
+              through: { attributes: [] },
+            },
+            {
+              association: "audienceSubsubs",
+              attributes: ["id", "name", "subcategoryId"],
+              through: { attributes: [] },
+            },
+          ],
+        },
+        {
+          model: User,
+          as: "registrant",
+          attributes: ["id", "name", "email", "avatarUrl"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Calculate similarity scores for each registration
+    const registrationsWithScores = await Promise.all(registrations.map(async (reg) => {
+      // Get registrant's profile data
+      const [
+        doIdentRows, doCatRows, doSubRows, doXRows,
+        industryCatRows, industrySubRows, industryXRows,
+      ] = await Promise.all([
+        UserIdentity.findAll({ where: { userId: reg.registrant.id }, attributes: ["identityId"] }),
+        UserCategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["categoryId"] }),
+        UserSubcategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["subcategoryId"] }),
+        UserSubsubCategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["subsubCategoryId"] }),
+        UserIndustryCategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["industryCategoryId"] }),
+        UserIndustrySubcategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["industrySubcategoryId"] }),
+        UserIndustrySubsubCategory.findAll({ where: { userId: reg.registrant.id }, attributes: ["industrySubsubCategoryId"] }),
+      ]);
+
+      const registrantProfile = {
+        doIdentityIds: doIdentRows.map(r => r.identityId),
+        doCategoryIds: doCatRows.map(r => r.categoryId),
+        doSubcategoryIds: doSubRows.map(r => r.subcategoryId),
+        doSubsubCategoryIds: doXRows.map(r => r.subsubCategoryId),
+        industryCategoryIds: industryCatRows.map(r => r.industryCategoryId),
+        industrySubcategoryIds: industrySubRows.map(r => r.industrySubcategoryId),
+        industrySubsubCategoryIds: industryXRows.map(r => r.industrySubsubCategoryId),
+      };
+
+      const similarity = calculateSimilarityScore(registrantProfile, reg.event, "event");
+      return {
+        ...reg.toJSON(),
+        similarityScore: similarity.percentage,
+        similarity,
+      };
+    }));
+
+    // Sort by similarity score descending
+    registrationsWithScores.sort((a, b) => b.similarityScore - a.similarityScore);
+
+    return res.json({
+      registrations: registrationsWithScores,
+      total: registrationsWithScores.length,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 module.exports = {
   getMe,
   updatePersonal,
@@ -506,4 +851,7 @@ module.exports = {
   updateDoSelections,
   updateInterestSelections,
   updateIndustrySelections,
+  getJobApplicationsForCompany,
+  getEventRegistrationsForCompany,
 };
+

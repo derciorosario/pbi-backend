@@ -1,5 +1,5 @@
 const { Job, Category, Subcategory, SubsubCategory } = require("../models");
-const { toIdArray, validateAudienceHierarchy, setJobAudience } = require("./_jobAudienceHelpers");
+const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setJobAudience } = require("./_jobAudienceHelpers");
 
 exports.createJob = async (req, res) => {
   try {
@@ -43,6 +43,9 @@ exports.createJob = async (req, res) => {
     const subcategoryIds = toIdArray(_subcategoryIds);
     const subsubCategoryIds = toIdArray(_subsubCategoryIds);
 
+    // Normalize identity names to IDs
+    const normalizedIdentityIds = await normalizeIdentityIds(identityIds);
+
     // For backward compatibility, keep single categoryId/subcategoryId required as before.
     // If not provided, pick the first from arrays (if present).
     const primaryCategoryId = categoryId || categoryIds[0];
@@ -79,9 +82,9 @@ exports.createJob = async (req, res) => {
 
     // attach audience sets (include the primary ones if arrays were empty)
 
-   // console.log({identityIds,categoryIds,subcategoryIds,subsubCategoryIds})
+   // console.log({normalizedIdentityIds,categoryIds,subcategoryIds,subsubCategoryIds})
     await setJobAudience(job, {
-      identityIds,
+      identityIds: normalizedIdentityIds,
       categoryIds: categoryIds.length ? categoryIds : [primaryCategoryId],
       subcategoryIds: subcategoryIds.length ? subcategoryIds : (primarySubcategoryId ? [primarySubcategoryId] : []),
       subsubCategoryIds,
@@ -159,6 +162,9 @@ exports.updateJob = async (req, res) => {
     const subcategoryIds     = data.subcategoryIds     !== undefined ? toIdArray(data.subcategoryIds)     : null;
     const subsubCategoryIds  = data.subsubCategoryIds  !== undefined ? toIdArray(data.subsubCategoryIds)  : null;
 
+    // Normalize identity names to IDs if provided
+    const normalizedIdentityIds = identityIds ? await normalizeIdentityIds(identityIds) : null;
+
     // Validate hierarchy if any of the arrays was provided
     if (categoryIds || subcategoryIds || subsubCategoryIds) {
       await validateAudienceHierarchy({
@@ -172,7 +178,7 @@ exports.updateJob = async (req, res) => {
 
     // Update audience sets (only those provided)
     await setJobAudience(job, {
-      identityIds: identityIds ?? undefined,
+      identityIds: normalizedIdentityIds ?? undefined,
       categoryIds: categoryIds ?? undefined,
       subcategoryIds: subcategoryIds ?? undefined,
       subsubCategoryIds: subsubCategoryIds ?? undefined,

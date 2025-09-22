@@ -346,9 +346,8 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Accessories",
     generalCategoryName: "Fashion & Apparel",
     generalSubcategoryName: "Bags",
-    industryCategoryName: "Manufacturing & Construction",
-    industrySubcategoryName: "Manufacturing",
-    industrySubsubCategoryName: "Textiles",
+    industryCategoryName: "Manufacturing",
+    industrySubcategoryName: "Textiles & Apparel",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -359,7 +358,7 @@ const PRODUCT_SEEDS = [
       subsubcategories: [
         "Trade > Fashion > Accessories"
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses"]
     }
   },
   {
@@ -378,9 +377,8 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Textiles",
     generalCategoryName: "Fashion & Apparel",
     generalSubcategoryName: "Textiles",
-    industryCategoryName: "Manufacturing & Construction",
-    industrySubcategoryName: "Manufacturing",
-    industrySubsubCategoryName: "Textiles",
+    industryCategoryName: "Manufacturing",
+    industrySubcategoryName: "Textiles & Apparel",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -388,7 +386,7 @@ const PRODUCT_SEEDS = [
         "Fashion & Apparel > Textiles",
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneur (Startups)", "Creative & Artist"]
+      identities: ["Entrepreneurs", "Creative & Artist"]
     }
   },
   {
@@ -407,9 +405,8 @@ const PRODUCT_SEEDS = [
     subcategoryName: "Gadgets & Accessories",
     generalCategoryName: "Electronics & Technology",
     generalSubcategoryName: "Smart Home Devices",
-    industryCategoryName: "Knowledge & Technology",
-    industrySubcategoryName: "Information Technology",
-    industrySubsubCategoryName: "Hardware Manufacturing",
+    industryCategoryName: "Information & Communication Technology (ICT)",
+    industrySubcategoryName: "IT Services & Cloud Solutions",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Technology", "Energy"],
@@ -417,7 +414,7 @@ const PRODUCT_SEEDS = [
         "Technology > Hardware & Devices",
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneur (Startups)", "Students", "Professional"]
+      identities: ["Entrepreneurs", "Students", "Professionals"]
     }
   },
   {
@@ -434,9 +431,8 @@ const PRODUCT_SEEDS = [
     sellerEmail: "afri-agro@54links.com",
     categoryName: "Health & Beauty",
     subcategoryName: "Skincare",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Healthcare & Pharmaceuticals",
-    industrySubsubCategoryName: "Pharmaceutical Manufacturing",
+    industryCategoryName: "Healthcare & Life Sciences",
+    industrySubcategoryName: "Pharmaceuticals & Biotech",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Health & Beauty", "Trade"],
@@ -446,7 +442,7 @@ const PRODUCT_SEEDS = [
       subsubcategories: [
         "Trade > Beauty & Cosmetics > Skincare"
       ],
-      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs"]
+      identities: ["Entrepreneurs", "Social Entrepreneurs"]
     }
   },
   {
@@ -463,8 +459,8 @@ const PRODUCT_SEEDS = [
     sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Home & Living",
     subcategoryName: "Home Decor",
-    industryCategoryName: "Manufacturing & Construction",
-    industrySubcategoryName: "Manufacturing",
+    industryCategoryName: "Manufacturing",
+    industrySubcategoryName: "Textiles & Apparel",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Home & Living", "Trade"],
@@ -472,7 +468,7 @@ const PRODUCT_SEEDS = [
         "Home & Living > Home Decor",
         { category: "Trade", subcategory: "Home Goods" }
       ],
-      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist"]
+      identities: ["Entrepreneurs", "Social Entrepreneurs", "Creative & Artist"]
     }
   }
 ];
@@ -510,7 +506,7 @@ const SERVICE_SEEDS = [
         "Technology > Software Development",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Freelancers"]
     }
   },
   {
@@ -532,9 +528,8 @@ const SERVICE_SEEDS = [
     providerEmail: "sa-renew@54links.com",
     categoryName: "Business",
     subcategoryName: "Consulting & Strategy",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Professional Services",
-    industrySubsubCategoryName: "Consulting Services",
+    industryCategoryName: "Financial Services",
+    industrySubcategoryName: "Investment & Capital Markets",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Business", "Service Providers"],
@@ -542,7 +537,7 @@ const SERVICE_SEEDS = [
         "Business > Consulting & Strategy",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Social Entrepreneurs"]
     }
   },
   {
@@ -573,7 +568,7 @@ const SERVICE_SEEDS = [
         "Marketing & Advertising > Branding & Creative Strategy",
         { category: "Service Providers", subcategory: "Creative & Design Services" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Creative & Artist"]
     }
   },
   {
@@ -595,7 +590,7 @@ const SERVICE_SEEDS = [
     providerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Farming & Crop Production",
-    industryCategoryName: "Agriculture",
+    industryCategoryName: "Agriculture & Agribusiness",
     industrySubcategoryName: "Crop Production",
     createdAtDaysAgo: 5,
     audience: {
@@ -604,7 +599,7 @@ const SERVICE_SEEDS = [
         "Agriculture > Crop Production",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Government Officials"]
     }
   },
   {
@@ -626,8 +621,8 @@ const SERVICE_SEEDS = [
     providerEmail: "naija-fintech@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Media, Entertainment & Sports",
+    industryCategoryName: "Creative & Cultural Industries",
+    industrySubcategoryName: "Media & Broadcasting",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Marketing & Advertising", "Service Providers"],
@@ -635,7 +630,7 @@ const SERVICE_SEEDS = [
         "Marketing & Advertising > Digital Marketing",
         { category: "Service Providers", subcategory: "Marketing & Advertising" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Freelancers"]
     }
   }
 ];
@@ -662,15 +657,15 @@ const TOURISM_SEEDS = [
     generalCategoryName: "Tourist Attractions",
     generalSubcategoryName: "Natural Attractions",
     generalSubsubCategoryName: "National Parks & Reserves",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Hospitality & Tourism",
+    industryCategoryName: "Hospitality & Tourism",
+    industrySubcategoryName: "Hotels & Resorts",
     createdAtDaysAgo: 4,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Wildlife & Safari"
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Investors"]
     }
   },
   {
@@ -690,16 +685,15 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Food & Wine",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Hospitality & Tourism",
-    industrySubsubCategoryName: "Tour Operators",
+    industryCategoryName: "Hospitality & Tourism",
+    industrySubcategoryName: "Travel Agencies",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Food & Wine"
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Creative & Artist"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Creative & Artist"]
     }
   },
   {
@@ -719,15 +713,15 @@ const TOURISM_SEEDS = [
     authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Cultural Tourism",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Hospitality & Tourism",
+    industryCategoryName: "Hospitality & Tourism",
+    industrySubcategoryName: "Hotels & Resorts",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Cultural Tourism"
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs", "Creative & Artist"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Social Entrepreneurs", "Creative & Artist"]
     }
   },
   {
@@ -747,15 +741,15 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Natural Wonders",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Hospitality & Tourism",
+    industryCategoryName: "Hospitality & Tourism",
+    industrySubcategoryName: "Hotels & Resorts",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Natural Wonders"
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Students"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Students"]
     }
   },
   {
@@ -775,8 +769,8 @@ const TOURISM_SEEDS = [
     authorEmail: "naija-fintech@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Adventure Tourism",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Hospitality & Tourism",
+    industryCategoryName: "Hospitality & Tourism",
+    industrySubcategoryName: "Hotels & Resorts",
     industrySubsubCategoryName: "Tour Operators",
     createdAtDaysAgo: 9,
     audience: {
@@ -784,7 +778,7 @@ const TOURISM_SEEDS = [
       subcategories: [
         "Tourism & Travel > Adventure Tourism"
       ],
-      identities: ["Entrepreneur (Startups)", "Professional", "Students", "Sports Professionals"]
+      identities: ["Entrepreneurs", "Professionals", "Students", "Sports Professionals"]
     }
   }
 ];
@@ -815,7 +809,7 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
-    generalCategoryName: "Grants & Funding",
+    generalCategoryName: "Grants",
     generalSubcategoryName: "Innovation & Startup Funding",
     generalSubsubCategoryName: "Seed Funding",
     industryCategoryName: "Agriculture",
@@ -827,7 +821,7 @@ const FUNDING_SEEDS = [
         "Agriculture > Crop Production",
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Social Entrepreneurs"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Social Entrepreneurs"]
     }
   },
   {
@@ -854,16 +848,15 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "naija-fintech@54links.com",
     categoryName: "Healthcare",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Healthcare & Pharmaceuticals",
-    industrySubsubCategoryName: "Hospitals & Clinics",
+    industryCategoryName: "Healthcare & Life Sciences",
+    industrySubcategoryName: "Hospitals & Clinics",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Healthcare"],
       subcategories: [
         { category: "Healthcare", subcategory: "Health & Wellbeing" }
       ],
-      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
+      identities: ["Entrepreneurs", "Social Entrepreneurs", "Investors", "Government Officials"]
     }
   },
   {
@@ -891,16 +884,15 @@ const FUNDING_SEEDS = [
     creatorEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
-    industryCategoryName: "Oil & Gas",
-    industrySubcategoryName: "Alternative & Emerging Segments",
-    industrySubsubCategoryName: "Renewable Integration with Oil & Gas",
+    industryCategoryName: "Energy & Utilities",
+    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy"],
       subcategories: [
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Government Officials"]
     }
   },
   {
@@ -936,7 +928,7 @@ const FUNDING_SEEDS = [
         { category: "Education", subcategory: "Education & Skill Development" },
         { category: "Technology", subcategory: "Software Development" }
       ],
-      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
+      identities: ["Entrepreneurs", "Social Entrepreneurs", "Investors", "Government Officials"]
     }
   },
   {
@@ -963,9 +955,8 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
-    industryCategoryName: "Manufacturing & Construction",
-    industrySubcategoryName: "Manufacturing",
-    industrySubsubCategoryName: "Textiles",
+    industryCategoryName: "Manufacturing",
+    industrySubcategoryName: "Textiles & Apparel",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -973,7 +964,7 @@ const FUNDING_SEEDS = [
         { category: "Fashion & Apparel", subcategory: "Textiles" },
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist", "Investor"]
+      identities: ["Entrepreneurs", "Social Entrepreneurs", "Creative & Artist", "Investors"]
     }
   }
 ];
@@ -1016,7 +1007,7 @@ const EVENT_SEEDS = [
         { category: "Technology", subcategory: "Software Development" },
         { category: "Business", subcategory: "Entrepreneurship" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Professional"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Professionals"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/professional-team-analyzing-archived-data-financial-file-meeting_482257-114412.jpg"
   },
@@ -1054,7 +1045,7 @@ const EVENT_SEEDS = [
         { category: "Agriculture", subcategory: "Crop Production" },
         { category: "Technology", subcategory: "AgriTech" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials", "Investor"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Government Officials", "Investors"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
   },
@@ -1083,8 +1074,8 @@ const EVENT_SEEDS = [
     organizerEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
-    industryCategoryName: "Oil & Gas",
-    industrySubcategoryName: "Alternative & Emerging Segments",
+    industryCategoryName: "Energy & Utilities",
+    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
     createdAtDaysAgo: 90,
     audience: {
       categories: ["Energy", "Business"],
@@ -1092,7 +1083,7 @@ const EVENT_SEEDS = [
         { category: "Energy", subcategory: "Renewable Energy" },
         { category: "Business", subcategory: "Investment" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Government Officials"]
     },
     coverImageUrl: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
   },
@@ -1121,9 +1112,8 @@ const EVENT_SEEDS = [
     organizerEmail: "naija-fintech@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Fashion Events",
-    industryCategoryName: "Manufacturing & Construction",
-    industrySubcategoryName: "Manufacturing",
-    industrySubsubCategoryName: "Textiles",
+    industryCategoryName: "Manufacturing",
+    industrySubcategoryName: "Textiles & Apparel",
     createdAtDaysAgo: 120,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -1131,7 +1121,7 @@ const EVENT_SEEDS = [
         { category: "Fashion & Apparel", subcategory: "Textiles" },
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist", "Investor"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Creative & Artist", "Investors"]
     },
     coverImageUrl: "https://img.freepik.com/stock-photo/representations-user-experience-interface-design_23-2150038909.jpg"
   },
@@ -1160,8 +1150,8 @@ const EVENT_SEEDS = [
     organizerEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Healthcare & Pharmaceuticals",
+    industryCategoryName: "Healthcare & Life Sciences",
+    industrySubcategoryName: "Hospitals & Clinics",
     createdAtDaysAgo: 100,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1169,7 +1159,7 @@ const EVENT_SEEDS = [
         { category: "Healthcare", subcategory: "Health & Wellbeing" },
         { category: "Technology", subcategory: "Health Tech" }
       ],
-      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
+      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Investors"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
   }
@@ -1194,9 +1184,8 @@ const JOB_SEEDS = [
     postedByEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Software Development",
-    industryCategoryName: "Knowledge & Technology",
-    industrySubcategoryName: "Information Technology",
-    industrySubsubCategoryName: "Software Development",
+    industryCategoryName: "Information & Communication Technology (ICT)",
+    industrySubcategoryName: "Software & App Development",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Technology", "Finance"],
@@ -1204,7 +1193,7 @@ const JOB_SEEDS = [
         { category: "Technology", subcategory: "Software Development" },
         { category: "Finance", subcategory: "Financial Technology" }
       ],
-      identities: ["Professional", "Freelancers", "Students"]
+      identities: ["Professionals", "Freelancers", "Students"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/business-executives-participating-business-meeting_107420-63841.jpg"
   },
@@ -1225,8 +1214,8 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Management",
-    industryCategoryName: "Agriculture",
-    industrySubcategoryName: "Agribusiness & Agro-Processing",
+    industryCategoryName: "Agriculture & Agribusiness",
+    industrySubcategoryName: "Agro-processing",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Agriculture", "Project Management"],
@@ -1234,7 +1223,7 @@ const JOB_SEEDS = [
         { category: "Agriculture", subcategory: "Crop Production" },
         { category: "Project Management", subcategory: "Agricultural Projects" }
       ],
-      identities: ["Professional", "Established Entrepreneurs / Businesses", "Government Officials"]
+      identities: ["Professionals", "Business Owners / Businesses", "Government Officials"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
   },
@@ -1255,9 +1244,8 @@ const JOB_SEEDS = [
     postedByEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
-    industryCategoryName: "Oil & Gas",
-    industrySubcategoryName: "Alternative & Emerging Segments",
-    industrySubsubCategoryName: "Renewable Integration with Oil & Gas",
+    industryCategoryName: "Energy & Utilities",
+    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy", "Engineering"],
@@ -1265,7 +1253,7 @@ const JOB_SEEDS = [
         { category: "Energy", subcategory: "Renewable Energy" },
         { category: "Engineering", subcategory: "Electrical Engineering" }
       ],
-      identities: ["Professional", "Students", "Established Entrepreneurs / Businesses"]
+      identities: ["Professionals", "Students", "Business Owners / Businesses"]
     },
     coverImageBase64: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
   },
@@ -1295,7 +1283,7 @@ const JOB_SEEDS = [
         { category: "Marketing & Advertising", subcategory: "Digital Marketing" },
         { category: "Fashion & Apparel", subcategory: "Fashion Marketing" }
       ],
-      identities: ["Professional", "Creative & Artist", "Freelancers"]
+      identities: ["Professionals", "Creative & Artist", "Freelancers"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/representations-user-experience-interface-design_23-2150038909.jpg"
   },
@@ -1316,9 +1304,8 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
-    industryCategoryName: "Services",
-    industrySubcategoryName: "Healthcare & Pharmaceuticals",
-    industrySubsubCategoryName: "Medical Equipment Suppliers",
+    industryCategoryName: "Healthcare & Life Sciences",
+    industrySubcategoryName: "Medical Equipment",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1326,7 +1313,7 @@ const JOB_SEEDS = [
         { category: "Healthcare", subcategory: "Health & Wellbeing" },
         { category: "Technology", subcategory: "Health Tech" }
       ],
-      identities: ["Professional", "Freelancers", "Established Entrepreneurs / Businesses"]
+      identities: ["Professionals", "Freelancers", "Business Owners / Businesses"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
   }

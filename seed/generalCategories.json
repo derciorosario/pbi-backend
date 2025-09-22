@@ -1,58 +1,5 @@
 [
   {
-    "type": "job",
-    "categories": [
-      {
-        "name": "Job Type",
-        "subcategories": [
-          "Full-Time",
-          "Part-Time",
-          "Temporary",
-          "Seasonal",
-          "Internship",
-          "Apprenticeship",
-          "Contract / Freelance"
-        ]
-      },
-      {
-        "name": "By Work Location",
-        "subcategories": ["On-Site", "Remote", "Hybrid", "Field-Based"]
-      },
-      {
-        "name": "By Work Schedule",
-        "subcategories": [
-          "Day Shift",
-          "Night Shift",
-          "Rotational Shifts",
-          "Flexible Hours",
-          "Weekend Jobs",
-          "Overtime / On-Call"
-        ]
-      },
-      {
-        "name": "By Career Level",
-        "subcategories": [
-          "Entry-Level",
-          "Mid-Level",
-          "Senior-Level",
-          "Executive / C-Suite",
-          "Volunteer / Community Work"
-        ]
-      },
-      {
-        "name": "By Payment Type",
-        "subcategories": [
-          "Salaried Jobs",
-          "Hourly Jobs",
-          "Commission-Based",
-          "Stipend-Based",
-          "Equity / Profit-Sharing Roles"
-        ]
-      }
-    ]
-  },
-  
-  {
   "type": "event",
   "categories": [
     {
@@ -706,7 +653,7 @@
   "type": "opportunity",
   "categories": [
     {
-      "name": "Scholarships and Sponsorships",
+      "name": "Scholarships",
       "subcategories": [
         {
           "name": "Undergraduate Scholarships",
@@ -781,7 +728,7 @@
       ]
     },
     {
-      "name": "Grants & Funding",
+      "name": "Grants",
       "subcategories": [
         {
           "name": "Research Grants"
@@ -857,7 +804,7 @@
       ]
     },
     {
-      "name": "Business Opportunities / Investors",
+      "name": "Investment Funds / Investors",
       "subcategories": [
         {
           "name": "Eligibility",

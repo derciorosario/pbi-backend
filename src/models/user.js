@@ -19,9 +19,19 @@ module.exports = (sequelize, DataTypes) => {
       phone: { type: DataTypes.STRING },
       biography: { type: DataTypes.TEXT },
       nationality: { type: DataTypes.STRING },
-      country: { type: DataTypes.STRING, allowNull: true }, 
-      city: { type: DataTypes.STRING, allowNull: true },            // nationality
-      countryOfResidence: { type: DataTypes.STRING, allowNull: true }, 
+      country: { type: DataTypes.STRING, allowNull: true },
+      city: { type: DataTypes.STRING, allowNull: true },
+      countryOfResidence: { type: DataTypes.STRING, allowNull: true },
+
+      // Individual fields
+      gender: {
+        type: DataTypes.ENUM("male", "female", "other", "prefer-not-to-say"),
+        allowNull: true
+      },
+
+      // Company fields
+      otherCountries: { type: DataTypes.JSON, allowNull: true }, // Array of countries
+      webpage: { type: DataTypes.STRING, allowNull: true },
 
       // 🔑 password
       passwordHash: { type: DataTypes.STRING, allowNull: false },
@@ -36,8 +46,8 @@ module.exports = (sequelize, DataTypes) => {
       isVerified: { type: DataTypes.BOOLEAN, defaultValue: false },
 
       provider: { type: DataTypes.ENUM("local", "google"), allowNull: false, defaultValue: "local" },
-      googleId: { type: DataTypes.STRING(64), allowNull: true },
-      avatarUrl: { type: DataTypes.TEXT('long'), allowNull: true},
+       googleId: { type: DataTypes.STRING(64), allowNull: true },
+       avatarUrl: { type: DataTypes.TEXT('long'), allowNull: true},
 
     },
     {
@@ -51,5 +61,7 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
+
+  
   return User;
 };

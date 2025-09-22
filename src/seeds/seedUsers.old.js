@@ -64,7 +64,23 @@ async function ensureCategoriesIfEmpty() {
   const categories = new Set();
   const categorySubcategories = new Map();
 
+  // Process individual identities
   for (const identity of identityCategoryMap.identities || []) {
+    for (const category of identity.categories || []) {
+      categories.add(category.name);
+      
+      if (!categorySubcategories.has(category.name)) {
+        categorySubcategories.set(category.name, new Set());
+      }
+      
+      for (const subcategory of category.subcategories || []) {
+        categorySubcategories.get(category.name).add(subcategory.name);
+      }
+    }
+  }
+
+  // Process company identities
+  for (const identity of identityCategoryMap.company_identities || []) {
     for (const category of identity.categories || []) {
       categories.add(category.name);
       
@@ -103,10 +119,22 @@ async function ensureIdentitiesIfEmpty() {
   const count = await Identity.count();
   if (count > 0) return;
   
-  const identities = identityCategoryMap.identities || [];
-  await Identity.bulkCreate(identities.map(identity => ({ name: identity.name })));
+  // Process individual identities
+  const individualIdentities = identityCategoryMap.identities || [];
+  await Identity.bulkCreate(individualIdentities.map(identity => ({
+    name: identity.name,
+    type: "individual"
+  })));
   
-  console.log(`✅ Seeded ${identities.length} identities (because DB had none).`);
+  // Process company identities
+  const companyIdentities = identityCategoryMap.company_identities || [];
+  await Identity.bulkCreate(companyIdentities.map(identity => ({
+    name: identity.name,
+    type: "company"
+  })));
+  
+  const totalIdentities = individualIdentities.length + companyIdentities.length;
+  console.log(`✅ Seeded ${totalIdentities} identities (${individualIdentities.length} individual, ${companyIdentities.length} company) because DB had none.`);
 }
 
 async function findCategoryIdsByNames(names = []) {
@@ -489,7 +517,7 @@ const BULK_USERS = [
       skills: ["Supply Chain", "Export", "B2B Sales"],
       languages: [{ name: "English", level: "Advanced" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Agriculture", "Commerce & Financial Services"],
     subcategories: [
       { categoryName: "Agriculture", subName: "Agro-Processing" },
@@ -513,7 +541,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Fintech" },
       { categoryName: "Energy", subName: "Renewable Energy" }
     ],
-    identityInterests: ["Investor", "Professional"],
+    identityInterests: ["Investors", "Professionals"],
     goals: ["Find Clients", "Partnerships", "Raise Capital"],
   },
   {
@@ -534,7 +562,7 @@ const BULK_USERS = [
       skills: ["Machine Learning", "AI", "Data Science", "Cloud Computing"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Technology", "Professional Services"],
     subcategories: [
       { categoryName: "Technology", subName: "Artificial Intelligence" },
@@ -557,7 +585,7 @@ const BULK_USERS = [
       { categoryName: "Education", subName: "EdTech" },
       { categoryName: "Health", subName: "Health Tech" }
     ],
-    identityInterests: ["Investor", "Professional"],
+    identityInterests: ["Investors", "Professionals"],
     goals: ["Hire Engineers", "Find Clients", "Raise Capital"],
   },
   {
@@ -578,7 +606,7 @@ const BULK_USERS = [
       skills: ["Solar Energy", "Wind Energy", "Sustainability", "Project Management"],
       languages: [{ name: "English", level: "Advanced" }, { name: "Swahili", level: "Native" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Energy", "Infrastructure & Construction"],
     subcategories: [
       { categoryName: "Energy", subName: "Renewable Energy" },
@@ -601,7 +629,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Hardware & Devices" },
       { categoryName: "Manufacturing", subName: "Machinery & Equipment" }
     ],
-    identityInterests: ["Investor", "Government Officials"],
+    identityInterests: ["Investors", "Government Officials"],
     goals: ["Find Investors", "Partnerships", "Raise Capital"],
   },
   {
@@ -700,7 +728,7 @@ const BULK_USERS = [
       skills: ["React", "Next.js", "Tailwind"],
       languages: [{ name: "English", level: "Advanced" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Technology"],
     subcategories: [{ categoryName: "Technology", subName: "Software Development" }],
     subsubcategories: [
@@ -718,7 +746,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Software Development" },
       { categoryName: "Technology", subName: "Mobile App Developer" }
     ],
-    identityInterests: ["Professional", "Freelancers"],
+    identityInterests: ["Professionals", "Freelancers"],
     goals: ["Job Opportunities", "Mentorship"],
   },
   {
@@ -732,14 +760,14 @@ const BULK_USERS = [
     city: "Cape Town",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Data Scientist",
       about: "Machine learning specialist with focus on NLP and computer vision.",
       experienceLevel: "Senior",
       skills: ["Python", "TensorFlow", "PyTorch", "Computer Vision", "NLP"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Technology"],
     subcategories: [
       { categoryName: "Technology", subName: "Data Science & Analysis" },
@@ -761,7 +789,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Data Science & Analysis" },
       { categoryName: "Health", subName: "Health Tech" }
     ],
-    identityInterests: ["Professional", "Entrepreneur (Startups)"],
+    identityInterests: ["Professionals", "Entrepreneurs"],
     goals: ["Find Clients", "Mentorship", "Partnerships"],
   },
   {
@@ -775,14 +803,14 @@ const BULK_USERS = [
     city: "Casablanca",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Financial Analyst",
       about: "Investment analysis and portfolio management specialist with focus on emerging markets.",
       experienceLevel: "Senior",
       skills: ["Financial Analysis", "Investment Management", "Risk Assessment", "Market Research"],
       languages: [{ name: "Arabic", level: "Native" }, { name: "French", level: "Advanced" }, { name: "English", level: "Advanced" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Commerce & Financial Services"],
     subcategories: [
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets" },
@@ -803,7 +831,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Fintech" },
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets" }
     ],
-    identityInterests: ["Professional", "Investor"],
+    identityInterests: ["Professionals", "Investors"],
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   {
@@ -842,7 +870,7 @@ const BULK_USERS = [
     city: "Casablanca",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Data Analyst",
       about: "Dashboards, SQL pipelines, marketing attribution.",
       experienceLevel: "Mid",
@@ -941,7 +969,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Clean Tech / Green Energy Solutions" },
       { categoryName: "Manufacturing", subName: "Sustainable Manufacturing" }
     ],
-    identityInterests: ["Social Entrepreneurs", "Investor"],
+    identityInterests: ["Social Entrepreneurs", "Investors"],
     goals: ["Find Investors", "Partnerships", "Mentorship"],
   },
   
@@ -982,7 +1010,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Software Development" },
       { categoryName: "Marketing & Advertising", subName: "Branding & Creative Strategy" }
     ],
-    identityInterests: ["Freelancers", "Entrepreneur (Startups)"],
+    identityInterests: ["Freelancers", "Entrepreneurs"],
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   
@@ -1023,7 +1051,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Artificial Intelligence" },
       { categoryName: "Technology", subName: "Software Development" }
     ],
-    identityInterests: ["Students", "Professional"],
+    identityInterests: ["Students", "Professionals"],
     goals: ["Internship", "Mentorship", "Job Opportunities"],
   },
   
@@ -1039,14 +1067,14 @@ const BULK_USERS = [
     city: "Johannesburg",
     accountType: "company",
     profile: {
-      primaryIdentity: "Investor",
+      primaryIdentity: "Investors",
       professionalTitle: "Venture Capital Firm",
       about: "Early-stage investment in African tech startups with focus on fintech, healthtech, and agritech.",
       experienceLevel: "Mid",
       skills: ["Investment Analysis", "Due Diligence", "Portfolio Management", "Startup Mentoring"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Investor"],
+    identities: ["Investors"],
     categories: ["Finance & Fintech", "Technology"],
     subcategories: [
       { categoryName: "Finance & Fintech", subName: "Venture Capital" },
@@ -1068,7 +1096,7 @@ const BULK_USERS = [
       { categoryName: "Health", subName: "Health Tech" },
       { categoryName: "Agriculture", subName: "Agro-Tech" }
     ],
-    identityInterests: ["Investor", "Entrepreneur (Startups)"],
+    identityInterests: ["Investors", "Entrepreneurs"],
     goals: ["Find Investments", "Partnerships", "Mentorship"],
   },
   
@@ -1133,7 +1161,7 @@ const BULK_USERS = [
 // Function to seed users with identities, categories, subcategories, and subsubcategories from identity_category_map.json
 async function seedUsersFromIdentityCategoryMap() {
   try {
-    // Create a sample user for each identity
+    // Create sample users for individual identities
     for (const identity of identityCategoryMap.identities || []) {
       const identityName = identity.name;
       
@@ -1223,7 +1251,100 @@ async function seedUsersFromIdentityCategoryMap() {
         industrySubcategories: [{ categoryName: "Services", subName: "Professional Services" }], // Default industry subcategory
       });
       
-      console.log(`Created sample user for identity: ${identityName}`);
+      console.log(`Created sample user for individual identity: ${identityName}`);
+    }
+    
+    // Create sample users for company identities
+    for (const identity of identityCategoryMap.company_identities || []) {
+      const identityName = identity.name;
+      
+      // Create sample categories, subcategories, and subsubcategories for this identity
+      const sampleCategories = [];
+      const sampleSubcategories = [];
+      const sampleSubsubcategories = [];
+      
+      // Take up to 2 categories for each identity
+      const categoriesToUse = identity.categories.slice(0, 2);
+      
+      for (const category of categoriesToUse) {
+        sampleCategories.push(category.name);
+        
+        // Take up to 2 subcategories for each category
+        const subcategoriesToUse = (category.subcategories || []).slice(0, 2);
+        
+        for (const subcategory of subcategoriesToUse) {
+          sampleSubcategories.push({
+            categoryName: category.name,
+            subName: subcategory.name
+          });
+          
+          // Take up to 2 subsubcategories for each subcategory if they exist
+          if (subcategory.subsubs && subcategory.subsubs.length > 0) {
+            const subsubsToUse = subcategory.subsubs.slice(0, 2);
+            
+            for (const subsubName of subsubsToUse) {
+              sampleSubsubcategories.push({
+                categoryName: category.name,
+                subName: subcategory.name,
+                subsubName: subsubName
+              });
+              console.log(`Adding subsubcategory: ${subsubName} in subcategory ${subcategory.name}`);
+            }
+          } else {
+            // If no subsubs exist, create a default one
+            const defaultSubsubName = `Default ${subcategory.name}`;
+            sampleSubsubcategories.push({
+              categoryName: category.name,
+              subName: subcategory.name,
+              subsubName: defaultSubsubName
+            });
+            console.log(`Adding default subsubcategory: ${defaultSubsubName} in subcategory ${subcategory.name}`);
+          }
+        }
+      }
+      
+      // Create a user for this identity
+      const email = `company-${identityName.toLowerCase().replace(/[^a-z0-9]/g, "-")}@54links.com`;
+      
+      // Check if user already exists
+      const existingUser = await User.findOne({ where: { email } });
+      if (existingUser) {
+        console.log(`User ${email} already exists, skipping...`);
+        continue;
+      }
+      
+      await upsertUserWithProfile({
+        email,
+        password: "Company@123",
+        name: `${identityName} Company`,
+        phone: "+1234567890",
+        nationality: "African",
+        country: "South Africa",
+        countryOfResidence: "South Africa",
+        city: "Johannesburg",
+        accountType: "company",
+        profile: {
+          primaryIdentity: identityName,
+          professionalTitle: `${identityName} Organization`,
+          about: `A sample company with ${identityName} identity.`,
+          experienceLevel: "Mid",
+          skills: ["Sample Skill 1", "Sample Skill 2"],
+          languages: [{ name: "English", level: "Advanced" }],
+        },
+        identities: [identityName],
+        categories: sampleCategories,
+        subcategories: sampleSubcategories,
+        subsubcategories: sampleSubsubcategories,
+        categoryInterests: sampleCategories,
+        subcategoryInterests: sampleSubcategories,
+        subsubcategoryInterests: sampleSubsubcategories,
+        identityInterests: [identityName],
+        goals: identityCategoryMap.goals.slice(0, 3), // Take first 3 goals
+        industryCategories: ["Services"], // Default industry category
+        industrySubcategories: [{ categoryName: "Services", subName: "Professional Services" }], // Default industry subcategory
+      });
+      
+      console.log(`Created sample user for company identity: ${identityName}`);
     }
     
     console.log("✅ Sample users from identity_category_map.json created successfully.");

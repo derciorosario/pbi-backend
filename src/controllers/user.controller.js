@@ -8,7 +8,7 @@ const {
   Goal, UserGoal,
   Job, Event, Service, Product, Tourism, Funding,
   Connection, ConnectionRequest,
-  MeetingRequest
+  MeetingRequest, CompanyStaff
 } = require("../models");
 const { getBlockStatus } = require("../utils/blocking");
 
@@ -45,6 +45,21 @@ exports.getPublicProfile = async (req, res) => {
         { model: UserCategoryInterest, as: "categoryInterests", include: [{ model: Category, as: "category" }] },
         { model: UserSubcategoryInterest, as: "subcategoryInterests", include: [{ model: Subcategory, as: "subcategory" }] },
         { model: UserSubsubCategoryInterest, as: "subsubInterests", include: [{ model: SubsubCategory, as: "subsubCategory" }] },
+        // Include company staff relationships for approved staff members
+        {
+          model: CompanyStaff,
+          as: "staffOf",
+          where: { status: "confirmed" },
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "company",
+              attributes: ["id", "name", "avatarUrl"],
+              include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"], required: false }]
+            }
+          ]
+        },
       ],
     });
 
@@ -196,6 +211,20 @@ exports.getPublicProfile = async (req, res) => {
       primaryIdentity: user.profile?.primaryIdentity,
       memberSince: user.createdAt,
 
+      // Company information for approved staff members
+      companyMemberships: user.staffOf?.map(staff => ({
+        id: staff.id,
+        companyId: staff.companyId,
+        role: staff.role,
+        isMain: staff.isMain,
+        joinedAt: staff.confirmedAt,
+        company: {
+          id: staff.company.id,
+          name: staff.company.name,
+          avatarUrl: staff.company.profile?.avatarUrl || staff.company.avatarUrl,
+        }
+      })) || [],
+
       // Taxonomy
       identities: user.identities?.map(i => i.name) || [],
       categories: user.categories?.map(c => c.name) || [],
@@ -276,7 +305,7 @@ exports.searchUsers = async (req, res, next) => {
           required: false
         }
       ],
-      attributes: ["id", "name", "email", "avatarUrl", "city", "country"],
+      attributes: ["id", "name", "email", "avatarUrl", "city", "country","accountType"],
       limit: 10
     });
     
@@ -287,7 +316,8 @@ exports.searchUsers = async (req, res, next) => {
       avatarUrl: user.profile?.avatarUrl || user.avatarUrl,
       professionalTitle: user.profile?.professionalTitle || null,
       city: user.city || null,
-      country: user.country || null
+      country: user.country || null,
+      accountType:user.accountType
     }));
     
     res.json(formattedUsers);

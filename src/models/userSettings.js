@@ -33,6 +33,24 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 'daily',
     },
+    hideMainFeed: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: 'Whether to hide the main feed content'
+    },
+    connectionsOnly: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: 'Whether to show only posts from connections'
+    },
+    contentType: {
+      type: DataTypes.ENUM('all', 'text', 'images'),
+      allowNull: false,
+      defaultValue: 'all',
+      comment: 'Type of content to display: all, text only, or images only'
+    },
   }, {
     timestamps: true,
     // optional: freezeTableName: true,

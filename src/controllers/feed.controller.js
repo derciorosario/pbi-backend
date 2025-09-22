@@ -30,6 +30,7 @@ const {
   IndustryCategory,
   IndustrySubcategory,
   IndustrySubsubCategory,
+  UserSettings,
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 
@@ -114,6 +115,54 @@ function ensureArray(val) {
 }
 function buildOrLikes(field, values) {
   return (values || []).filter(Boolean).map((v) => ({ [field]: like(v) }));
+}
+
+// Content type filtering helpers
+function hasTextContent(item) {
+  return Boolean(item.description && item.description.trim().length > 0);
+}
+
+function hasImageContent(item) {
+  // Check various image fields that posts might have
+  const imageFields = ['coverImage', 'coverImageBase64', 'coverImageUrl', 'images', 'attachments'];
+
+  for (const field of imageFields) {
+    if (item[field]) {
+      if (Array.isArray(item[field]) && item[field].length > 0) {
+        return true;
+      }
+      if (typeof item[field] === 'string' && item[field].trim().length > 0) {
+        // Skip base64 data URLs that are just placeholders
+        if (item[field].startsWith('data:image/') && item[field].length < 100) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function applyContentTypeFilter(items, contentType) {
+  if (contentType === 'all') {
+    return items;
+  }
+
+  return items.filter(item => {
+    const hasText = hasTextContent(item);
+    const hasImages = hasImageContent(item);
+
+    if (contentType === 'text') {
+      // Show only items with text content but no images
+      return hasText && !hasImages;
+    } else if (contentType === 'images') {
+      // Show only items with images
+      return hasImages;
+    }
+
+    return true;
+  });
 }
 
 // ---- Humanizer
@@ -630,6 +679,14 @@ exports.getFeed = async (req, res) => {
        // jobs
        jobType,            // field: jobType
        workMode,           // field: workMode
+
+       workLocation,
+       workSchedule,
+       careerLevel,
+       paymentType,
+       jobsView,
+
+
        // tourism
        postType,           // field: postType
        season,             // field: season
@@ -661,15 +718,63 @@ exports.getFeed = async (req, res) => {
 
      // Get the singular entity type for the current tab
      const relatedEntityType = tabToEntityTypeMap[tab];
-
+ 
     // Parse city as array to support multiple cities
     const cities = ensureArray(city);
     console.log("Cities filter:", cities);
 
+    // Get current user ID
+    const currentUserId = req.user?.id || null;
+
+    // Check if user has feed filter settings enabled
+    let userSettings = null;
+    let connectionsOnly = false;
+    let contentType = 'all';
+    let connectedUserIds = [];
+
+ 
+    if (currentUserId) {
+      try {
+        userSettings = await UserSettings.findOne({
+          where: { userId: currentUserId },
+          attributes: ['connectionsOnly', 'contentType']
+        });
+        connectionsOnly = userSettings?.connectionsOnly || false;
+        contentType = userSettings?.contentType || 'all';
+
+        
+        if (connectionsOnly) {
+          // Get all connected user IDs (both directions)
+          const connections = await Connection.findAll({
+            where: {
+              [Op.or]: [
+                { userOneId: currentUserId },
+                { userTwoId: currentUserId }
+              ]
+            },
+            attributes: ['userOneId', 'userTwoId']
+          });
+          console.log({connections})
+ 
+          connectedUserIds = connections.flatMap(conn =>
+            conn.userOneId === currentUserId ? [conn.userTwoId] : [conn.userOneId]
+          );
+ 
+          console.log(`Connections only filter enabled. Connected users: ${connectedUserIds.length}`);
+        }
+ 
+        if (contentType !== 'all') {
+          console.log(`Content type filter enabled: ${contentType}`);
+        }
+      } catch (error) {
+        console.error("Error loading user settings for feed filters:", error);
+      }
+    }
+
     // Parse industry filter IDs
     const effIndustryIds = ensureArray(industryIds).filter(Boolean);
 
-    console.log("Feed request:", {
+/*    console.log("Feed request:", {
       tab, q, country, city, categoryId, subcategoryId, subsubCategoryId, identityId,
       industryIds: effIndustryIds,
       generalCategoryIds, generalSubcategoryIds, generalSubsubCategoryIds,
@@ -677,7 +782,7 @@ exports.getFeed = async (req, res) => {
       price, serviceType, priceType, deliveryTime, experienceLevel, locationType,
       jobType, workMode, postType, season, budgetRange, fundingGoal, amountRaised, deadline,
       eventType, date, registrationType
-    });
+    });*/
 
     // Improved text search handling
     let searchTerms = [];
@@ -709,20 +814,20 @@ exports.getFeed = async (req, res) => {
     const effGeneralSubcategoryIdsStr = effGeneralSubcategoryIds.map(String);
     const effGeneralSubsubCategoryIdsStr = effGeneralSubsubCategoryIds.map(String);
 
-    console.log("Audience filter parameters:", {
+   /* console.log("Audience filter parameters:", {
       identityIds: effAudienceIdentityIds,
       audienceCategoryIds: effAudienceCategoryIds,
       audienceSubcategoryIds: effAudienceSubcategoryIds,
       audienceSubsubCategoryIds: effAudienceSubsubCategoryIds
-    });
-    console.log("General taxonomy filter parameters:", {
+    });*/
+
+    /*console.log("General taxonomy filter parameters:", {
       generalCategoryIds: effGeneralCategoryIds,
       generalSubcategoryIds: effGeneralSubcategoryIds,
       generalSubsubCategoryIds: effGeneralSubsubCategoryIds
-    });
+    });*/
 
     const hasTextSearch = Boolean(q && searchTerms.length > 0);
-    const currentUserId = req.user?.id || null;
 
     const hasExplicitFilter = Boolean(
       country || city || categoryId || subcategoryId || subsubCategoryId || identityId ||
@@ -996,6 +1101,19 @@ exports.getFeed = async (req, res) => {
       whereNeed.subsubCategoryId = subsubCategoryId;
     }
 
+    // Apply connectionsOnly filter if enabled
+    if (connectionsOnly && connectedUserIds.length > 0) {
+      whereJob.postedByUserId = { [Op.in]: connectedUserIds };
+      whereEvent.organizerUserId = { [Op.in]: connectedUserIds };
+      whereService.providerUserId = { [Op.in]: connectedUserIds };
+      whereProduct.sellerUserId = { [Op.in]: connectedUserIds };
+      whereTourism.authorUserId = { [Op.in]: connectedUserIds };
+      whereFunding.creatorUserId = { [Op.in]: connectedUserIds };
+      whereNeed.userId = { [Op.in]: connectedUserIds };
+      // For moments, add userId filter to whereCommon
+      whereCommon.userId = { [Op.in]: connectedUserIds };
+    }
+
     // Industry filters
     if (effIndustryIds.length > 0) {
       whereJob.industryCategoryId = { [Op.in]: effIndustryIds };
@@ -1057,6 +1175,22 @@ exports.getFeed = async (req, res) => {
     if (workMode) {
       const workModes = workMode.split(",").filter(Boolean);
       if (workModes.length) whereJob.workMode = { [Op.in]: workModes };
+    }
+    if (workLocation) {
+      const workLocations = workLocation.split(",").filter(Boolean);
+      if (workLocations.length) whereJob.workLocation = { [Op.in]: workLocations };
+    }
+    if (workSchedule) {
+      const workSchedules = workSchedule.split(",").filter(Boolean);
+      if (workSchedules.length) whereJob.workSchedule = { [Op.in]: workSchedules };
+    }
+    if (careerLevel) {
+      const careerLevels = careerLevel.split(",").filter(Boolean);
+      if (careerLevels.length) whereJob.careerLevel = { [Op.in]: careerLevels };
+    }
+    if (paymentType) {
+      const paymentTypes = paymentType.split(",").filter(Boolean);
+      if (paymentTypes.length) whereJob.paymentType = { [Op.in]: paymentTypes };
     }
     if (experienceLevel) {
       const els = experienceLevel.split(",").filter(Boolean);
@@ -2097,86 +2231,130 @@ exports.getFeed = async (req, res) => {
       if (tab === "events") {
         const events = await Event.findAll({
           subQuery: false,
-          where: whereEvent,
+          where: { ...whereEvent, moderation_status: "approved" },
           include: includeEventRefs,
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
         const mapped = events.map(mapEvent);
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        const filtered = applyContentTypeFilter(mapped, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "jobs") {
-        const jobs = await Job.findAll({
-          subQuery: false,
-          where: whereJob,
-          include: includeCategoryRefs,
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-          offset: off,
-        });
+        // Parse jobsView filter
+        const jobsViewOptions = jobsView ? ensureArray(jobsView) : [];
+        const showJobOffers = jobsViewOptions.length === 0 || jobsViewOptions.includes("Job Offers");
+        const showJobSeekers = jobsViewOptions.length === 0 || jobsViewOptions.includes("Job Seekers");
+
+        let jobs = [];
+        let relatedNeeds = [];
+        let relatedMoments = [];
+
+        if (showJobOffers) {
+          jobs = await Job.findAll({
+            subQuery: false,
+            where: { ...whereJob, moderation_status: "approved" },
+            include: includeCategoryRefs,
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+            offset: off,
+          });
+        }
+
+        if (showJobSeekers) {
+          // Get needs and moments related to jobs
+          relatedNeeds = await Need.findAll({
+            subQuery: false,
+            where: { ...whereNeed, relatedEntityType: 'job' },
+            include: includeNeedRefs,
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+            offset: off,
+          });
+
+          relatedMoments = await Moment.findAll({
+            subQuery: false,
+            where: { ...whereCommon, relatedEntityType: 'job' },
+            include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+            offset: off,
+          });
+        }
+
         const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
-        const mapped = jobs.map((j) => mapJob(j, companyMap));
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+
+        const mappedJobs = jobs.map((j) => mapJob(j, companyMap));
+        const mappedNeeds = relatedNeeds.map(mapNeed);
+        const mappedMoments = relatedMoments.map(mapMoment);
+
+        const combined = [...mappedJobs, ...mappedNeeds, ...mappedMoments];
+        const filtered = applyContentTypeFilter(combined, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "services") {
         const services = await Service.findAll({
           subQuery: false,
-          where: whereService,
+          where: { ...whereService, moderation_status: "approved" },
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
         const mapped = services.map(mapService);
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        const filtered = applyContentTypeFilter(mapped, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "products") {
         const products = await Product.findAll({
           subQuery: false,
-          where: whereProduct,
+          where: { ...whereProduct, moderation_status: "approved" },
           include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
         const mapped = products.map(mapProduct);
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        const filtered = applyContentTypeFilter(mapped, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "tourism") {
         const tourism = await Tourism.findAll({
           subQuery: false,
-          where: whereTourism,
+          where: { ...whereTourism, moderation_status: "approved" },
           include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
         const mapped = tourism.map(mapTourism);
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        const filtered = applyContentTypeFilter(mapped, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "funding") {
         const funding = await Funding.findAll({
           subQuery: false,
-          where: whereFunding,
+          where: { ...whereFunding, moderation_status: "approved" },
           include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim,
           offset: off,
         });
         const mapped = funding.map(mapFunding);
-        sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        const filtered = applyContentTypeFilter(mapped, contentType);
+        sortByMatchThenRecency(filtered);
+        return res.json({ items: await getConStatusItems(filtered) });
       }
 
       if (tab === "moments") {
@@ -2206,56 +2384,56 @@ exports.getFeed = async (req, res) => {
       ] = await Promise.all([
         Job.findAll({
           subQuery: false,
-          where: whereJob,
+          where: { ...whereJob, moderation_status: "approved" },
           include: includeCategoryRefs,
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Event.findAll({
           subQuery: false,
-          where: whereEvent,
+          where: { ...whereEvent, moderation_status: "approved" },
           include: includeEventRefs,
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Service.findAll({
           subQuery: false,
-          where: whereService,
+          where: { ...whereService, moderation_status: "approved" },
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Product.findAll({
           subQuery: false,
-          where: whereProduct,
+          where: { ...whereProduct, moderation_status: "approved" },
           include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Tourism.findAll({
           subQuery: false,
-          where: whereTourism,
+          where: { ...whereTourism, moderation_status: "approved" },
           include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Funding.findAll({
           subQuery: false,
-          where: categoryId ? { ...whereFunding, categoryId } : whereFunding,
+          where: categoryId ? { ...whereFunding, categoryId, moderation_status: "approved" } : { ...whereFunding, moderation_status: "approved" },
           include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Need.findAll({
           subQuery: false,
-          where: whereNeed,
+          where: { ...whereNeed, moderation_status: "approved" },
           include: includeNeedRefs,
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
         }),
         Moment.findAll({
           subQuery: false,
-          where: whereCommon,
+          where: { ...whereCommon, moderation_status: "approved" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           order: [["createdAt", "DESC"]],
           limit: lim * 2,
@@ -2310,7 +2488,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "events") {
       const events = await Event.findAll({
         subQuery: false,
-        where: whereEvent,
+        where: { ...whereEvent, moderation_status: "approved" },
         include: includeEventRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2345,31 +2523,45 @@ exports.getFeed = async (req, res) => {
     }
 
     if (tab === "jobs") {
-      const jobs = await Job.findAll({
-        subQuery: false,
-        where: whereJob,
-        include: includeCategoryRefs,
-        order: [["createdAt", "DESC"]],
-        limit: bufferLimit,
-      });
+      // Parse jobsView filter
+      const jobsViewOptions = jobsView ? ensureArray(jobsView) : [];
+      const showJobOffers = jobsViewOptions.length === 0 || jobsViewOptions.includes("Job Offers");
+      const showJobSeekers = jobsViewOptions.length === 0 || jobsViewOptions.includes("Job Seekers");
+
+      let jobs = [];
+      let relatedNeeds = [];
+      let relatedMoments = [];
+
+      if (showJobOffers) {
+        jobs = await Job.findAll({
+          subQuery: false,
+          where: { ...whereJob, moderation_status: "approved" },
+          include: includeCategoryRefs,
+          order: [["createdAt", "DESC"]],
+          limit: bufferLimit,
+        });
+      }
+
+      if (showJobSeekers) {
+        // Get needs and moments related to jobs
+        relatedNeeds = await Need.findAll({
+          subQuery: false,
+          where: { ...whereNeed, relatedEntityType: 'job' },
+          include: includeNeedRefs,
+          order: [["createdAt", "DESC"]],
+          limit: bufferLimit,
+        });
+
+        relatedMoments = await Moment.findAll({
+          subQuery: false,
+          where: { ...whereCommon, relatedEntityType: 'job' },
+          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          order: [["createdAt", "DESC"]],
+          limit: bufferLimit,
+        });
+      }
+
       const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
-
-      // Get needs and moments related to jobs
-      const relatedNeeds = await Need.findAll({
-        subQuery: false,
-        where: { ...whereNeed, relatedEntityType: 'job' },
-        include: includeNeedRefs,
-        order: [["createdAt", "DESC"]],
-        limit: bufferLimit,
-      });
-
-      const relatedMoments = await Moment.findAll({
-        subQuery: false,
-        where: { ...whereCommon, relatedEntityType: 'job' },
-        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        order: [["createdAt", "DESC"]],
-        limit: bufferLimit,
-      });
 
       const mappedJobs = jobs.map((j) => mapJob(j, companyMap));
       const mappedNeeds = relatedNeeds.map(mapNeed);
@@ -2385,7 +2577,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "services") {
       const services = await Service.findAll({
         subQuery: false,
-        where: whereService,
+        where: { ...whereService, moderation_status: "approved" },
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2422,7 +2614,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "products") {
       const products = await Product.findAll({
         subQuery: false,
-        where: whereProduct,
+        where: { ...whereProduct, moderation_status: "approved" },
         include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2459,7 +2651,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "tourism") {
       const tourism = await Tourism.findAll({
         subQuery: false,
-        where: whereTourism,
+        where: { ...whereTourism, moderation_status: "approved" },
         include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2496,7 +2688,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "funding") {
       const funding = await Funding.findAll({
         subQuery: false,
-        where: whereFunding,
+        where: { ...whereFunding, moderation_status: "approved" },
         include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2533,7 +2725,7 @@ exports.getFeed = async (req, res) => {
     if (tab === "needs") {
       const needs = await Need.findAll({
         subQuery: false,
-        where: whereNeed,
+        where: { ...whereNeed, moderation_status: "approved" },
         include: includeNeedRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2552,16 +2744,17 @@ exports.getFeed = async (req, res) => {
       const mappedMoments = relatedMoments.map(mapMoment);
 
       const combined = [...mappedNeeds, ...mappedMoments];
-      combined.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(combined);
-      const windowed = combined.slice(off, off + lim);
+      const filtered = applyContentTypeFilter(combined, contentType);
+      filtered.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(filtered);
+      const windowed = filtered.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
     if (tab === "moments") {
       const moments = await Moment.findAll({
         subQuery: false,
-        where: whereCommon,
+        where: { ...whereCommon, moderation_status: "approved" },
         include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2580,9 +2773,10 @@ exports.getFeed = async (req, res) => {
       const mappedNeeds = relatedNeeds.map(mapNeed);
 
       const combined = [...mappedMoments, ...mappedNeeds];
-      combined.forEach((x) => (x._score = scoreItem(x)));
-      sortByMatchThenRecency(combined);
-      const windowed = combined.slice(off, off + lim);
+      const filtered = applyContentTypeFilter(combined, contentType);
+      filtered.forEach((x) => (x._score = scoreItem(x)));
+      sortByMatchThenRecency(filtered);
+      const windowed = filtered.slice(off, off + lim);
       return res.json({ items: await getConStatusItems(windowed) });
     }
 
@@ -2599,56 +2793,56 @@ exports.getFeed = async (req, res) => {
     ] = await Promise.all([
       Job.findAll({
         subQuery: false,
-        where: whereJob,
+        where: { ...whereJob, moderation_status: "approved" },
         include: includeCategoryRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Event.findAll({
         subQuery: false,
-        where: whereEvent,
+        where: { ...whereEvent, moderation_status: "approved" },
         include: includeEventRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Service.findAll({
         subQuery: false,
-        where: whereService,
+        where: { ...whereService, moderation_status: "approved" },
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Product.findAll({
         subQuery: false,
-        where: whereProduct,
+        where: { ...whereProduct, moderation_status: "approved" },
         include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Tourism.findAll({
         subQuery: false,
-        where: whereTourism,
+        where: { ...whereTourism, moderation_status: "approved" },
         include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Funding.findAll({
         subQuery: false,
-        where: whereFunding,
+        where: { ...whereFunding, moderation_status: "approved" },
         include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Need.findAll({
         subQuery: false,
-        where: whereNeed,
+        where: { ...whereNeed, moderation_status: "approved" },
         include: includeNeedRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       }),
       Moment.findAll({
         subQuery: false,
-        where: whereCommon,
+        where: { ...whereCommon, moderation_status: "approved" },
         include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
@@ -2685,13 +2879,19 @@ exports.getFeed = async (req, res) => {
       ...applyTextMatchFlag(fundingBuf.map(mapFunding)),
       ...applyTextMatchFlag(needsBuf.map(mapNeed)),
       ...applyTextMatchFlag(momentsBuf.map(mapMoment)),
-    ].map((x) => ({ ...x, _score: scoreItem(x) })); // _score kept for debugging/secondary uses
+    ];
+
+    // Apply content type filter before scoring
+    const contentFiltered = applyContentTypeFilter(mergedScored, contentType);
+
+    // Apply scoring after content filtering
+    const scored = contentFiltered.map((x) => ({ ...x, _score: scoreItem(x) })); // _score kept for debugging/secondary uses
 
     // Primary: match %, Secondary: recency
-    sortByMatchThenRecency(mergedScored);
+    sortByMatchThenRecency(scored);
 
     // Diversify so you don't get long runs of the same kind
-    const diversified = diversifyFeed(mergedScored, { maxSeq: 1 });
+    const diversified = diversifyFeed(scored, { maxSeq: 1 });
 
     const windowed = diversified.slice(off, off + lim);
 

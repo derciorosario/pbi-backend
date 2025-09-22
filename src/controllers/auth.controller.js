@@ -1,7 +1,8 @@
 const { createUserAndSendVerification, verifyEmailToken, resendVerification, login, requestPasswordReset, resetPassword } =
   require("../services/auth.service");
-const { User } = require("../models");
+const { User, CompanyRepresentative } = require("../models");
 const { loginWithGoogle } = require("../services/auth.service");
+const jwt = require("jsonwebtoken");
 
 
 async function register(req, res, next) {
@@ -151,6 +152,56 @@ async function confirmResetPassword(req, res, next) {
   }
 }
 
+async function getCompanyToken(req, res, next) {
+  try {
+    const { companyId } = req.body;
+    const userId = req.user.sub;
+
+    // Verify that the user is authorized to represent this company
+   /* const representation = await CompanyRepresentative.findOne({
+      where: {
+        companyId,
+        representativeId: userId,
+        status: "authorized"
+      }
+    });
+
+    if (!representation) {
+      return res.status(403).json({ message: "You are not authorized to manage this company" });
+    }
+
+    **/
+
+    // Get the company user
+    const company = await User.findByPk(companyId);
+   /* if (!company || company.accountType !== "company") {
+      return res.status(404).json({ message: "Company not found" });
+    }*/
+
+    if (!company) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+
+    // Generate a JWT token for the company
+    const token = jwt.sign(
+      {
+        sub: company.id,
+        name: company.name,
+        email: company.email,
+        accountType: company.accountType,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
+      },
+      process.env.JWT_SECRET || "fallback-secret"
+    );
+
+    res.json({ token,email:company.email });
+  } catch (err) {
+    next(err);
+  }
+}
+
 
 module.exports = {
   forgotPassword,
@@ -161,5 +212,6 @@ module.exports = {
   signIn,
   me,
   googleSignIn,
-  checkGoogleUserStatus
+  checkGoogleUserStatus,
+  getCompanyToken
 };

@@ -299,6 +299,7 @@ async function upsertUserWithProfile({
   industryCategories = [],
   industrySubcategories = [],
   industrySubsubcategories = [],
+  avatarUrl=null,
 }) {
   const passwordHash = await hash(password);
 
@@ -315,6 +316,7 @@ async function upsertUserWithProfile({
       city,
       accountType,
       isVerified: true,
+      avatarUrl
     });
     console.log(`👤 Created user: ${email}`);
   } else {
@@ -502,6 +504,7 @@ const BULK_USERS = [
   {
     email: "afri-agro@54links.com",
     password: "Company@123",
+    avatarUrl:'',
     name: "AfriAgro Ltd.",
     phone: "+234 01 222 7788",
     nationality: "Nigerian",
@@ -517,7 +520,7 @@ const BULK_USERS = [
       skills: ["Supply Chain", "Export", "B2B Sales"],
       languages: [{ name: "English", level: "Advanced" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Agriculture", "Commerce & Financial Services"],
     subcategories: [
       { categoryName: "Agriculture", subName: "Agro-Processing" },
@@ -529,19 +532,16 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Trade", subName: "Food & Beverage", subsubName: "Beverages" }
     ],
-    industryCategories: ["Agriculture"],
+    industryCategories: ["Agriculture & Agribusiness"],
     industrySubcategories: [
-      { categoryName: "Agriculture", subName: "Agribusiness & Agro-Processing" }
-    ],
-    industrySubsubcategories: [
-      { categoryName: "Agriculture", subName: "Agribusiness & Agro-Processing", subsubName: "Food Processing" }
+      { categoryName: "Agriculture & Agribusiness", subName: "Agro-processing" }
     ],
     categoryInterests: ["Technology", "Energy"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Fintech" },
       { categoryName: "Energy", subName: "Renewable Energy" }
     ],
-    identityInterests: ["Investor", "Professional"],
+    identityInterests: ["Investors", "Professionals"],
     goals: ["Find Clients", "Partnerships", "Raise Capital"],
   },
   {
@@ -562,7 +562,7 @@ const BULK_USERS = [
       skills: ["Machine Learning", "AI", "Data Science", "Cloud Computing"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Technology", "Professional Services"],
     subcategories: [
       { categoryName: "Technology", subName: "Artificial Intelligence" },
@@ -573,19 +573,16 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Artificial Intelligence", subsubName: "Machine Learning" },
       { categoryName: "Technology", subName: "Data Science & Analysis", subsubName: "Big Data" }
     ],
-    industryCategories: ["Knowledge & Technology"],
+    industryCategories: ["Information & Communication Technology (ICT)"],
     industrySubcategories: [
-      { categoryName: "Knowledge & Technology", subName: "Information Technology" }
-    ],
-    industrySubsubcategories: [
-      { categoryName: "Knowledge & Technology", subName: "Information Technology", subsubName: "Artificial Intelligence" }
+      { categoryName: "Information & Communication Technology (ICT)", subName: "Software & App Development" }
     ],
     categoryInterests: ["Education", "Health"],
     subcategoryInterests: [
       { categoryName: "Education", subName: "EdTech" },
       { categoryName: "Health", subName: "Health Tech" }
     ],
-    identityInterests: ["Investor", "Professional"],
+    identityInterests: ["Investors", "Professionals"],
     goals: ["Hire Engineers", "Find Clients", "Raise Capital"],
   },
   {
@@ -606,7 +603,7 @@ const BULK_USERS = [
       skills: ["Solar Energy", "Wind Energy", "Sustainability", "Project Management"],
       languages: [{ name: "English", level: "Advanced" }, { name: "Swahili", level: "Native" }],
     },
-    identities: ["Entrepreneur (Startups)"],
+    identities: ["Entrepreneurs"],
     categories: ["Energy", "Infrastructure & Construction"],
     subcategories: [
       { categoryName: "Energy", subName: "Renewable Energy" },
@@ -617,23 +614,21 @@ const BULK_USERS = [
       { categoryName: "Energy", subName: "Renewable Energy", subsubName: "Solar" },
       { categoryName: "Energy", subName: "Renewable Energy", subsubName: "Wind" }
     ],
-    industryCategories: ["Oil & Gas"],
+    industryCategories: ["Energy & Utilities"],
     industrySubcategories: [
-      { categoryName: "Oil & Gas", subName: "Alternative & Emerging Segments" }
-    ],
-    industrySubsubcategories: [
-      { categoryName: "Oil & Gas", subName: "Alternative & Emerging Segments", subsubName: "Renewable Integration with Oil & Gas" }
+      { categoryName: "Energy & Utilities", subName: "Renewable Energy (Solar, Wind, Hydro)" }
     ],
     categoryInterests: ["Technology", "Manufacturing"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Hardware & Devices" },
       { categoryName: "Manufacturing", subName: "Machinery & Equipment" }
     ],
-    identityInterests: ["Investor", "Government Officials"],
+    identityInterests: ["Investors", "Government Officials"],
     goals: ["Find Investors", "Partnerships", "Raise Capital"],
   },
   {
     email: "sa-renew@54links.com",
+    avatarUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/EDP_Renov%C3%A1veis_2022.svg/330px-EDP_Renov%C3%A1veis_2022.svg.png",
     password: "Company@123",
     name: "SA Renewables",
     phone: "+27 21 555 9000",
@@ -685,6 +680,7 @@ const BULK_USERS = [
   },
   {
     email: "kenya-logistics@54links.com",
+    avatarUrl:'https://s3-eu-west-1.amazonaws.com/think.whoswho/2668468e-9209-4e5b-9432-dad1ea6148a2.jpg',
     password: "Company@123",
     name: "Kilima Logistics",
     phone: "+254 700 111 333",
@@ -712,6 +708,7 @@ const BULK_USERS = [
   // Individuals
   {
     email: "amara.dev@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/portrait-confident-dark-skinned-woman-enterpreneur-with-serious-look-wears-round-glasses-red-blouse-going-meet-with-partners-from-abroad-prepares-presenting-company-isolated-white_273609-3653.jpg',
     password: "User@123",
     name: "Amara N.",
     phone: "+234 803 555 1010",
@@ -728,15 +725,15 @@ const BULK_USERS = [
       skills: ["React", "Next.js", "Tailwind"],
       languages: [{ name: "English", level: "Advanced" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Technology"],
     subcategories: [{ categoryName: "Technology", subName: "Software Development" }],
     subsubcategories: [
       { categoryName: "Technology", subName: "Software Development", subsubName: "Frontend" }
     ],
-    industryCategories: ["Knowledge & Technology"],
+    industryCategories: ["Information & Communication Technology (ICT)"],
     industrySubcategories: [
-      { categoryName: "Knowledge & Technology", subName: "Information Technology" }
+      { categoryName: "Information & Communication Technology (ICT)", subName: "Software & App Development" }
     ],
     industrySubsubcategories: [
       { categoryName: "Knowledge & Technology", subName: "Information Technology", subsubName: "Software Development" }
@@ -746,7 +743,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Software Development" },
       { categoryName: "Technology", subName: "Mobile App Developer" }
     ],
-    identityInterests: ["Professional", "Freelancers"],
+    identityInterests: ["Professionals", "Freelancers"],
     goals: ["Job Opportunities", "Mentorship"],
   },
   {
@@ -760,14 +757,14 @@ const BULK_USERS = [
     city: "Cape Town",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Data Scientist",
       about: "Machine learning specialist with focus on NLP and computer vision.",
       experienceLevel: "Senior",
       skills: ["Python", "TensorFlow", "PyTorch", "Computer Vision", "NLP"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Technology"],
     subcategories: [
       { categoryName: "Technology", subName: "Data Science & Analysis" },
@@ -777,23 +774,21 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Data Science & Analysis", subsubName: "Machine Learning" },
       { categoryName: "Technology", subName: "Artificial Intelligence", subsubName: "NLP" }
     ],
-    industryCategories: ["Knowledge & Technology"],
+    industryCategories: ["Information & Communication Technology (ICT)"],
     industrySubcategories: [
-      { categoryName: "Knowledge & Technology", subName: "Data & Analytics" }
-    ],
-    industrySubsubcategories: [
-      { categoryName: "Knowledge & Technology", subName: "Data & Analytics", subsubName: "Artificial Intelligence" }
+      { categoryName: "Information & Communication Technology (ICT)", subName: "IT Services & Cloud Solutions" }
     ],
     categoryInterests: ["Technology", "Health"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Data Science & Analysis" },
       { categoryName: "Health", subName: "Health Tech" }
     ],
-    identityInterests: ["Professional", "Entrepreneur (Startups)"],
+    identityInterests: ["Professionals", "Entrepreneurs"],
     goals: ["Find Clients", "Mentorship", "Partnerships"],
   },
   {
     email: "fatima.finance@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/professional-woman-smiling_23-2152009549.jpg',
     password: "User@123",
     name: "Fatima M.",
     phone: "+212 661 555 4321",
@@ -803,14 +798,14 @@ const BULK_USERS = [
     city: "Casablanca",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Financial Analyst",
       about: "Investment analysis and portfolio management specialist with focus on emerging markets.",
       experienceLevel: "Senior",
       skills: ["Financial Analysis", "Investment Management", "Risk Assessment", "Market Research"],
       languages: [{ name: "Arabic", level: "Native" }, { name: "French", level: "Advanced" }, { name: "English", level: "Advanced" }],
     },
-    identities: ["Professional"],
+    identities: ["Professionals"],
     categories: ["Commerce & Financial Services"],
     subcategories: [
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets" },
@@ -819,19 +814,16 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets", subsubName: "Portfolio Management" }
     ],
-    industryCategories: ["Services"],
+    industryCategories: ["Financial Services"],
     industrySubcategories: [
-      { categoryName: "Services", subName: "Financial Services" }
-    ],
-    industrySubsubcategories: [
-      { categoryName: "Services", subName: "Financial Services", subsubName: "Investments" }
+      { categoryName: "Financial Services", subName: "Investment & Capital Markets" }
     ],
     categoryInterests: ["Technology", "Commerce & Financial Services"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Fintech" },
       { categoryName: "Commerce & Financial Services", subName: "Investment & Capital Markets" }
     ],
-    identityInterests: ["Professional", "Investor"],
+    identityInterests: ["Professionals", "Investors"],
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   {
@@ -861,6 +853,7 @@ const BULK_USERS = [
   },
   {
     email: "youssef.data@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/i-know-exactly-what-i-want-headshot-attractive-young-african-american-student-stylish-glasses-having-serious-calm-face-expression-feeling-confident-about-his-future-plans-career_273609-179.jpg',
     password: "User@123",
     name: "Youssef E.",
     phone: "+212 600 777 888",
@@ -870,7 +863,7 @@ const BULK_USERS = [
     city: "Casablanca",
     accountType: "individual",
     profile: {
-      primaryIdentity: "Professional",
+      primaryIdentity: "Professionals",
       professionalTitle: "Data Analyst",
       about: "Dashboards, SQL pipelines, marketing attribution.",
       experienceLevel: "Mid",
@@ -886,6 +879,7 @@ const BULK_USERS = [
   },
   {
     email: "chinedu.hr@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/medium-shot-woman-working-as-lawyer_23-2151202454.jpg',
     password: "User@123",
     name: "Chinedu O.",
     phone: "+234 802 999 1234",
@@ -908,6 +902,7 @@ const BULK_USERS = [
   },
   {
     email: "helena.events@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/medium-shot-woman-relaxing-home_23-2150307065.jpg',
     password: "User@123",
     name: "Helena M.",
     phone: "+27 71 333 2222",
@@ -935,6 +930,7 @@ const BULK_USERS = [
   // Social Entrepreneurs
   {
     email: "eco-solutions@54links.com",
+    avatarUrl:'https://scontent.fmpm5-1.fna.fbcdn.net/v/t39.30808-6/314896480_491828612974524_5314665697496285242_n.jpg?_nc_cat=100&ccb=1-7&_nc_sid=6ee11a&_nc_eui2=AeHadUT0Z_pzDKjQxsdYZFuLaYde54r9O4tph17niv07izshl-BPKWYcmJLAP1jawpbSNhKF5yj7QE7bj2-nH_QZ&_nc_ohc=KMRuYXW9iiEQ7kNvwG7U0BL&_nc_oc=Adk0h4PuUohKPhWgoLL0Fc2GF0D0uHRixEmCjzVmSzUHXrRGzPEcWXUZfxpzgIeVDEs&_nc_pt=5&_nc_zt=23&_nc_ht=scontent.fmpm5-1.fna&_nc_gid=qY7PJQBtVPR9Be9U-LOjNQ&oh=00_AfbaE4g_cIqVEJ8K71_nMB9Lh09F6dje2WZTbqp2vLvCFA&oe=68D357CE',
     password: "User@123",
     name: "EcoSolutions Africa",
     phone: "+255 755 555 1234",
@@ -960,22 +956,23 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Environment & Climate Action", subName: "Waste Management", subsubName: "Recycling" }
     ],
-    industryCategories: ["Services"],
+    industryCategories: ["Financial Services"],
     industrySubcategories: [
-      { categoryName: "Services", subName: "Professional Services" }
+      { categoryName: "Financial Services", subName: "Investment & Capital Markets" }
     ],
     categoryInterests: ["Technology", "Manufacturing"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Clean Tech / Green Energy Solutions" },
       { categoryName: "Manufacturing", subName: "Sustainable Manufacturing" }
     ],
-    identityInterests: ["Social Entrepreneurs", "Investor"],
+    identityInterests: ["Social Entrepreneurs", "Investors"],
     goals: ["Find Investors", "Partnerships", "Mentorship"],
   },
   
   // Freelancers
   {
     email: "zainab.design@54links.com",
+    avatarUrl:'https://img.freepik.com/free-photo/portrait-beautiful-smiling-woman-with-curly-hair-looking-camera_1098-20801.jpg',
     password: "User@123",
     name: "Zainab H.",
     phone: "+20 100 555 7890",
@@ -1010,7 +1007,7 @@ const BULK_USERS = [
       { categoryName: "Technology", subName: "Software Development" },
       { categoryName: "Marketing & Advertising", subName: "Branding & Creative Strategy" }
     ],
-    identityInterests: ["Freelancers", "Entrepreneur (Startups)"],
+    identityInterests: ["Freelancers", "Entrepreneurs"],
     goals: ["Find Clients", "Partnerships", "Mentorship"],
   },
   
@@ -1042,22 +1039,23 @@ const BULK_USERS = [
     subsubcategories: [
       { categoryName: "Education", subName: "IT & Computer Science", subsubName: "Undergraduate" }
     ],
-    industryCategories: ["Services"],
+    industryCategories: ["Education & Training"],
     industrySubcategories: [
-      { categoryName: "Services", subName: "Education & Training" }
+      { categoryName: "Education & Training", subName: "Schools & Universities" }
     ],
     categoryInterests: ["Technology", "Education"],
     subcategoryInterests: [
       { categoryName: "Technology", subName: "Artificial Intelligence" },
       { categoryName: "Technology", subName: "Software Development" }
     ],
-    identityInterests: ["Students", "Professional"],
+    identityInterests: ["Students", "Professionals"],
     goals: ["Internship", "Mentorship", "Job Opportunities"],
   },
   
   // Investors
   {
     email: "venture-capital@54links.com",
+    avatarUrl: "https://vcwire.tech/wp-content/uploads/2024/03/p1-ventures.jpeg",
     password: "User@123",
     name: "Pan-African Ventures",
     phone: "+27 11 555 9876",
@@ -1067,14 +1065,14 @@ const BULK_USERS = [
     city: "Johannesburg",
     accountType: "company",
     profile: {
-      primaryIdentity: "Investor",
+      primaryIdentity: "Investors",
       professionalTitle: "Venture Capital Firm",
       about: "Early-stage investment in African tech startups with focus on fintech, healthtech, and agritech.",
       experienceLevel: "Mid",
       skills: ["Investment Analysis", "Due Diligence", "Portfolio Management", "Startup Mentoring"],
       languages: [{ name: "English", level: "Native" }],
     },
-    identities: ["Investor"],
+    identities: ["Investors"],
     categories: ["Finance & Fintech", "Technology"],
     subcategories: [
       { categoryName: "Finance & Fintech", subName: "Venture Capital" },
@@ -1096,7 +1094,7 @@ const BULK_USERS = [
       { categoryName: "Health", subName: "Health Tech" },
       { categoryName: "Agriculture", subName: "Agro-Tech" }
     ],
-    identityInterests: ["Investor", "Entrepreneur (Startups)"],
+    identityInterests: ["Investors", "Entrepreneurs"],
     goals: ["Find Investments", "Partnerships", "Mentorship"],
   },
   
@@ -1105,6 +1103,7 @@ const BULK_USERS = [
     email: "ops.admin@54links.com",
     password: "Admin@123",
     name: "54Links Ops",
+    avatarUrl: "https://commons.wikimedia.org/wiki/File:Link_logo_%282019%29.svg",
     phone: "+27 10 200 0000",
     nationality: "South African",
     country: "South Africa",

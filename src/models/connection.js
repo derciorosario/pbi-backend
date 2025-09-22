@@ -18,5 +18,11 @@ module.exports = (sequelize, DataTypes) => {
       ],
     }
   );
+
+  Connection.associate = (models) => {
+    Connection.belongsTo(models.User, { foreignKey: "userOneId", as: "userOne" });
+    Connection.belongsTo(models.User, { foreignKey: "userTwoId", as: "userTwo" });
+  };
+
   return Connection;
 };

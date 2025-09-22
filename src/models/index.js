@@ -18,7 +18,9 @@ const UserCategory = require("./userCategory")(sequelize, DataTypes);
 const UserSubcategory = require("./userSubcategory")(sequelize, DataTypes);
 
 const Job = require("./job")(sequelize, DataTypes);
+const JobApplication = require("./jobApplication")(sequelize, DataTypes);
 const Event = require("./event")(sequelize, DataTypes);
+const EventRegistration = require("./eventRegistration")(sequelize, DataTypes);
 const Service = require("./service")(sequelize, DataTypes);
 const Product = require("./product")(sequelize, DataTypes);
 const Tourism = require("./tourism")(sequelize, DataTypes);
@@ -87,6 +89,18 @@ Job.belongsTo(User, { foreignKey: "postedByUserId", as: "postedBy" });
 
 Job.belongsTo(Category,    { as: "category",    foreignKey: "categoryId" });
 Job.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
+
+// Job applications
+User.hasMany(JobApplication, { foreignKey: "userId", as: "jobApplications" });
+JobApplication.belongsTo(User, { foreignKey: "userId", as: "applicant" });
+Job.hasMany(JobApplication, { foreignKey: "jobId", as: "applications" });
+JobApplication.belongsTo(Job, { foreignKey: "jobId", as: "job" });
+
+// Event registrations
+User.hasMany(EventRegistration, { foreignKey: "userId", as: "eventRegistrations" });
+EventRegistration.belongsTo(User, { foreignKey: "userId", as: "registrant" });
+Event.hasMany(EventRegistration, { foreignKey: "eventId", as: "registrations" });
+EventRegistration.belongsTo(Event, { foreignKey: "eventId", as: "event" });
 
 // Event
 User.hasMany(Event, { foreignKey: "organizerUserId", as: "events" });
@@ -174,7 +188,10 @@ Comment.belongsTo(Comment, { foreignKey: "parentCommentId", as: "parentComment" 
 Repost.belongsTo(User, { foreignKey: "userId", as: "user" });
 User.hasMany(Repost, { foreignKey: "userId", as: "reposts" });
 
-// Report associations (already defined above)
+// Report associations
+if (Report.associate) {
+  Report.associate({ User });
+}
 
 // For connections
 // (no strict includes needed; we query by ids)
@@ -271,52 +288,52 @@ const UserSubsubCategoryInterest = require("./userSubsubCategoryInterest")(seque
 
 
 Job.belongsToMany(Identity, {
-  through: "job_identities",
+  through: JobIdentity,
   foreignKey: "jobId",
   otherKey: "identityId",
   as: "audienceIdentities",
 });
 Identity.belongsToMany(Job, {
-  through: "job_identities",
+  through: JobIdentity,
   foreignKey: "identityId",
   otherKey: "jobId",
   as: "jobs",
 });
 
 Job.belongsToMany(Category, {
-  through: "job_categories",
+  through: JobCategory,
   foreignKey: "jobId",
   otherKey: "categoryId",
   as: "audienceCategories",
 });
 Category.belongsToMany(Job, {
-  through: "job_categories",
+  through: JobCategory,
   foreignKey: "categoryId",
   otherKey: "jobId",
   as: "jobs",
 });
 
 Job.belongsToMany(Subcategory, {
-  through: "job_subcategories",
+  through: JobSubcategory,
   foreignKey: "jobId",
   otherKey: "subcategoryId",
   as: "audienceSubcategories",
 });
 Subcategory.belongsToMany(Job, {
-  through: "job_subcategories",
+  through: JobSubcategory,
   foreignKey: "subcategoryId",
   otherKey: "jobId",
   as: "jobs",
 });
 
 Job.belongsToMany(SubsubCategory, {
-  through: "job_subsubcategories",
+  through: JobSubsubCategory,
   foreignKey: "jobId",
   otherKey: "subsubCategoryId",
   as: "audienceSubsubs",
 });
 SubsubCategory.belongsToMany(Job, {
-  through: "job_subsubcategories",
+  through: JobSubsubCategory,
   foreignKey: "subsubCategoryId",
   otherKey: "jobId",
   as: "jobs",
@@ -324,52 +341,52 @@ SubsubCategory.belongsToMany(Job, {
 
 // Event audience associations
 Event.belongsToMany(Identity, {
-  through: "event_identities",
+  through: EventIdentity,
   foreignKey: "eventId",
   otherKey: "identityId",
   as: "audienceIdentities",
 });
 Identity.belongsToMany(Event, {
-  through: "event_identities",
+  through: EventIdentity,
   foreignKey: "identityId",
   otherKey: "eventId",
   as: "events",
 });
 
 Event.belongsToMany(Category, {
-  through: "event_categories",
+  through: EventCategory,
   foreignKey: "eventId",
   otherKey: "categoryId",
   as: "audienceCategories",
 });
 Category.belongsToMany(Event, {
-  through: "event_categories",
+  through: EventCategory,
   foreignKey: "categoryId",
   otherKey: "eventId",
   as: "events",
 });
 
 Event.belongsToMany(Subcategory, {
-  through: "event_subcategories",
+  through: EventSubcategory,
   foreignKey: "eventId",
   otherKey: "subcategoryId",
   as: "audienceSubcategories",
 });
 Subcategory.belongsToMany(Event, {
-  through: "event_subcategories",
+  through: EventSubcategory,
   foreignKey: "subcategoryId",
   otherKey: "eventId",
   as: "events",
 });
 
 Event.belongsToMany(SubsubCategory, {
-  through: "event_subsubcategories",
+  through: EventSubsubCategory,
   foreignKey: "eventId",
   otherKey: "subsubCategoryId",
   as: "audienceSubsubs",
 });
 SubsubCategory.belongsToMany(Event, {
-  through: "event_subsubcategories",
+  through: EventSubsubCategory,
   foreignKey: "subsubCategoryId",
   otherKey: "eventId",
   as: "events",
@@ -906,8 +923,54 @@ User.hasMany(UserSubsubCategoryInterest, { as: "subsubInterests", foreignKey: "u
 UserSubsubCategoryInterest.belongsTo(User, { as: "user", foreignKey: "userId" });
 UserSubsubCategoryInterest.belongsTo(SubsubCategory, { as: "subsubCategory", foreignKey: "subsubCategoryId" });
 
+// Company management models
+const CompanyRepresentative = require("./companyRepresentative")(sequelize, DataTypes);
+const CompanyStaff = require("./companyStaff")(sequelize, DataTypes);
+const CompanyInvitation = require("./companyInvitation")(sequelize, DataTypes);
 
+// Organization join request model
+const OrganizationJoinRequest = require("./organizationJoinRequest")(sequelize, DataTypes);
 
+// Company management associations
+// CompanyInvitation associations
+CompanyInvitation.belongsTo(User, { foreignKey: "companyId", as: "company" });
+CompanyInvitation.belongsTo(User, { foreignKey: "invitedUserId", as: "invitedUser" });
+CompanyInvitation.belongsTo(User, { foreignKey: "invitedBy", as: "inviter" });
+User.hasMany(CompanyInvitation, { foreignKey: "companyId", as: "companyInvitations" });
+User.hasMany(CompanyInvitation, { foreignKey: "invitedUserId", as: "receivedInvitations" });
+User.hasMany(CompanyInvitation, { foreignKey: "invitedBy", as: "sentInvitations" });
+
+// CompanyRepresentative associations
+CompanyRepresentative.belongsTo(User, { foreignKey: "companyId", as: "company" });
+CompanyRepresentative.belongsTo(User, { foreignKey: "representativeId", as: "representative" });
+CompanyRepresentative.belongsTo(User, { foreignKey: "authorizedBy", as: "authorizer" });
+CompanyRepresentative.belongsTo(User, { foreignKey: "revokedBy", as: "revoker" });
+User.hasMany(CompanyRepresentative, { foreignKey: "companyId", as: "companyRepresentatives" });
+User.hasMany(CompanyRepresentative, { foreignKey: "representativeId", as: "representativeOf" });
+User.hasMany(CompanyRepresentative, { foreignKey: "authorizedBy", as: "authorizedRepresentatives" });
+User.hasMany(CompanyRepresentative, { foreignKey: "revokedBy", as: "revokedRepresentatives" });
+
+// CompanyStaff associations
+CompanyStaff.belongsTo(User, { foreignKey: "companyId", as: "company" });
+CompanyStaff.belongsTo(User, { foreignKey: "staffId", as: "staff" });
+CompanyStaff.belongsTo(User, { foreignKey: "invitedBy", as: "inviter" });
+CompanyStaff.belongsTo(User, { foreignKey: "removedBy", as: "remover" });
+User.hasMany(CompanyStaff, { foreignKey: "companyId", as: "companyStaff" });
+User.hasMany(CompanyStaff, { foreignKey: "staffId", as: "staffOf" });
+User.hasMany(CompanyStaff, { foreignKey: "invitedBy", as: "invitedStaff" });
+User.hasMany(CompanyStaff, { foreignKey: "removedBy", as: "removedStaff" });
+
+// Organization Join Request associations
+OrganizationJoinRequest.belongsTo(User, { foreignKey: "organizationId", as: "organization" });
+OrganizationJoinRequest.belongsTo(User, { foreignKey: "userId", as: "user" });
+OrganizationJoinRequest.belongsTo(User, { foreignKey: "cancelledBy", as: "cancelledByUser" });
+OrganizationJoinRequest.belongsTo(User, { foreignKey: "approvedBy", as: "approvedByUser" });
+User.hasMany(OrganizationJoinRequest, { foreignKey: "organizationId", as: "organizationJoinRequests" });
+User.hasMany(OrganizationJoinRequest, { foreignKey: "userId", as: "joinRequests" });
+User.hasMany(OrganizationJoinRequest, { foreignKey: "cancelledBy", as: "cancelledJoinRequests" });
+User.hasMany(OrganizationJoinRequest, { foreignKey: "approvedBy", as: "approvedJoinRequests" });
+
+// Organization membership associations are now handled through CompanyStaff model
 
 const IndustryCategory = require("./IndustryCategory")(sequelize, DataTypes);
 const IndustrySubcategory = require("./IndustrySubcategory")(sequelize, DataTypes);
@@ -1021,6 +1084,22 @@ IndustrySubsubCategory.belongsToMany(User, {
 
 
 // Call associate methods for models that have them
+if (Connection.associate) {
+  Connection.associate({ User });
+}
+
+if (Job.associate) {
+  Job.associate({ User });
+}
+
+if (UserIdentity.associate) {
+  UserIdentity.associate({ User, Identity });
+}
+
+if (UserGoal.associate) {
+  UserGoal.associate({ User, Goal });
+}
+
 if (Need.associate) {
   Need.associate({
     User,
@@ -1065,7 +1144,9 @@ module.exports = {
   IndustrySubsubCategory,
 
 
-
+  Category,
+  Subcategory,
+  UserCategory,
   UserSubcategory, UserSubsubCategory,
   Identity, UserIdentity,
   Connection,
@@ -1076,13 +1157,13 @@ module.exports = {
   User,
   Profile,
   VerificationToken,
-  Category,
-  Subcategory,
-  UserCategory,
+ 
   Goal,
   UserGoal,
   Event,
+  EventRegistration,
   Job,
+  JobApplication,
   Message,
   Conversation,
   // Export event audience association models
@@ -1143,4 +1224,12 @@ module.exports = {
   GeneralCategory,
   GeneralSubcategory,
   GeneralSubsubCategory,
+
+  // Company management models
+  CompanyRepresentative,
+  CompanyStaff,
+  CompanyInvitation,
+
+  // Organization join request model
+  OrganizationJoinRequest,
 };

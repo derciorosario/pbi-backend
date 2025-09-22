@@ -9,6 +9,12 @@ const { OAuth2Client } = require("google-auth-library");
 async function createUserAndSendVerification({
   name, email, password, accountType = "individual",
   phone, biography, nationality, countryOfResidence,
+  // Individual fields
+  avatarUrl, gender,
+  // Company fields
+  otherCountries, webpage,
+  // Profile fields (for birthDate)
+  birthDate,
 }) {
   const existing = await User.findOne({ where: { email } });
   if (existing) throw Object.assign(new Error("Email already in use"), { status: 409 });
@@ -16,10 +22,18 @@ async function createUserAndSendVerification({
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await User.create({
     name, email, passwordHash, accountType, phone, biography, nationality, countryOfResidence,
+    // Individual fields
+    avatarUrl, gender,
+    // Company fields
+    otherCountries, webpage,
   });
 
-  // create empty Profile shell
-  await Profile.create({ userId: user.id });
+  // Create Profile with birthDate if provided
+  const profileData = { userId: user.id };
+  if (birthDate) {
+    profileData.birthDate = birthDate;
+  }
+  await Profile.create(profileData);
 
   // email verification token
   const token = crypto.randomBytes(32).toString("hex");
@@ -173,7 +187,7 @@ async function fetchUserInfoWithAccessToken(accessToken) {
   return res.json(); // { sub, email, email_verified, name, picture, hd? }
 }
 
-async function loginWithGoogle({ idToken, accessToken, accountType = "individual" }) {
+async function loginWithGoogle({ idToken, accessToken, accountType = "individual", additionalFields = {} }) {
   let payload;
 
   if (idToken) {
@@ -217,8 +231,8 @@ async function loginWithGoogle({ idToken, accessToken, accountType = "individual
   if (!user) user = await User.findOne({ where: { email } });
 
   if (!user) {
-    // Create new Google-based user
-    user = await User.create({
+    // Create new Google-based user with additional fields
+    const userData = {
       name: name || email.split("@")[0],
       email,
       passwordHash: "GOOGLE_AUTH",
@@ -227,14 +241,26 @@ async function loginWithGoogle({ idToken, accessToken, accountType = "individual
       provider: "google",
       googleId,
       avatarUrl: picture || null,
-    });
-    await Profile.create({ userId: user.id });
+      ...additionalFields, // Include any additional fields from signup
+    };
+
+    user = await User.create(userData);
+
+    // Create Profile with birthDate if provided
+    const profileData = { userId: user.id };
+    if (additionalFields.birthDate) {
+      profileData.birthDate = additionalFields.birthDate;
+    }
+    await Profile.create(profileData);
   } else {
     // Update linkage & details
     user.googleId = user.googleId || googleId;
     user.provider = "google";
     user.isVerified = true;
     if (picture && user.avatarUrl !== picture) user.avatarUrl = picture;
+
+    // Update any additional fields if provided
+    Object.assign(user, additionalFields);
     await user.save();
   }
 

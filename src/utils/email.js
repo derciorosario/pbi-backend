@@ -54,6 +54,38 @@ async function getTransport() {
 }
 
 /**
+ * Send a plain HTML email (without template)
+ * @param {object} opts
+ * @param {string} opts.to
+ * @param {string} opts.subject
+ * @param {string} opts.html - HTML content
+ * @param {string} opts.text - optional plain text version
+ */
+async function sendEmail({ to, subject, html, text }) {
+  const from = process.env.EMAIL_FROM || "54Links <no-reply@54links.com>";
+  const transport = await getTransport();
+
+  // DEV fallback: log to console if SMTP not configured
+  if (!transport) {
+    console.log("📧 [DEV EMAIL - PLAIN]", {
+      to,
+      subject,
+      html: html.substring(0, 200) + (html.length > 200 ? '...' : ''),
+      text: text ? text.substring(0, 200) + (text.length > 200 ? '...' : '') : undefined,
+    });
+    return { mocked: true };
+  }
+
+  return transport.sendMail({
+    from,
+    to,
+    subject,
+    html,
+    text,
+  });
+}
+
+/**
  * Send an email using a Handlebars template
  * @param {object} opts
  * @param {string} opts.to
@@ -94,6 +126,7 @@ async function sendTemplatedEmail({ to, subject, template, context = {} }) {
 }
 
 module.exports = {
+  sendEmail,
   sendTemplatedEmail,
   BRAND,
 };

@@ -48,6 +48,11 @@ module.exports = (sequelize, DataTypes) => {
       // Skills & Attachments
       skills: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
       attachments: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
+
+      moderation_status: {
+        type: DataTypes.ENUM("approved", "reported", "under_review", "removed", "suspended"),
+        defaultValue: "approved"
+      },
     },
     {
       tableName: "services",

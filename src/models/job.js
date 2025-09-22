@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
       department:     { type: DataTypes.STRING(120) },
       experienceLevel:{ type: DataTypes.ENUM("Junior","Mid-level","Senior","Lead"), allowNull: true },
 
-      // Details
+      //new Fields here - Details
      
       jobType: {
         type: DataTypes.STRING(), // e.g. "Full-Time"
@@ -41,6 +41,8 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING(), // e.g. "Salaried Jobs"
         allowNull: true,
       },
+         /*** end of new fields */
+
       description:    { type: DataTypes.TEXT, allowNull: false },
       requiredSkills: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
 
@@ -84,30 +86,13 @@ module.exports = (sequelize, DataTypes) => {
   );
 
   Job.associate = (models) => {
-    Job.belongsTo(models.User, { foreignKey: "postedByUserId", as: "postedBy" });
-
     // New association to the company user (accountType: "company")
      // ✅ NEW: link a Job to a company User via jobs.companyId
     Job.belongsTo(models.User, {
       as: "company",
-      foreignKey: { name: "companyId", allowNull: true,as:'company' },
+      foreignKey: { name: "companyId", allowNull: true },
       onDelete: "SET NULL",
       onUpdate: "CASCADE",
-    });
-      
-    Job.belongsTo(Category, {
-    as: "category",
-    foreignKey: { name: "categoryId", allowNull: false },
-    onDelete: "RESTRICT",   // ou "NO ACTION" / "CASCADE"
-    onUpdate: "CASCADE",
-    });
-
-    // Subcategoria opcional ⇒ SET NULL é ok
-    Job.belongsTo(Subcategory, {
-    as: "subcategory",
-    foreignKey: { name: "subcategoryId", allowNull: true },
-    onDelete: "SET NULL",
-    onUpdate: "CASCADE",
     });
   };
 

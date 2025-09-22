@@ -7,7 +7,14 @@ const {
   Report,
   Like,
   Comment,
-  Repost
+  Event,
+  Repost,
+  Product,
+  Service,
+  Tourism,
+  Funding,
+  Moment,
+  Need
 } = require("../models");
 
 /**
@@ -39,13 +46,61 @@ exports.getContentForModeration = async (req, res) => {
     }
 
     // Get content based on content type
-    if (contentType === "job") {
-      const { count, rows: jobs } = await Job.findAndCountAll({
+    let contentData = [];
+
+    const contentTypes = ["job", "event", "service", "product", "tourism", "funding", "moment", "need"];
+    const models = { job: Job, event: Event, service: Service, product: Product, tourism: Tourism, funding: Funding, moment: Moment, need: Need };
+    const userAsMap = { job: "postedBy", event: "organizer", service: "provider", product: "seller", tourism: "author", funding: "creator", moment: "user", need: "user" };
+
+    if (contentType === "all") {
+      // Collect content from all types
+      for (const type of contentTypes) {
+        const model = models[type];
+        const userAs = userAsMap[type];
+        const items = await model.findAll({
+          where: whereClause,
+          include: [
+            {
+              model: User,
+              as: userAs,
+              attributes: ["id", "name", "avatarUrl"],
+              include: [
+                {
+                  model: Profile,
+                  as: "profile",
+                  attributes: ["professionalTitle"],
+                  required: false
+                }
+              ]
+            }
+          ],
+          order: [["createdAt", "DESC"]],
+          limit: 1000 // Get more to combine and paginate
+        });
+
+        // Add type to each item for identification
+        items.forEach(item => {
+          item.contentType = type;
+          item.userAs = userAs;
+        });
+
+        contentData.push(...items);
+      }
+
+      // Sort combined results by createdAt DESC
+      contentData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      // Apply pagination
+      contentData = contentData.slice(offset, offset + parseInt(limit));
+    } else if (contentTypes.includes(contentType)) {
+      const model = models[contentType];
+      const userAs = userAsMap[contentType];
+      contentData = await model.findAll({
         where: whereClause,
         include: [
           {
             model: User,
-            as: "postedBy",
+            as: userAs,
             attributes: ["id", "name", "avatarUrl"],
             include: [
               {
@@ -62,81 +117,137 @@ exports.getContentForModeration = async (req, res) => {
         offset: parseInt(offset)
       });
 
-      // Get additional data for each job
-      const jobsWithStats = await Promise.all(
-        jobs.map(async (job) => {
-          const [reportCount, likeCount, commentCount] = await Promise.all([
-            Report.count({ where: { targetType: "job", targetId: job.id } }),
-            Like.count({ where: { targetType: "job", targetId: job.id } }),
-            Comment.count({ where: { targetType: "job", targetId: job.id } })
-          ]);
-
-          // Get the most recent reports
-          const reports = await Report.findAll({
-            where: { targetType: "job", targetId: job.id },
-            include: [
-              {
-                model: User,
-                as: "reporter",
-                attributes: ["id", "name", "avatarUrl"]
-              }
-            ],
-            order: [["createdAt", "DESC"]],
-            limit: 5
-          });
-
-          return {
-            id: job.id,
-            title: job.title,
-            companyName: job.companyName,
-            description: job.description,
-            jobType: job.jobType,
-            workMode: job.workMode,
-            country: job.country,
-            city: job.city,
-            status: job.status,
-            moderation_status: job.moderation_status,
-            createdAt: job.createdAt,
-            updatedAt: job.updatedAt,
-            postedBy: {
-              id: job.postedBy?.id,
-              name: job.postedBy?.name,
-              avatarUrl: job.postedBy?.avatarUrl,
-              professionalTitle: job.postedBy?.profile?.professionalTitle
-            },
-            stats: {
-              reports: reportCount,
-              likes: likeCount,
-              comments: commentCount
-            },
-            reports: reports.map(report => ({
-              id: report.id,
-              category: report.category,
-              description: report.description,
-              createdAt: report.createdAt,
-              reporter: {
-                id: report.reporter?.id,
-                name: report.reporter?.name,
-                avatarUrl: report.reporter?.avatarUrl
-              }
-            }))
-          };
-        })
-      );
-
-      res.json({
-        content: jobsWithStats,
-        pagination: {
-          total: count,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(count / limit)
-        }
+      // Add type to each item
+      contentData.forEach(item => {
+        item.contentType = contentType;
+        item.userAs = userAs;
       });
     } else {
-      // Handle other content types in the future
-      return res.status(400).json({ message: "Unsupported content type" });
+      return res.status(400).json({ message: "Invalid content type" });
     }
+
+    // Get additional data for each item
+    const contentWithStats = await Promise.all(
+      contentData.map(async (item) => {
+        const [reportCount, likeCount, commentCount] = await Promise.all([
+          Report.count({ where: { targetType: item.contentType, targetId: item.id } }),
+          Like.count({ where: { targetType: item.contentType, targetId: item.id } }),
+          Comment.count({ where: { targetType: item.contentType, targetId: item.id } })
+        ]);
+
+        // Get the most recent reports
+        const reports = await Report.findAll({
+          where: { targetType: item.contentType, targetId: item.id },
+          include: [
+            {
+              model: User,
+              as: "reporter",
+              attributes: ["id", "name", "avatarUrl"]
+            }
+          ],
+          order: [["createdAt", "DESC"]],
+          limit: 5
+        });
+
+        // Get recent comments
+        const comments = await Comment.findAll({
+          where: { targetType: item.contentType, targetId: item.id },
+          include: [
+            {
+              model: User,
+              as: "user",
+            }
+          ],
+          order: [["createdAt", "DESC"]],
+          limit: 10
+        });
+
+        // Get recent likes
+        const likes = await Like.findAll({
+          where: { targetType: item.contentType, targetId: item.id },
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "name", "avatarUrl"]
+            }
+          ],
+          order: [["createdAt", "DESC"]],
+          limit: 10
+        });
+
+        return {
+          id: item.id,
+          title: item.title || item.description?.substring(0, 100) || "Untitled",
+          description: item.description,
+          contentType: item.contentType,
+          moderation_status: item.moderation_status,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          postedBy: {
+            id: item[item.userAs]?.id,
+            name: item[item.userAs]?.name,
+            avatarUrl: item[item.userAs]?.avatarUrl,
+            professionalTitle: item[item.userAs]?.profile?.professionalTitle
+          },
+          stats: {
+            reports: reportCount,
+            likes: likeCount,
+            comments: commentCount
+          },
+          reports: reports.map(report => ({
+            id: report.id,
+            category: report.category,
+            description: report.description,
+            createdAt: report.createdAt,
+            reporter: {
+              id: report.reporter?.id,
+              name: report.reporter?.name,
+              avatarUrl: report.reporter?.avatarUrl
+            }
+          })),
+          comments: comments.map(comment => ({
+            id: comment.id,
+            content: comment.text,
+            createdAt: comment.createdAt,
+            user: {
+              id: comment.user?.id,
+              name: comment.user?.name,
+              avatarUrl: comment.user?.avatarUrl
+            }
+          })),
+          likes: likes.map(like => ({
+            id: like.id,
+            createdAt: like.createdAt,
+            user: {
+              id: like.user?.id,
+              name: like.user?.name,
+              avatarUrl: like.user?.avatarUrl
+            }
+          }))
+        };
+      })
+    );
+
+    // Calculate total for pagination
+    let totalCount = 0;
+    if (contentType === "all") {
+      for (const type of contentTypes) {
+        totalCount += await models[type].count({ where: whereClause });
+      }
+    } else {
+      totalCount = await models[contentType].count({ where: whereClause });
+    }
+
+    res.json({
+      content: contentWithStats,
+      pagination: {
+        total: totalCount,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
   } catch (error) {
     console.error("Error getting content for moderation:", error);
     res.status(500).json({ message: "Failed to get content for moderation" });
@@ -148,6 +259,7 @@ exports.getContentForModeration = async (req, res) => {
  */
 exports.updateModerationStatus = async (req, res) => {
   try {
+    
     // Check if user is admin
     if (req.user.accountType !== "admin") {
       return res.status(403).json({ message: "Unauthorized: Admin access required" });
@@ -161,24 +273,48 @@ exports.updateModerationStatus = async (req, res) => {
     }
 
     // Update content based on content type
+    let model, entityName;
     if (contentType === "job") {
-      const job = await Job.findByPk(id);
-      if (!job) {
-        return res.status(404).json({ message: "Job not found" });
-      }
-
-      job.moderation_status = moderationStatus;
-      await job.save();
-
-      res.json({
-        message: `Job moderation status updated to ${moderationStatus}`,
-        id: job.id,
-        moderation_status: job.moderation_status
-      });
+      model = Job;
+      entityName = "Job";
+    } else if (contentType === "event") {
+      model = Event;
+      entityName = "Event";
+    } else if (contentType === "service") {
+      model = Service;
+      entityName = "Service";
+    } else if (contentType === "product") {
+      model = Product;
+      entityName = "Product";
+    } else if (contentType === "tourism") {
+      model = Tourism;
+      entityName = "Tourism";
+    } else if (contentType === "funding") {
+      model = Funding;
+      entityName = "Funding";
+    } else if (contentType === "moment") {
+      model = Moment;
+      entityName = "Moment";
+    } else if (contentType === "need") {
+      model = Need;
+      entityName = "Need";
     } else {
-      // Handle other content types in the future
       return res.status(400).json({ message: "Unsupported content type" });
     }
+
+    const entity = await model.findByPk(id);
+    if (!entity) {
+      return res.status(404).json({ message: `${entityName} not found` });
+    }
+
+    entity.moderation_status = moderationStatus;
+    await entity.save();
+
+    res.json({
+      message: `${entityName} moderation status updated to ${moderationStatus}`,
+      id: entity.id,
+      moderation_status: entity.moderation_status
+    });
   } catch (error) {
     console.error("Error updating moderation status:", error);
     res.status(500).json({ message: "Failed to update moderation status" });
@@ -195,51 +331,52 @@ exports.getModerationStats = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized: Admin access required" });
     }
 
-    // Get counts for different moderation statuses
-    const [
-      reportedCount,
-      underReviewCount,
-      approvedCount,
-      removedCount,
-      suspendedCount,
-      totalReportsCount
-    ] = await Promise.all([
-      Job.count({ where: { moderation_status: "reported" } }),
-      Job.count({ where: { moderation_status: "under_review" } }),
-      Job.count({ where: { moderation_status: "approved" } }),
-      Job.count({ where: { moderation_status: "removed" } }),
-      Job.count({ where: { moderation_status: "suspended" } }),
-      Report.count()
-    ]);
+    // Get counts for different moderation statuses across all content types
+    const contentTypes = ["job", "event", "service", "product", "tourism", "funding", "moment", "need"];
+    const models = { job: Job, event: Event, service: Service, product: Product, tourism: Tourism, funding: Funding, moment: Moment, need: Need };
 
-    // Get counts for today
+    const statusCounts = { reported: 0, under_review: 0, approved: 0, removed: 0, suspended: 0 };
+
+    for (const type of contentTypes) {
+      const model = models[type];
+      statusCounts.reported += await model.count({ where: { moderation_status: "reported" } });
+      statusCounts.under_review += await model.count({ where: { moderation_status: "under_review" } });
+      statusCounts.approved += await model.count({ where: { moderation_status: "approved" } });
+      statusCounts.removed += await model.count({ where: { moderation_status: "removed" } });
+      statusCounts.suspended += await model.count({ where: { moderation_status: "suspended" } });
+    }
+
+    const totalReportsCount = await Report.count();
+
+    // Get counts for today across all content types
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [
-      approvedToday,
-      removedToday
-    ] = await Promise.all([
-      Job.count({
+    let approvedToday = 0;
+    let removedToday = 0;
+
+    for (const type of contentTypes) {
+      const model = models[type];
+      approvedToday += await model.count({
         where: {
           moderation_status: "approved",
           updatedAt: { [Op.gte]: today }
         }
-      }),
-      Job.count({
+      });
+      removedToday += await model.count({
         where: {
           moderation_status: "removed",
           updatedAt: { [Op.gte]: today }
         }
-      })
-    ]);
+      });
+    }
 
     res.json({
-      reported: reportedCount,
-      underReview: underReviewCount,
-      approved: approvedCount,
-      removed: removedCount,
-      suspended: suspendedCount,
+      reported: statusCounts.reported,
+      underReview: statusCounts.under_review,
+      approved: statusCounts.approved,
+      removed: statusCounts.removed,
+      suspended: statusCounts.suspended,
       totalReports: totalReportsCount,
       today: {
         approved: approvedToday,

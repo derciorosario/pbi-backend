@@ -32,7 +32,9 @@ exports.getAllUsers = async (req, res) => {
     const offset = (page - 1) * limit;
     
     // Build where clause based on filters
-    const whereClause = {};
+     const whereClause = {
+      accountType: { [Op.ne]: "admin" } // exclude admin accounts
+    };
     
     if (search) {
       whereClause[Op.or] = [
@@ -317,7 +319,7 @@ exports.toggleUserSuspension = async (req, res) => {
     }
 
     // Update user's verification status (inverse of suspended)
-    user.isVerified = !suspended;
+    user.isVerified = suspended;
     await user.save();
 
     res.json({ 

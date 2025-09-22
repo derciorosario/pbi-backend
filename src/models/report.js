@@ -7,7 +7,7 @@ module.exports = (sequelize, DataTypes) => {
       id: { type: DataTypes.UUID, defaultValue: () => uuidv4(), primaryKey: true },
       reporterId: { type: DataTypes.UUID, allowNull: false },
       targetType: {
-        type: DataTypes.ENUM("user", "job", "event", "service", "product", "tourism", "funding", "comment"),
+        type: DataTypes.STRING(),
         allowNull: false
       },
       targetId:   { type: DataTypes.UUID, allowNull: false },

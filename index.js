@@ -60,6 +60,12 @@ app.use("/api/onboarding", onboardingRoutes)
 const jobRoutes = require("./src/routes/job.routes");
 app.use("/api/jobs", jobRoutes)
 
+const jobApplicationRoutes = require("./src/routes/jobApplication.routes");
+app.use("/api/job-applications", jobApplicationRoutes);
+
+const eventRegistrationRoutes = require("./src/routes/eventRegistration.routes");
+app.use("/api/event-registrations", eventRegistrationRoutes);
+
 const momentRoutes = require("./src/routes/moment.routes");
 app.use("/api/moments", momentRoutes);
 
@@ -90,6 +96,7 @@ app.use("/api", feedRoutes);
 
 // index.js or src/app.js
 app.use("/api", require("./src/routes/profile.routes"));
+app.use("/api/profile", require("./src/routes/profileApplications.routes"));
 
 const adminRoutes = require("./src/routes/admin.routes");
 app.use("/api", adminRoutes);
@@ -130,6 +137,12 @@ app.use("/api", require("./src/routes/report.routes"))
 app.use("/api", require("./src/routes/social.routes"))
 app.use("/api/admin/moderation", require("./src/routes/moderation.routes"))
 
+// Company management routes
+app.use("/api/company", require("./src/routes/company.routes"))
+
+// Organization join request routes
+app.use("/api/organization", require("./src/routes/organization.routes"))
+
 // ❌ 404 handler
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
@@ -144,8 +157,8 @@ app.use((err, req, res, next) => {
 // ---------------------------
 const PORT = process.env.PORT || 5000;
 
-const { seedIfEmpty } = require("./src/utils/seed");
-const seedAll = require("./src/seeds/seedAll");
+//const { seedIfEmpty } = require("./src/utils/seed");
+//const seedAll = require("./src/seeds/seedAll");
 
 
 
@@ -167,6 +180,14 @@ const seedAll = require("./src/seeds/seedAll");
     // 🔑 Ensure default admin exists
     await ensureAdmin();
 
+    // Create event_registrations table if it doesn't exist
+    try {
+      const { createEventRegistrationsTable } = require('./scripts/create_event_registrations_table');
+      await createEventRegistrationsTable();
+    } catch (error) {
+      console.error("❌ Error creating event_registrations table:", error);
+    }
+
     // Run migration script to add moderation_status column
     try {
       const { addModerationStatusColumn } = require('./scripts/add_moderation_status');
@@ -179,6 +200,19 @@ const seedAll = require("./src/seeds/seedAll");
     } catch (error) {
       console.error("❌ Error running migration script:", error);
     }
+
+    // Run migration script to create job_applications table
+    /*try {
+      const { createJobApplicationsTable } = require('./scripts/create_job_applications_table');
+      const migrationResult = await createJobApplicationsTable();
+      if (migrationResult) {
+        console.log("✅ Job applications table migration executed successfully");
+      } else {
+        console.error("❌ Job applications table migration failed");
+      }
+    } catch (error) {
+      console.error("❌ Error running job applications table migration:", error);
+    }*/
     
     // Run migration script to add companyId to jobs table
 
@@ -200,13 +234,12 @@ const seedAll = require("./src/seeds/seedAll");
    //require("./scripts/seedGeneralCategories.js");
    //require("./scripts/seedIndustryCategories.js");
 
-   //await seedAll();
-   //
     // Track online users
 
     //add seeds:
+      //node src/seeds/seedUsers.js
     //node node src/seeds/seedProductsServicesTourismFunding.js
-    //node src/seeds/seedUsers.js
+  
 
 
 

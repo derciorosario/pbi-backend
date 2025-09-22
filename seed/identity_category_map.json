@@ -27,7 +27,7 @@
   
   "identities": [
   {
-    "name": "Entrepreneur (Startups)",
+    "name": "Entrepreneurs",
     "categories": [
       {
         "name": "Technology",
@@ -138,7 +138,7 @@
     ]
   },
    {
-    "name": "Established Entrepreneurs / Businesses",
+    "name": "Business Owners / Businesses",
     "categories": [
       {
         "name": "SME",
@@ -329,7 +329,7 @@
     ]
   },
   {
-  "name": "Professional",
+  "name": "Professionals",
   "categories": [
     {
       "name": "Administrative",
@@ -1267,10 +1267,9 @@
 
   ]
 }
-
 ,
 {
-  "name": "Investor",
+  "name": "Investors",
   "categories": [
     {
       "name": "Angel Investor",
@@ -1431,6 +1430,72 @@
         { "name": "Gender Equality & Women Empowerment", "subsubs": ["Equity Investment","Debt Financing","Seed & Early-Stage Funding","Series/Scale-up Investment","Grants","Donations","Endowments","Sponsorships","Corporate Social Responsibility (CSR)","Public-Private Partnerships"] },
         { "name": "Youth Development", "subsubs": ["Equity Investment","Debt Financing","Seed & Early-Stage Funding","Series/Scale-up Investment","Grants","Donations","Endowments","Sponsorships","Corporate Social Responsibility (CSR)","Public-Private Partnerships"] }
       ]
+    },
+    
+    {
+      "name": "Executives",
+      "categories": [
+        {
+          "name": "C-Level Executives (C-Suite)",
+          "subcategories": [
+            { "name": "Chief Executive Officer (CEO)" },
+            { "name": "Chief Operating Officer (COO)" },
+            { "name": "Chief Financial Officer (CFO)" },
+            { "name": "Chief Technology Officer (CTO)" },
+            { "name": "Chief Marketing Officer (CMO)" },
+            { "name": "Chief Human Resources Officer (CHRO)" },
+            { "name": "Chief Information Officer (CIO)" },
+            { "name": "Chief Strategy Officer (CSO)" }
+          ]
+        },
+        {
+          "name": "Vice Presidents",
+          "subcategories": [
+            { "name": "Executive Vice President (EVP)" },
+            { "name": "Senior Vice President (SVP)" },
+            { "name": "Vice President (VP)" }
+          ]
+        },
+        {
+          "name": "Directors",
+          "subcategories": [
+            { "name": "Global Managing Director" },
+            { "name": "Regional Managing Director" },
+            { "name": "Managing Director" },
+            { "name": "Executive Director" },
+            { "name": "Non-Executive Director" },
+            { "name": "Independent Director" },
+            { "name": "Associate Director" },
+            { "name": "Assistant Director" }
+          ]
+        },
+        {
+          "name": "Managers",
+          "subcategories": [
+            { "name": "General Manager (GM)" },
+            { "name": "Operations Manager" },
+            { "name": "Project Manager" },
+            { "name": "Product Manager" },
+            { "name": "Marketing Manager" },
+            { "name": "Sales Manager" },
+            { "name": "Finance Manager" },
+            { "name": "Human Resources (HR) Manager" },
+            { "name": "IT / Technology Manager" },
+            { "name": "Supply Chain / Logistics Manager" },
+            { "name": "Customer Service Manager" },
+            { "name": "Business Development Manager" }
+          ]
+        },
+        {
+          "name": "Other Executive Roles",
+          "subcategories": [
+            { "name": "General Counsel / Chief Legal Officer" },
+            { "name": "Chief Innovation Officer" },
+            { "name": "Chief Risk Officer" },
+            { "name": "Chief Compliance Officer" }
+          ]
+        }
+      ]
     }
   ]
 }
@@ -1441,7 +1506,7 @@
 ],
 "company_identities": [
       {
-      "name": "Business",
+      "name": "Companies",
       "categories": [
         {
           "name": "Technology",
@@ -1534,7 +1599,7 @@
       ]
     },
     {
-      "name": "Non-Profit Organizations (NPOs/NGOs)",
+      "name": "NGOs/NPOs",
       "categories": [
         {
           "name": "Humanitarian & Relief NGOs",
@@ -1650,7 +1715,7 @@
       ]
     },
     {
-      "name": "Government / Public Sector Organizations",
+      "name": "Government / Public Sector",
       "categories": [
         { "name": "Central/Federal Government Agencies" },
         { "name": "State/Regional Government Agencies" },
@@ -1661,7 +1726,7 @@
       ]
     },
     {
-      "name": "Educational & Research Organizations",
+      "name": "Educational & Research",
       "categories": [
         { "name": "Schools (Public, Private)" },
         { "name": "Colleges & Universities" },
@@ -1671,7 +1736,7 @@
       ]
     },
     {
-      "name": "Healthcare Organizations",
+      "name": "Healthcare",
       "categories": [
         { "name": "Public Hospitals" },
         { "name": "Private Hospitals & Clinics" },
@@ -1681,7 +1746,7 @@
       ]
     },
     {
-      "name": "International / Intergovernmental Organizations",
+      "name": "International / Intergovernmental",
       "categories": [
         { "name": "United Nations (UN)", "subsubs": ["UNICEF", "WHO", "UNESCO"] },
         { "name": "World Bank & IMF" },
@@ -1694,7 +1759,7 @@
       ]
     },
     {
-      "name": "Hybrid / Special Organizations",
+      "name": "Hybrid / Special",
       "categories": [
         { "name": "Social Enterprises (business + social impact)" },
         { "name": "Professional Associations", "subsubs": ["Bar Association", "Medical Associations"] },
@@ -1799,7 +1864,7 @@
       ]
     },
     {
-      "name": "Non-Profit Organizations (NPOs/NGOs)",
+      "name": "NGOs/NPOs",
       "categories": [
         {
           "name": "Humanitarian & Relief NGOs",
@@ -1931,7 +1996,7 @@
       ]
     },
     {
-      "name": "Educational & Research Organizations",
+      "name": "Educational & Research",
       "categories": [
         {
           "name": "Institutions",
@@ -1946,7 +2011,7 @@
       ]
     },
     {
-      "name": "Healthcare Organizations",
+      "name": "Healthcare",
       "categories": [
         {
           "name": "Providers",
@@ -1979,7 +2044,7 @@
       ]
     },
     {
-      "name": "Hybrid / Special Organizations",
+      "name": "Hybrid / Special",
       "categories": [
         {
           "name": "Types",

@@ -8,5 +8,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     { tableName: "users_goals", timestamps: true }
   );
+
+  UserGoal.associate = (models) => {
+    UserGoal.belongsTo(models.User, { foreignKey: "userId", as: "user" });
+    UserGoal.belongsTo(models.Goal, { foreignKey: "goalId", as: "goal" });
+  };
+
   return UserGoal;
 };

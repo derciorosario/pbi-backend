@@ -297,7 +297,7 @@ async function getConnectionUpdates(userId, since) {
         description: e.description,
         createdBy: e.organizer,                      // normalize alias -> createdBy
         createdAt: e.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/event/${e.id}`
+        link: `${process.env.BASE_URL || 'https://54links.com'}/event/${e.id}`
       })),
       ...services.map(s => ({
         type: 'service',
@@ -305,7 +305,7 @@ async function getConnectionUpdates(userId, since) {
         description: s.description,
         createdBy: s.provider,
         createdAt: s.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/service/${s.id}`
+        link: `${process.env.BASE_URL || 'https://54links.com'}/service/${s.id}`
       })),
       ...products.map(p => ({
         type: 'product',
@@ -313,7 +313,7 @@ async function getConnectionUpdates(userId, since) {
         description: p.description,
         createdBy: p.seller,
         createdAt: p.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/product/${p.id}`
+        link: `${process.env.BASE_URL || 'https://54links.com'}/product/${p.id}`
       })),
       ...tourismPosts.map(t => ({
         type: 'Experience',
@@ -321,7 +321,7 @@ async function getConnectionUpdates(userId, since) {
         description: t.description,
         createdBy: t.author,
         createdAt: t.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/experience/${t.id}`
+        link: `${process.env.BASE_URL || 'https://54links.com'}/experience/${t.id}`
       })),
       ...fundingPosts.map(f => ({
         type: 'funding investment',
@@ -329,7 +329,7 @@ async function getConnectionUpdates(userId, since) {
         description: f.pitch,                        // pitch -> description for template
         createdBy: f.creator,
         createdAt: f.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/funding/${f.id}`
+        link: `${process.env.BASE_URL || 'https://54links.com'}/funding/${f.id}`
       }))
     ];
 
@@ -403,7 +403,7 @@ async function getJobRecommendations(userId, since) {
         description: job.description,
         createdBy: job.postedBy,
         createdAt: job.createdAt,
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/jobs/${job.id}`,
+        link: `${process.env.BASE_URL || 'https://54links.com'}/jobs/${job.id}`,
         matchPercentage
       };
     });
@@ -588,7 +588,7 @@ async function getConnectionRecommendations(userId) {
         subcategories: uniqueSubcategories,
         goals: goalNames,
         location: [u.city, u.country].filter(Boolean).join(', '),
-        link: `${process.env.FRONTEND_URL || 'https://54links.com'}/profile/${u.id}`,
+        link: `${process.env.BASE_URL || 'https://54links.com'}/profile/${u.id}`,
         matchPercentage
       };
     });
@@ -637,7 +637,7 @@ async function sendNotificationEmails(frequency) {
             name: user.name,
             frequency,
             updates,
-            baseUrl: process.env.FRONTEND_URL || 'https://54links.com'
+            baseUrl: process.env.BASE_URL || 'https://54links.com'
           });
           await sendEmail({ to: user.email, subject: `Your ${frequency} connection updates`, html });
         }
@@ -650,7 +650,7 @@ async function sendNotificationEmails(frequency) {
           const html = recommendationHtml({
             name: user.name,
             recommendations,
-            baseUrl: process.env.FRONTEND_URL || 'https://54links.com'
+            baseUrl: process.env.BASE_URL || 'https://54links.com'
           });
           await sendEmail({ to: user.email, subject: 'People you may want to connect with', html });
         }
@@ -663,7 +663,7 @@ async function sendNotificationEmails(frequency) {
           const html = jobOpportunityHtml({
             name: user.name,
             jobs,
-            baseUrl: process.env.FRONTEND_URL || 'https://54links.com'
+            baseUrl: process.env.BASE_URL || 'https://54links.com'
           });
           await sendEmail({ to: user.email, subject: 'Job opportunities for you', html });
         }

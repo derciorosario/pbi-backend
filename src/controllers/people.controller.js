@@ -16,6 +16,7 @@ const {
   Identity,
   SubsubCategory,
   UserBlock,
+  CompanyStaff,
 } = require("../models");
 
 function like(v) { return { [Op.like]: `%${v}%` }; }
@@ -50,6 +51,42 @@ exports.searchPeople = async (req, res) => {
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
     const currentUserId = req.user?.id || null;
+
+    // Check if user has connectionsOnly enabled
+    let connectionsOnly = false;
+    let connectedUserIds = [];
+
+    if (currentUserId) {
+      try {
+        const { UserSettings } = require("../models");
+        const userSettings = await UserSettings.findOne({
+          where: { userId: currentUserId },
+          attributes: ['connectionsOnly']
+        });
+        connectionsOnly = false //userSettings?.connectionsOnly || false;
+
+        if (connectionsOnly) {
+          // Get all connected user IDs (both directions)
+          const connections = await Connection.findAll({
+            where: {
+              [Op.or]: [
+                { userOneId: currentUserId },
+                { userTwoId: currentUserId }
+              ]
+            },
+            attributes: ['userOneId', 'userTwoId']
+          });
+
+          connectedUserIds = connections.flatMap(conn =>
+            conn.userOneId === currentUserId ? [conn.userTwoId] : [conn.userOneId]
+          );
+
+          console.log(`Connections only filter enabled. Connected users: ${connectedUserIds.length}`);
+        }
+      } catch (error) {
+        console.error("Error loading user settings for connectionsOnly filter:", error);
+      }
+    }
 
     let myCategoryIds = [], mySubcategoryIds = [], myGoalIds = [];
     let myCountry = null, myCity = null;
@@ -98,8 +135,16 @@ exports.searchPeople = async (req, res) => {
 
     // =============== WHERE (User) =================
     const andClauses = [];
-    const whereUser = { accountType: { [Op.ne]: "admin" } };
+    const whereUser = {
+      accountType: { [Op.ne]: "admin" },
+      isVerified: true
+    };
     if (currentUserId) whereUser.id = { [Op.notIn]: [String(currentUserId), ...excludeIds] };
+
+    // Apply connectionsOnly filter if enabled
+    if (connectionsOnly && connectedUserIds.length > 0) {
+      whereUser.id = { [Op.in]: connectedUserIds };
+    }
 
    
 
@@ -222,6 +267,21 @@ exports.searchPeople = async (req, res) => {
         },
         interestsInclude,
         goalsInclude,
+        // Include company staff relationships for approved staff members
+        {
+          model: CompanyStaff,
+          as: "staffOf",
+          where: { status: "confirmed" },
+          required: false,
+          include: [
+            {
+              model: User,
+              as: "company",
+              attributes: ["id", "name", "avatarUrl"],
+              include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"], required: false }]
+            }
+          ]
+        },
         ...(effIdentityIds.length
           ? [{
               model: UserIdentityInterest,
@@ -366,6 +426,7 @@ exports.searchPeople = async (req, res) => {
           role: u.profile?.professionalTitle || null,
           city: u.city || null,
           country: u.country || null,
+          countryOfResidence: u.countryOfResidence,
           avatarUrl: u.profile?.avatarUrl || u.avatarUrl || null,
           email: u.email,
           lookingFor: goalNames.join(", "),
@@ -377,6 +438,20 @@ exports.searchPeople = async (req, res) => {
           connectionStatus: cStatus,
           accountType: u.accountType,
           matchPercentage,
+
+          // Company information for approved staff members
+          companyMemberships: u.staffOf?.map(staff => ({
+            id: staff.id,
+            companyId: staff.companyId,
+            role: staff.role,
+            isMain: staff.isMain,
+            joinedAt: staff.confirmedAt,
+            company: {
+              id: staff.company.id,
+              name: staff.company.name,
+              avatarUrl: staff.company.profile?.avatarUrl || staff.company.avatarUrl,
+            }
+          })) || [],
         },
       };
     });

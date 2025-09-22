@@ -9,5 +9,11 @@ module.exports = (sequelize, DataTypes) => {
     timestamps: true,
     indexes: [{ unique: true, fields: ["userId","identityId"] }],
   });
+
+  UserIdentity.associate = (models) => {
+    UserIdentity.belongsTo(models.User, { foreignKey: "userId", as: "user" });
+    UserIdentity.belongsTo(models.Identity, { foreignKey: "identityId", as: "identity" });
+  };
+
   return UserIdentity;
 };

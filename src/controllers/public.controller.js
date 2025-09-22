@@ -29,6 +29,8 @@ exports.getIdentityCatalog = async (req, res) => {
     const blueprintIdentities =
       type === "company" ? blueprint.company_identities || [] : blueprint.identities || [];
 
+      console.log({type})
+
     // Load canonical taxonomy from DB filtered by type
     const cats = await Category.findAll({
       attributes: ["id", "name", "type"],

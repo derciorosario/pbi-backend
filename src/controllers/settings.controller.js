@@ -23,7 +23,10 @@ exports.getSettings = async (req, res) => {
           messages: { email: true },
           meetingRequests: { email: true }
         }),
-        emailFrequency: "daily"
+        emailFrequency: "daily",
+        hideMainFeed: false,
+        connectionsOnly: false,
+        contentType: "all"
       }
     });
 
@@ -43,7 +46,7 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { notifications, emailFrequency } = req.body;
+    const { notifications, emailFrequency, hideMainFeed, connectionsOnly, contentType } = req.body;
 
     // Validate input
     if (!notifications || !emailFrequency) {
@@ -54,6 +57,22 @@ exports.updateSettings = async (req, res) => {
     const validFrequencies = ["daily", "weekly", "monthly", "auto"];
     if (!validFrequencies.includes(emailFrequency)) {
       return res.status(400).json({ message: "Invalid email frequency" });
+    }
+
+    // Validate hideMainFeed
+    if (typeof hideMainFeed !== 'boolean') {
+      return res.status(400).json({ message: "hideMainFeed must be a boolean" });
+    }
+
+    // Validate connectionsOnly
+    if (typeof connectionsOnly !== 'boolean') {
+      return res.status(400).json({ message: "connectionsOnly must be a boolean" });
+    }
+
+    // Validate contentType
+    const validContentTypes = ["all", "text", "images"];
+    if (!validContentTypes.includes(contentType)) {
+      return res.status(400).json({ message: "Invalid content type" });
     }
 
     // Find or create user settings
@@ -68,13 +87,19 @@ exports.updateSettings = async (req, res) => {
           messages: { email: true },
           meetingRequests: { email: true }
         }),
-        emailFrequency: "daily"
+        emailFrequency: "daily",
+        hideMainFeed: false,
+        connectionsOnly: false,
+        contentType: "all"
       }
     });
 
     // Update settings
     settings.notifications = typeof notifications === 'string' ? notifications : JSON.stringify(notifications);
     settings.emailFrequency = emailFrequency;
+    settings.hideMainFeed = hideMainFeed;
+    settings.connectionsOnly = connectionsOnly;
+    settings.contentType = contentType;
     await settings.save();
 
     // Return the updated settings

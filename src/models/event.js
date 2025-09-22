@@ -53,7 +53,11 @@ module.exports = (sequelize, DataTypes) => {
 
       // Media
       coverImageUrl: { type: DataTypes.TEXT('long'), allowNull: true },
-      // status etc. can be added later
+
+      moderation_status: {
+        type: DataTypes.ENUM("approved", "reported", "under_review", "removed", "suspended"),
+        defaultValue: "approved"
+      },
     },
     {
       tableName: "events",

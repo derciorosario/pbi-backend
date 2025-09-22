@@ -20,6 +20,10 @@ router.post("/profile/work-samples", auth(true), C.createWorkSample);
 router.put("/profile/work-samples/:id", auth(true), C.updateWorkSample);
 router.delete("/profile/work-samples/:id", auth(true), C.deleteWorkSample);
 
+// Company applications and registrations
+router.get("/profile/job-applications", auth(true), C.getJobApplicationsForCompany);
+router.get("/profile/event-registrations", auth(true), C.getEventRegistrationsForCompany);
+
 module.exports = router;
 
 
