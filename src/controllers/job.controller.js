@@ -227,3 +227,20 @@ exports.listJobs = async (req, res) => {
   });
   res.json({ jobs });
 };
+
+exports.deleteJob = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const job = await Job.findByPk(id);
+    if (!job) return res.status(404).json({ message: "Job not found" });
+    if (String(job.postedByUserId) !== String(req.user?.id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await job.destroy();
+    res.json({ message: "Job deleted successfully" });
+  } catch (err) {
+    console.error("deleteJob error", err);
+    res.status(400).json({ message: err.message });
+  }
+};

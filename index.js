@@ -170,7 +170,7 @@ const PORT = process.env.PORT || 5000;
 
     // Auto-sync DB tables (use migrations in production)
     // Temporarily disabled to avoid schema issues during development
-    // await sequelize.sync({ force: false, alter: true });
+     await sequelize.sync({ force: false, alter: true });
     
     // 👉 Run seeding if needed
     //await seedIfEmpty();
@@ -240,10 +240,6 @@ const PORT = process.env.PORT || 5000;
       //node src/seeds/seedUsers.js
     //node node src/seeds/seedProductsServicesTourismFunding.js
   
-
-
-
-
 
 
 const { Message, Conversation, User, Connection, Profile, ConnectionRequest, MeetingRequest  } = require("./src/models");

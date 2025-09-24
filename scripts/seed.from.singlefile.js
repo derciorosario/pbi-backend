@@ -14,8 +14,8 @@ const {
 const norm = (s) => String(s || "").trim();
 
 // -------- CONFIG: choose what to seed --------
-const sectionsToSeed = ["goals", "identities", "company_identities"];
-//const sectionsToSeed = ["company_identities"];
+//const sectionsToSeed = ["goals", "identities", "company_identities"];
+const sectionsToSeed = ["identities"];
 
 async function findOrCreateCategoryByName(name, identityId = null, type = "individual") {
   const n = norm(name);
@@ -57,22 +57,31 @@ async function seedFromSingleFile() {
       const name = norm(identity.name);
       if (!name) continue;
 
-      const [identityRow] = await Identity.findOrCreate({
-        where: { name },
-        defaults: { name, type: "individual" },
-      });
+       console.log({name,n:identity.name})
 
-      for (const cat of identity.categories || []) {
-        const catRow = await findOrCreateCategoryByName(cat.name, identityRow.id, "individual");
+      if(identity.name=="Executives"){
 
-        for (const sub of cat.subcategories || []) {
-          const subRow = await findOrCreateSubcategory(catRow.id, sub.name, "individual");
+       
 
-          for (const ssName of sub.subsubs || []) {
-            await findOrCreateSubsub(subRow.id, ssName, "individual");
+          const [identityRow] = await Identity.findOrCreate({
+            where: { name },
+            defaults: { name, type: "individual" },
+          });
+
+          for (const cat of identity.categories || []) {
+            const catRow = await findOrCreateCategoryByName(cat.name, identityRow.id, "individual");
+
+            for (const sub of cat.subcategories || []) {
+              const subRow = await findOrCreateSubcategory(catRow.id, sub.name, "individual");
+
+              for (const ssName of sub.subsubs || []) {
+                await findOrCreateSubsub(subRow.id, ssName, "individual");
+              }
+            }
           }
-        }
+
       }
+
     }
   }
 

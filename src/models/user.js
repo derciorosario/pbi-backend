@@ -26,7 +26,11 @@ module.exports = (sequelize, DataTypes) => {
       // Individual fields
       gender: {
         type: DataTypes.ENUM("male", "female", "other", "prefer-not-to-say"),
-        allowNull: true
+        allowNull: true,
+        set(v) {
+          // turn "", null, undefined into NULL in DB
+          this.setDataValue("gender", v && String(v).trim() ? v : null);
+        },
       },
 
       // Company fields

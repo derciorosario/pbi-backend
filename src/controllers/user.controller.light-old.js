@@ -19,6 +19,9 @@ const normalizePair = (id1, id2) => {
   return a < b ? [a, b] : [b, a];
 };
 
+
+const stripDataUrl = (s) => (s && String(s).startsWith("data:") ? null : s);
+
 const toPublicUser = (u) => ({
   id: u.id,
   name: u.name,
@@ -26,7 +29,31 @@ const toPublicUser = (u) => ({
   city: u.city || null,
   country: u.country || null,
   avatarUrl: u.profile?.avatarUrl || u.avatarUrl || null,
+  //avatarUrl: stripDataUrl(u?.profile?.avatarUrl || u?.avatarUrl) || null,
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -37,47 +64,82 @@ exports.getPublicProfile = async (req, res) => {
     const { id } = req.params;
     const viewerId = req.user?.id || null;
 
-    // ── Base user with taxonomy selections kept as before ─────────────────────
+    // 1) Fetch the user with LEAN includes only (no large arrays/blobs)
     const user = await User.findByPk(id, {
       attributes: ["id", "name", "email", "accountType", "country", "city", "avatarUrl", "createdAt"],
       include: [
         {
-          model: Profile, as: "profile",
-          include: [{
-            model: WorkSample, as: "workSamples",
-            where: (viewerId && String(viewerId) === String(id)) ? undefined : { isPublic: true },
-            required: false,
-            attributes: [
-              "id","title","description","projectUrl","imageBase64","imageFileName",
-              "category","technologies","attachments","completionDate","isPublic","createdAt","updatedAt"
-            ],
-            order: [["createdAt","DESC"]],
-          }]
+          model: Profile,
+          as: "profile",
+          attributes: [
+            "id",
+            "avatarUrl",
+            "professionalTitle",
+            "about",
+            "experienceLevel",
+            "skills",
+            "languages",
+            "primaryIdentity",
+          ],
+          required: false,
         },
 
-        // ⬇️ keep these as-is
-        { model: Goal,         as: "goals",           attributes: ["id", "name"], through: { attributes: [] } },
-        { model: Identity,     as: "identities",      attributes: ["id", "name"], through: { attributes: [] } },
-        { model: Category,     as: "categories",      attributes: ["id", "name"], through: { attributes: [] } },
-        { model: Subcategory,  as: "subcategories",   attributes: ["id", "name"], through: { attributes: [] } },
-        { model: SubsubCategory, as: "subsubcategories", attributes: ["id", "name"], through: { attributes: [] } },
+        // BelongsToMany — names only, no join-table attrs
+        { model: Goal,        as: "goals",           attributes: ["id", "name"], through: { attributes: [] }, required: false },
+        { model: Identity,    as: "identities",      attributes: ["id", "name"], through: { attributes: [] }, required: false },
+        { model: Category,    as: "categories",      attributes: ["id", "name"], through: { attributes: [] }, required: false },
+        { model: Subcategory, as: "subcategories",   attributes: ["id", "name"], through: { attributes: [] }, required: false },
+        { model: SubsubCategory, as: "subsubcategories", attributes: ["id", "name"], through: { attributes: [] }, required: false },
 
-        // ⛔️ removed the 4 *Interest includes here
+        // Interests — only ids+names, LEFT joins (required:false)
+        {
+          model: UserIdentityInterest,
+          as: "identityInterests",
+          attributes: ["id"],
+          include: [{ model: Identity, as: "identity", attributes: ["id", "name"], required: false }],
+          required: false,
+        },
+        {
+          model: UserCategoryInterest,
+          as: "categoryInterests",
+          attributes: ["id"],
+          include: [{ model: Category, as: "category", attributes: ["id", "name"], required: false }],
+          required: false,
+        },
+        {
+          model: UserSubcategoryInterest,
+          as: "subcategoryInterests",
+          attributes: ["id"],
+          include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false }],
+          required: false,
+        },
+        {
+          // ⚠️ Alias MUST match your association: 'subsubInterests'
+          model: UserSubsubCategoryInterest,
+          as: "subsubInterests",
+          attributes: ["id"],
+          include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"], required: false }],
+          required: false,
+        },
 
-        // Keep company staff include
+        // Company staff memberships (lean)
         {
           model: CompanyStaff,
-          as: "staffOf",
+          as: "staffOf",               // matches User.hasMany(CompanyStaff, { as: 'staffOf', foreignKey: 'staffId' })
           where: { status: "confirmed" },
           required: false,
+          attributes: ["id", "companyId", "role", "isMain", "confirmedAt"],
           include: [
             {
               model: User,
               as: "company",
-              attributes: ["id", "name", "avatarUrl"],
-              include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"], required: false }]
-            }
-          ]
+              attributes: ["id", "name", "avatarUrl", "city", "country"],
+              include: [
+                { model: Profile, as: "profile", attributes: ["avatarUrl", "professionalTitle"], required: false },
+              ],
+              required: false,
+            },
+          ],
         },
       ],
     });
@@ -85,32 +147,31 @@ exports.getPublicProfile = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.accountType === "admin") return res.status(404).json({ message: "User not found" });
 
-    // ── Interests fetched separately (same final shape) ───────────────────────
-    const [
-      identityInterestsRows,
-      categoryInterestsRows,
-      subcategoryInterestsRows,
-      subsubInterestsRows,
-    ] = await Promise.all([
-      UserIdentityInterest.findAll({
-        where: { userId: id },
-        include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }],
-      }),
-      UserCategoryInterest.findAll({
-        where: { userId: id },
-        include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
-      }),
-      UserSubcategoryInterest.findAll({
-        where: { userId: id },
-        include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name"] }],
-      }),
-      UserSubsubCategoryInterest.findAll({
-        where: { userId: id },
-        include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }],
-      }),
-    ]);
+    // 2) Work samples — separate small query (NO base64)
+    const workSamples = [] /*await WorkSample.findAll({
+      where: {
+        profileId: user.profile?.id || null,
+        ...(viewerId && String(viewerId) === String(id) ? {} : { isPublic: true }),
+      },
+      attributes: [
+        "id",
+        "title",
+        "description",
+        "projectUrl",
+        // DO NOT include imageBase64 here
+        "imageFileName",
+        "category",
+        "technologies",
+        "completionDate",
+        "isPublic",
+        "createdAt",
+        "updatedAt",
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: 12, // keep small; paginate if needed
+    });*/
 
-    // ── Counts, recents, connections, meetings (unchanged) ────────────────────
+    // 3) Cheap counts
     const [jobsCount, eventsCount, servicesCount, productsCount, tourismCount, fundingCount] = await Promise.all([
       Job.count({ where: { postedByUserId: user.id } }),
       Event.count({ where: { organizerUserId: user.id } }),
@@ -120,39 +181,41 @@ exports.getPublicProfile = async (req, res) => {
       Funding.count({ where: { creatorUserId: user.id } }),
     ]);
 
+    // 4) Recent items (bounded + attributes only)
     const [recentJobs, recentEvents, recentServices, recentProducts, recentFunding] = await Promise.all([
       Job.findAll({
         where: { postedByUserId: user.id },
-        limit: 3,
-        order: [["createdAt", "DESC"]],
         attributes: ["id", "title", "companyName", "city", "country", "createdAt"],
+        order: [["createdAt", "DESC"]],
+        limit: 3,
       }),
       Event.findAll({
         where: { organizerUserId: user.id },
-        limit: 3,
-        order: [["createdAt", "DESC"]],
         attributes: ["id", "title", "city", "country", "startAt", "createdAt", "registrationType", "price", "currency"],
+        order: [["createdAt", "DESC"]],
+        limit: 3,
       }),
       Service.findAll({
         where: { providerUserId: user.id },
-        limit: 3,
-        order: [["createdAt", "DESC"]],
         attributes: ["id", "title", "priceAmount", "priceType", "deliveryTime", "createdAt"],
+        order: [["createdAt", "DESC"]],
+        limit: 3,
       }),
       Product.findAll({
         where: { sellerUserId: user.id },
-        limit: 3,
-        order: [["createdAt", "DESC"]],
         attributes: ["id", "title", "price", "createdAt"],
+        order: [["createdAt", "DESC"]],
+        limit: 3,
       }),
       Funding.findAll({
         where: { creatorUserId: user.id },
-        limit: 3,
-        order: [["createdAt", "DESC"]],
         attributes: ["id", "title", "goal", "raised", "currency", "deadline", "createdAt"],
+        order: [["createdAt", "DESC"]],
+        limit: 3,
       }),
     ]);
 
+    // 5) Connections + viewer connection status
     const connections = await Connection.count({
       where: { [Op.or]: [{ userOneId: user.id }, { userTwoId: user.id }] },
     });
@@ -161,9 +224,9 @@ exports.getPublicProfile = async (req, res) => {
     if (viewerId && String(viewerId) !== String(user.id)) {
       const [a, b] = normalizePair(viewerId, user.id);
       const [accepted, outgoingReq, incomingReq] = await Promise.all([
-        Connection.findOne({ where: { userOneId: a, userTwoId: b } }),
-        ConnectionRequest.findOne({ where: { status: "pending", fromUserId: viewerId, toUserId: user.id } }),
-        ConnectionRequest.findOne({ where: { status: "pending", fromUserId: user.id, toUserId: viewerId } }),
+        Connection.findOne({ where: { userOneId: a, userTwoId: b }, attributes: ["id"] }),
+        ConnectionRequest.findOne({ where: { status: "pending", fromUserId: viewerId, toUserId: user.id }, attributes: ["id"] }),
+        ConnectionRequest.findOne({ where: { status: "pending", fromUserId: user.id, toUserId: viewerId }, attributes: ["id"] }),
       ]);
       if (accepted) connectionStatus = "connected";
       else if (outgoingReq) connectionStatus = "outgoing_pending";
@@ -172,20 +235,27 @@ exports.getPublicProfile = async (req, res) => {
       connectionStatus = "self";
     }
 
+    // 6) Meetings (bounded, lean includes)
     let meetings = [];
     if (viewerId && String(viewerId) !== String(user.id)) {
       meetings = await MeetingRequest.findAll({
         where: {
           [Op.or]: [
-            { [Op.and]: [{ fromUserId: user.id },   { toUserId: viewerId }] },
-            { [Op.and]: [{ fromUserId: viewerId },  { toUserId: user.id  }] },
+            { fromUserId: user.id,   toUserId: viewerId },
+            { fromUserId: viewerId,  toUserId: user.id  },
           ],
         },
+        attributes: [
+          "id", "title", "agenda", "scheduledAt", "duration", "timezone",
+          "mode", "location", "link", "status", "createdAt",
+        ],
         order: [["scheduledAt", "DESC"]],
         limit: 5,
         include: [
-          { model: User, as: "requester", attributes: ["id", "name", "avatarUrl", "city", "country"] },
-          { model: User, as: "recipient", attributes: ["id", "name", "avatarUrl", "city", "country"] },
+          { model: User, as: "requester", attributes: ["id", "name", "avatarUrl", "city", "country"],
+            include: [{ model: Profile, as: "profile", attributes: ["professionalTitle"], required: false }], required: false },
+          { model: User, as: "recipient", attributes: ["id", "name", "avatarUrl", "city", "country"],
+            include: [{ model: Profile, as: "profile", attributes: ["professionalTitle"], required: false }], required: false },
         ],
       });
     }
@@ -206,92 +276,83 @@ exports.getPublicProfile = async (req, res) => {
       to: toPublicUser(m.recipient),
     }));
 
-    // account-type extras
+    // 7) Account-type specific extras
     let accountDetails = {};
     if (user.accountType === "individual") {
       accountDetails = {
         type: "individual",
-        professionalTitle: user.profile?.professionalTitle,
-        experienceLevel: user.profile?.experienceLevel,
+        professionalTitle: user.profile?.professionalTitle || null,
+        experienceLevel: user.profile?.experienceLevel || null,
       };
     } else if (user.accountType === "company") {
       accountDetails = {
         type: "company",
-        professionalTitle: user.profile?.professionalTitle,
-        experienceLevel: user.profile?.experienceLevel,
+        professionalTitle: user.profile?.professionalTitle || null,
+        experienceLevel: user.profile?.experienceLevel || null,
         categories: user.categories?.map(c => c.name) || [],
       };
     }
 
+    // 8) Block status
     const block = await getBlockStatus(viewerId, user.id);
 
-    const workSamples = Array.isArray(user.profile?.workSamples)
-      ? user.profile.workSamples.map(ws => ({
-          id: ws.id,
-          title: ws.title,
-          description: ws.description,
-          projectUrl: ws.projectUrl,
-          imageBase64: ws.imageBase64,
-          imageFileName: ws.imageFileName,
-          category: ws.category,
-          technologies: Array.isArray(ws.technologies) ? ws.technologies : [],
-          attachments: Array.isArray(ws.attachments) ? ws.attachments : [],
-          completionDate: ws.completionDate,
-          isPublic: !!ws.isPublic,
-          createdAt: ws.createdAt,
-        }))
-      : [];
-
-    // ── Payload (interests use the separately-fetched rows) ───────────────────
+    // 9) Final payload (no base64 images)
     const payload = {
       id: user.id,
       name: user.name,
-      email: user.email,
+      email: user.email, // hide if needed for non-owners
       accountType: user.accountType,
       city: user.city,
       country: user.country,
       avatarUrl: user.profile?.avatarUrl || user.avatarUrl,
-      professionalTitle: user.profile?.professionalTitle,
-      about: user.profile?.about,
-      experienceLevel: user.profile?.experienceLevel,
-      skills: user.profile?.skills || [],
-      languages: user.profile?.languages || [],
-      primaryIdentity: user.profile?.primaryIdentity,
+      professionalTitle: user.profile?.professionalTitle || null,
+      about: user.profile?.about || null,
+      experienceLevel: user.profile?.experienceLevel || null,
+      skills: Array.isArray(user.profile?.skills) ? user.profile.skills : (user.profile?.skills || []),
+      languages: Array.isArray(user.profile?.languages) ? user.profile.languages : (user.profile?.languages || []),
+      primaryIdentity: user.profile?.primaryIdentity || null,
       memberSince: user.createdAt,
 
-      workSamples,
+      workSamples: workSamples.map(ws => ({
+        id: ws.id,
+        title: ws.title,
+        description: ws.description,
+        projectUrl: ws.projectUrl,
+        imageFileName: ws.imageFileName, // no base64 here
+        category: ws.category,
+        technologies: Array.isArray(ws.technologies) ? ws.technologies : [],
+        completionDate: ws.completionDate,
+        isPublic: !!ws.isPublic,
+        createdAt: ws.createdAt,
+      })),
 
-      companyMemberships: user.staffOf?.map(staff => ({
-        id: staff.id,
-        companyId: staff.companyId,
-        role: staff.role,
-        isMain: staff.isMain,
-        joinedAt: staff.confirmedAt,
-        company: {
-          id: staff.company.id,
-          name: staff.company.name,
-          avatarUrl: staff.company.profile?.avatarUrl || staff.company.avatarUrl,
-        }
-      })) || [],
+      companyMemberships:
+        (user.staffOf || []).map(staff => ({
+          id: staff.id,
+          companyId: staff.companyId,
+          role: staff.role,
+          isMain: staff.isMain,
+          joinedAt: staff.confirmedAt,
+          company: toPublicUser(staff.company),
+        })),
 
-      // Selected taxonomy (unchanged)
-      identities: user.identities?.map(i => i.name) || [],
-      categories:  user.categories?.map(c => c.name) || [],
-      subcategories: user.subcategories?.map(s => s.name) || [],
-      subsubs: user.subsubcategories?.map(s3 => s3.name) || [],
+      // Canonical selections
+      identities: (user.identities || []).map(i => i.name),
+      categories: (user.categories || []).map(c => c.name),
+      subcategories: (user.subcategories || []).map(s => s.name),
+      subsubs: (user.subsubcategories || []).map(s3 => s3.name),
 
-      // Interests (now from separate queries)
+      // Interests (looking for)
       interests: {
-        identities: identityInterestsRows?.map(ii => ii.identity?.name) || [],
-        categories:  categoryInterestsRows?.map(ci => ci.category?.name) || [],
-        subcategories: subcategoryInterestsRows?.map(si => si.subcategory?.name) || [],
-        subsubs:     subsubInterestsRows?.map(ssi => ssi.subsubCategory?.name) || [],
+        identities: (user.identityInterests || []).map(ii => ii.identity?.name).filter(Boolean),
+        categories: (user.categoryInterests || []).map(ci => ci.category?.name).filter(Boolean),
+        subcategories: (user.subcategoryInterests || []).map(si => si.subcategory?.name).filter(Boolean),
+        subsubs: (user.subsubInterests || []).map(ssi => ssi.subsubCategory?.name).filter(Boolean),
       },
 
-      // Goals (unchanged)
-      goals: user.goals?.map(g => g.name) || [],
+      goals: (user.goals || []).map(g => g.name),
 
-      // Activity
+      // Activity stats & recent
       stats: {
         jobs: jobsCount,
         events: eventsCount,
@@ -315,12 +376,24 @@ exports.getPublicProfile = async (req, res) => {
       connectionStatus,
     };
 
-    res.json(payload);
+    return res.json(payload);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to fetch profile" });
+    return res.status(500).json({ message: "Failed to fetch profile" });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -529,10 +529,28 @@ async function updateAvailability(req, res, next) {
     const profile = await Profile.findOne({ where: { userId } });
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
-    profile.isOpenToWork = Boolean(isOpenToWork);
+
+    profile.isOpenToWork = isOpenToWork=== true || isOpenToWork==="true" ? true : false
+
     await profile.save();
 
     return getMe(req, res, next);
+  } catch (e) { next(e); }
+}
+
+/* PUT /api/profile/avatar */
+async function updateAvatarUrl(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { avatarUrl } = req.body;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.avatarUrl = avatarUrl || null;
+    await user.save();
+
+    return res.json({ message: "Avatar updated successfully", avatarUrl: user.avatarUrl });
   } catch (e) { next(e); }
 }
 
@@ -844,6 +862,7 @@ module.exports = {
   updateProfessional,
   updatePortfolio,
   updateAvailability,
+  updateAvatarUrl,
   getWorkSamples,
   createWorkSample,
   updateWorkSample,

@@ -1430,9 +1430,10 @@
         { "name": "Gender Equality & Women Empowerment", "subsubs": ["Equity Investment","Debt Financing","Seed & Early-Stage Funding","Series/Scale-up Investment","Grants","Donations","Endowments","Sponsorships","Corporate Social Responsibility (CSR)","Public-Private Partnerships"] },
         { "name": "Youth Development", "subsubs": ["Equity Investment","Debt Financing","Seed & Early-Stage Funding","Series/Scale-up Investment","Grants","Donations","Endowments","Sponsorships","Corporate Social Responsibility (CSR)","Public-Private Partnerships"] }
       ]
-    },
-    
-    {
+    }
+  ]
+},
+{
       "name": "Executives",
       "categories": [
         {
@@ -1497,8 +1498,6 @@
         }
       ]
     }
-  ]
-}
 
 
 

@@ -16,6 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: "Consulting"
       },
+      currency: { type: DataTypes.STRING(10), allowNull: true },
       description: { type: DataTypes.TEXT, allowNull: false },
 
       // Pricing

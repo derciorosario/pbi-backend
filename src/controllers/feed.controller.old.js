@@ -292,7 +292,7 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   if (categoryId) interestsWhere.categoryId = categoryId;
   if (subcategoryId) interestsWhere.subcategoryId = subcategoryId;
   if (subsubCategoryId) interestsWhere.subsubcategoryId = subsubCategoryId;
-  const needInterests = false// Boolean(categoryId || subcategoryId || subsubCategoryId);
+  const needInterests = Boolean(categoryId || subcategoryId || subsubCategoryId);
   return [
     {
       model: User,
@@ -2086,8 +2086,6 @@ exports.getFeed = async (req, res) => {
 
       if (tab === "services") {
         const services = await Service.findAll({
-          distinct: true,
-          col: "Service.id",
           subQuery: false,
           where: { ...whereService, moderation_status: "approved" },
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
@@ -2274,8 +2272,6 @@ exports.getFeed = async (req, res) => {
           limit: lim,
         }),
         Service.findAll({
-          distinct: true,
-          col: "Service.id",
           subQuery: false,
           where: { ...whereService, moderation_status: "approved" },
           include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
@@ -2438,8 +2434,6 @@ exports.getFeed = async (req, res) => {
 
     if (tab === "services") {
       const services = await Service.findAll({
-        distinct: true,
-        col: "Service.id",
         subQuery: false,
         where: { ...whereService, moderation_status: "approved" },
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
@@ -2644,8 +2638,6 @@ exports.getFeed = async (req, res) => {
         limit: bufferLimit,
       }),
       Service.findAll({
-        distinct: true,
-        col: "Service.id",
         subQuery: false,
         where: { ...whereService, moderation_status: "approved" },
         include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),

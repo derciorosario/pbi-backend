@@ -146,7 +146,7 @@ async function upsertGeneralSubsubCategoryByName(categoryName, subcategoryName, 
   return subsub;
 }
 
-// Industry Category helpers
+// Industry category helpers
 async function upsertIndustryCategoryByName(name) {
   if (!name) return null;
   let cat = await IndustryCategory.findOne({ where: { name } });
@@ -328,9 +328,6 @@ async function associateWithAudience(entity, entityType, audienceData) {
 
 /** ------------------------- Seed Data ------------------------- **/
 
-
-/** ------------------------- Seed Data ------------------------- **/
-
 // Product Seeds
 const PRODUCT_SEEDS = [
   {
@@ -347,12 +344,10 @@ const PRODUCT_SEEDS = [
     sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Accessories",
-    // general (product)
     generalCategoryName: "Fashion & Apparel",
     generalSubcategoryName: "Bags",
-    // industry
-    industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Textiles & Apparel",
+    industryCategoryName: "Fashion & Textiles",
+    industrySubcategoryName: "Fashion Design",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -363,7 +358,7 @@ const PRODUCT_SEEDS = [
       subsubcategories: [
         "Trade > Fashion > Accessories"
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses"]
     }
   },
   {
@@ -380,12 +375,10 @@ const PRODUCT_SEEDS = [
     sellerEmail: "afri-agro@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Textiles",
-    // general (product) – closest valid fit
     generalCategoryName: "Fashion & Apparel",
-    generalSubcategoryName: "Accessories",
-    // industry
-    industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Textiles & Apparel",
+    generalSubcategoryName: "Textiles",
+    industryCategoryName: "Fashion & Textiles",
+    industrySubcategoryName: "Textile Manufacturing",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -393,7 +386,7 @@ const PRODUCT_SEEDS = [
         "Fashion & Apparel > Textiles",
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneurs", "Creative & Artist"]
+      identities: ["Entrepreneur (Startups)", "Creative & Artist"]
     }
   },
   {
@@ -410,12 +403,10 @@ const PRODUCT_SEEDS = [
     sellerEmail: "sa-renew@54links.com",
     categoryName: "Technology",
     subcategoryName: "Gadgets & Accessories",
-    // general (product)
     generalCategoryName: "Electronics & Technology",
-    generalSubcategoryName: "Computer Accessories",
-    // industry
-    industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Electronics & Electricals",
+    generalSubcategoryName: "Smart Home Devices",
+    industryCategoryName: "Technology & Software",
+    industrySubcategoryName: "Consumer Electronics",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Technology", "Energy"],
@@ -423,7 +414,7 @@ const PRODUCT_SEEDS = [
         "Technology > Hardware & Devices",
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneurs", "Students", "Professionals"]
+      identities: ["Entrepreneur (Startups)", "Students", "Professional"]
     }
   },
   {
@@ -440,12 +431,8 @@ const PRODUCT_SEEDS = [
     sellerEmail: "afri-agro@54links.com",
     categoryName: "Health & Beauty",
     subcategoryName: "Skincare",
-    // general (product)
-    generalCategoryName: "Beauty & Personal Care",
-    generalSubcategoryName: "Skincare",
-    // industry
-    industryCategoryName: "Healthcare & Life Sciences",
-    industrySubcategoryName: "Pharmaceuticals & Biotech",
+    industryCategoryName: "Healthcare & Pharmaceuticals",
+    industrySubcategoryName: "Personal Care Products",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Health & Beauty", "Trade"],
@@ -455,7 +442,7 @@ const PRODUCT_SEEDS = [
       subsubcategories: [
         "Trade > Beauty & Cosmetics > Skincare"
       ],
-      identities: ["Entrepreneurs", "Social Entrepreneurs"]
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs"]
     }
   },
   {
@@ -472,12 +459,8 @@ const PRODUCT_SEEDS = [
     sellerEmail: "kenya-logistics@54links.com",
     categoryName: "Home & Living",
     subcategoryName: "Home Decor",
-    // general (product)
-    generalCategoryName: "Home & Living",
-    generalSubcategoryName: "Home Decor",
-    // industry
     industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Textiles & Apparel",
+    industrySubcategoryName: "Consumer Goods",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Home & Living", "Trade"],
@@ -485,7 +468,7 @@ const PRODUCT_SEEDS = [
         "Home & Living > Home Decor",
         { category: "Trade", subcategory: "Home Goods" }
       ],
-      identities: ["Entrepreneurs", "Social Entrepreneurs", "Creative & Artist"]
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist"]
     }
   }
 ];
@@ -511,12 +494,10 @@ const SERVICE_SEEDS = [
     providerEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Web Development",
-    // general (service)
     generalCategoryName: "Technology & IT Services",
     generalSubcategoryName: "Web Development",
-    // industry
-    industryCategoryName: "Information & Communication Technology (ICT)",
-    industrySubcategoryName: "Software & App Development",
+    industryCategoryName: "Technology & Software",
+    industrySubcategoryName: "Software Development",
     createdAtDaysAgo: 3,
     audience: {
       categories: ["Technology", "Service Providers"],
@@ -524,7 +505,7 @@ const SERVICE_SEEDS = [
         "Technology > Software Development",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Freelancers"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
     }
   },
   {
@@ -546,12 +527,8 @@ const SERVICE_SEEDS = [
     providerEmail: "sa-renew@54links.com",
     categoryName: "Business",
     subcategoryName: "Consulting & Strategy",
-    // general (service)
-    generalCategoryName: "Business & Professional Services",
-    generalSubcategoryName: "Consulting",
-    // industry
-    industryCategoryName: "Financial Services",
-    industrySubcategoryName: "Investment & Capital Markets",
+    industryCategoryName: "Professional Services",
+    industrySubcategoryName: "Business Consulting",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Business", "Service Providers"],
@@ -559,7 +536,7 @@ const SERVICE_SEEDS = [
         "Business > Consulting & Strategy",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Social Entrepreneurs"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs"]
     }
   },
   {
@@ -581,12 +558,8 @@ const SERVICE_SEEDS = [
     providerEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Branding & Creative Strategy",
-    // general (service)
-    generalCategoryName: "Creative & Design Services",
-    generalSubcategoryName: "Logo Design",
-    // industry
-    industryCategoryName: "Creative & Cultural Industries",
-    industrySubcategoryName: "Fashion & Design",
+    industryCategoryName: "Creative & Media",
+    industrySubcategoryName: "Design Services",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Marketing & Advertising", "Service Providers"],
@@ -594,7 +567,7 @@ const SERVICE_SEEDS = [
         "Marketing & Advertising > Branding & Creative Strategy",
         { category: "Service Providers", subcategory: "Creative & Design Services" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Creative & Artist"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist"]
     }
   },
   {
@@ -616,12 +589,8 @@ const SERVICE_SEEDS = [
     providerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Farming & Crop Production",
-    // general (service)
-    generalCategoryName: "Business & Professional Services",
-    generalSubcategoryName: "Consulting",
-    // industry
-    industryCategoryName: "Agriculture & Agribusiness",
-    industrySubcategoryName: "Crop Production",
+    industryCategoryName: "Agriculture & Food",
+    industrySubcategoryName: "Crop Farming",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Agriculture", "Service Providers"],
@@ -629,7 +598,7 @@ const SERVICE_SEEDS = [
         "Agriculture > Crop Production",
         { category: "Service Providers", subcategory: "Consulting" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Government Officials"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials"]
     }
   },
   {
@@ -651,12 +620,8 @@ const SERVICE_SEEDS = [
     providerEmail: "naija-fintech@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
-    // general (service)
-    generalCategoryName: "Marketing & Advertising Services",
-    generalSubcategoryName: "Social Media Management",
-    // industry
-    industryCategoryName: "Creative & Cultural Industries",
-    industrySubcategoryName: "Media & Broadcasting",
+    industryCategoryName: "Marketing & Advertising",
+    industrySubcategoryName: "Digital Marketing",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Marketing & Advertising", "Service Providers"],
@@ -664,7 +629,7 @@ const SERVICE_SEEDS = [
         "Marketing & Advertising > Digital Marketing",
         { category: "Service Providers", subcategory: "Marketing & Advertising" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Freelancers"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Freelancers"]
     }
   }
 ];
@@ -688,20 +653,18 @@ const TOURISM_SEEDS = [
     authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Wildlife & Safari",
-    // general (tourism)
     generalCategoryName: "Tourist Attractions",
     generalSubcategoryName: "Natural Attractions",
     generalSubsubCategoryName: "National Parks & Reserves",
-    // industry
-    industryCategoryName: "Hospitality & Tourism",
-    industrySubcategoryName: "Travel Agencies",
+    industryCategoryName: "Tourism & Hospitality",
+    industrySubcategoryName: "Wildlife Tourism",
     createdAtDaysAgo: 4,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Wildlife & Safari"
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Investors"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
     }
   },
   {
@@ -721,20 +684,15 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Food & Wine",
-    // general (tourism)
-    generalCategoryName: "Food & Restaurants",
-    generalSubcategoryName: "Food Tours & Tastings",
-    generalSubsubCategoryName: "Wine Tasting",
-    // industry
-    industryCategoryName: "Hospitality & Tourism",
-    industrySubcategoryName: "Travel Agencies",
+    industryCategoryName: "Tourism & Hospitality",
+    industrySubcategoryName: "Culinary Tourism",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Food & Wine"
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Creative & Artist"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Creative & Artist"]
     }
   },
   {
@@ -754,19 +712,15 @@ const TOURISM_SEEDS = [
     authorEmail: "kenya-logistics@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Cultural Tourism",
-    // general (tourism)
-    generalCategoryName: "Tourist Attractions",
-    generalSubcategoryName: "Cultural Attractions",
-    // industry
-    industryCategoryName: "Hospitality & Tourism",
-    industrySubcategoryName: "Travel Agencies",
+    industryCategoryName: "Tourism & Hospitality",
+    industrySubcategoryName: "Cultural Tourism",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Cultural Tourism"
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Social Entrepreneurs", "Creative & Artist"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Social Entrepreneurs", "Creative & Artist"]
     }
   },
   {
@@ -786,20 +740,15 @@ const TOURISM_SEEDS = [
     authorEmail: "sa-renew@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Natural Wonders",
-    // general (tourism)
-    generalCategoryName: "Tourist Attractions",
-    generalSubcategoryName: "Natural Attractions",
-    generalSubsubCategoryName: "Waterfalls",
-    // industry
-    industryCategoryName: "Hospitality & Tourism",
-    industrySubcategoryName: "Hotels & Resorts",
+    industryCategoryName: "Tourism & Hospitality",
+    industrySubcategoryName: "Adventure Tourism",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Natural Wonders"
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Students"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Students"]
     }
   },
   {
@@ -819,20 +768,15 @@ const TOURISM_SEEDS = [
     authorEmail: "naija-fintech@54links.com",
     categoryName: "Tourism & Travel",
     subcategoryName: "Adventure Tourism",
-    // general (tourism)
-    generalCategoryName: "Tourist Attractions",
-    generalSubcategoryName: "Adventure/Activity-Based Attractions",
-    generalSubsubCategoryName: "Hiking Trails",
-    // industry
-    industryCategoryName: "Hospitality & Tourism",
-    industrySubcategoryName: "Travel Agencies",
+    industryCategoryName: "Tourism & Hospitality",
+    industrySubcategoryName: "Adventure Tourism",
     createdAtDaysAgo: 9,
     audience: {
       categories: ["Tourism & Travel"],
       subcategories: [
         "Tourism & Travel > Adventure Tourism"
       ],
-      identities: ["Entrepreneurs", "Professionals", "Students", "Sports Professionals"]
+      identities: ["Entrepreneur (Startups)", "Professional", "Students", "Sports Professionals"]
     }
   }
 ];
@@ -863,13 +807,11 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
-    // general (opportunity)
-    generalCategoryName: "Grants",
+    generalCategoryName: "Grants & Funding",
     generalSubcategoryName: "Innovation & Startup Funding",
     generalSubsubCategoryName: "Seed Funding",
-    // industry
-    industryCategoryName: "Agriculture & Agribusiness",
-    industrySubcategoryName: "Crop Production",
+    industryCategoryName: "Agriculture & Food",
+    industrySubcategoryName: "AgriTech",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Agriculture", "Energy"],
@@ -877,7 +819,7 @@ const FUNDING_SEEDS = [
         "Agriculture > Crop Production",
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Social Entrepreneurs"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Social Entrepreneurs"]
     }
   },
   {
@@ -904,19 +846,15 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "naija-fintech@54links.com",
     categoryName: "Healthcare",
-    // general (opportunity)
-    generalCategoryName: "Grants",
-    generalSubcategoryName: "NGO/Nonprofit Grants",
-    // industry
-    industryCategoryName: "Healthcare & Life Sciences",
-    industrySubcategoryName: "Hospitals & Clinics",
+    industryCategoryName: "Healthcare & Pharmaceuticals",
+    industrySubcategoryName: "Healthcare Services",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Healthcare"],
       subcategories: [
         { category: "Healthcare", subcategory: "Health & Wellbeing" }
       ],
-      identities: ["Entrepreneurs", "Social Entrepreneurs", "Investors", "Government Officials"]
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
     }
   },
   {
@@ -944,20 +882,15 @@ const FUNDING_SEEDS = [
     creatorEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
-    // general (opportunity)
-    generalCategoryName: "Grants",
-    generalSubcategoryName: "Innovation & Startup Funding",
-    generalSubsubCategoryName: "Seed Funding",
-    // industry
     industryCategoryName: "Energy & Utilities",
-    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
+    industrySubcategoryName: "Renewable Energy",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy"],
       subcategories: [
         { category: "Energy", subcategory: "Renewable Energy" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Government Officials"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
     }
   },
   {
@@ -984,13 +917,8 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "afri-agro@54links.com",
     categoryName: "Education",
-    // general (opportunity)
-    generalCategoryName: "Grants",
-    generalSubcategoryName: "Innovation & Startup Funding",
-    generalSubsubCategoryName: "Accelerator Programs",
-    // industry
-    industryCategoryName: "Education & Training",
-    industrySubcategoryName: "E-learning Platforms",
+    industryCategoryName: "Education",
+    industrySubcategoryName: "EdTech",
     createdAtDaysAgo: 8,
     audience: {
       categories: ["Education", "Technology"],
@@ -998,7 +926,7 @@ const FUNDING_SEEDS = [
         { category: "Education", subcategory: "Education & Skill Development" },
         { category: "Technology", subcategory: "Software Development" }
       ],
-      identities: ["Entrepreneurs", "Social Entrepreneurs", "Investors", "Government Officials"]
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Investor", "Government Officials"]
     }
   },
   {
@@ -1025,13 +953,8 @@ const FUNDING_SEEDS = [
     ],
     creatorEmail: "kenya-logistics@54links.com",
     categoryName: "Fashion & Apparel",
-    // general (opportunity)
-    generalCategoryName: "Grants",
-    generalSubcategoryName: "Innovation & Startup Funding",
-    generalSubsubCategoryName: "Seed Funding",
-    // industry
-    industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Textiles & Apparel",
+    industryCategoryName: "Fashion & Textiles",
+    industrySubcategoryName: "Fashion Design",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -1039,7 +962,7 @@ const FUNDING_SEEDS = [
         { category: "Fashion & Apparel", subcategory: "Textiles" },
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneurs", "Social Entrepreneurs", "Creative & Artist", "Investors"]
+      identities: ["Entrepreneur (Startups)", "Social Entrepreneurs", "Creative & Artist", "Investor"]
     }
   }
 ];
@@ -1071,12 +994,10 @@ const EVENT_SEEDS = [
     organizerEmail: "kenya-logistics@54links.com",
     categoryName: "Technology",
     subcategoryName: "Tech Events",
-    // general (event)
     generalCategoryName: "Technology & Innovation",
     generalSubcategoryName: "Developer Meetups",
-    // industry
-    industryCategoryName: "Information & Communication Technology (ICT)",
-    industrySubcategoryName: "Software & App Development",
+    industryCategoryName: "Technology & Software",
+    industrySubcategoryName: "Technology Events",
     createdAtDaysAgo: 60,
     audience: {
       categories: ["Technology", "Business"],
@@ -1084,13 +1005,13 @@ const EVENT_SEEDS = [
         { category: "Technology", subcategory: "Software Development" },
         { category: "Business", subcategory: "Entrepreneurship" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Professionals"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Professional"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/professional-team-analyzing-archived-data-financial-file-meeting_482257-114412.jpg"
   },
   {
     title: "Pan-African Agricultural Innovation Forum",
-    eventType: "Conference",
+    eventType: "Forum",
     description: "A forum focused on agricultural innovation, sustainable farming practices, and technology adoption in African agriculture. Connect with experts, policymakers, and agribusiness leaders.",
     startDate: daysAgo(-45),
     endDate: daysAgo(-47),
@@ -1113,12 +1034,8 @@ const EVENT_SEEDS = [
     organizerEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Technology",
-    // general (event)
-    generalCategoryName: "Business & Professional",
-    generalSubcategoryName: "Conferences",
-    // industry
-    industryCategoryName: "Agriculture & Agribusiness",
-    industrySubcategoryName: "Crop Production",
+    industryCategoryName: "Agriculture & Food",
+    industrySubcategoryName: "AgriTech",
     createdAtDaysAgo: 75,
     audience: {
       categories: ["Agriculture", "Technology"],
@@ -1126,13 +1043,13 @@ const EVENT_SEEDS = [
         { category: "Agriculture", subcategory: "Crop Production" },
         { category: "Technology", subcategory: "AgriTech" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Government Officials", "Investors"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Government Officials", "Investor"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
   },
   {
     title: "African Renewable Energy Summit",
-    eventType: "Conference",
+    eventType: "Summit",
     description: "Summit focused on renewable energy development in Africa. Discuss policy, investment, and technology for solar, wind, hydro, and other renewable energy sources.",
     startDate: daysAgo(-60),
     endDate: daysAgo(-62),
@@ -1155,12 +1072,8 @@ const EVENT_SEEDS = [
     organizerEmail: "sa-renew@54links.com",
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
-    // general (event)
-    generalCategoryName: "Business & Professional",
-    generalSubcategoryName: "Conferences",
-    // industry
     industryCategoryName: "Energy & Utilities",
-    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
+    industrySubcategoryName: "Renewable Energy",
     createdAtDaysAgo: 90,
     audience: {
       categories: ["Energy", "Business"],
@@ -1168,13 +1081,13 @@ const EVENT_SEEDS = [
         { category: "Energy", subcategory: "Renewable Energy" },
         { category: "Business", subcategory: "Investment" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Investors", "Government Officials"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Investor", "Government Officials"]
     },
     coverImageUrl: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
   },
   {
     title: "African Fashion Week",
-    eventType: "Networking",
+    eventType: "Exhibition",
     description: "Showcase of African fashion, textiles, and design. Connect with designers, retailers, and fashion industry professionals from across the continent.",
     startDate: daysAgo(-20),
     endDate: daysAgo(-26),
@@ -1197,12 +1110,8 @@ const EVENT_SEEDS = [
     organizerEmail: "naija-fintech@54links.com",
     categoryName: "Fashion & Apparel",
     subcategoryName: "Fashion Events",
-    // general (event)
-    generalCategoryName: "Entertainment & Cultural",
-    generalSubcategoryName: "Festivals",
-    // industry
-    industryCategoryName: "Manufacturing",
-    industrySubcategoryName: "Textiles & Apparel",
+    industryCategoryName: "Fashion & Textiles",
+    industrySubcategoryName: "Fashion Events",
     createdAtDaysAgo: 120,
     audience: {
       categories: ["Fashion & Apparel", "Trade"],
@@ -1210,7 +1119,7 @@ const EVENT_SEEDS = [
         { category: "Fashion & Apparel", subcategory: "Textiles" },
         { category: "Trade", subcategory: "Fashion" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Creative & Artist", "Investors"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Creative & Artist", "Investor"]
     },
     coverImageUrl: "https://img.freepik.com/stock-photo/representations-user-experience-interface-design_23-2150038909.jpg"
   },
@@ -1239,12 +1148,8 @@ const EVENT_SEEDS = [
     organizerEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
-    // general (event)
-    generalCategoryName: "Health & Wellness",
-    generalSubcategoryName: "Medical Conferences",
-    // industry
-    industryCategoryName: "Healthcare & Life Sciences",
-    industrySubcategoryName: "Medical Equipment",
+    industryCategoryName: "Healthcare & Pharmaceuticals",
+    industrySubcategoryName: "Health Technology",
     createdAtDaysAgo: 100,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1252,13 +1157,13 @@ const EVENT_SEEDS = [
         { category: "Healthcare", subcategory: "Health & Wellbeing" },
         { category: "Technology", subcategory: "Health Tech" }
       ],
-      identities: ["Entrepreneurs", "Business Owners / Businesses", "Professionals", "Investors"]
+      identities: ["Entrepreneur (Startups)", "Established Entrepreneurs / Businesses", "Professional", "Investor"]
     },
     coverImageUrl: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
   }
 ];
 
-// Job Seeds (no general fields required)
+// Job Seeds
 const JOB_SEEDS = [
   {
     title: "Senior Software Engineer - Fintech",
@@ -1277,8 +1182,8 @@ const JOB_SEEDS = [
     postedByEmail: "naija-fintech@54links.com",
     categoryName: "Technology",
     subcategoryName: "Software Development",
-    industryCategoryName: "Information & Communication Technology (ICT)",
-    industrySubcategoryName: "Software & App Development",
+    industryCategoryName: "Technology & Software",
+    industrySubcategoryName: "Software Development",
     createdAtDaysAgo: 5,
     audience: {
       categories: ["Technology", "Finance"],
@@ -1286,7 +1191,7 @@ const JOB_SEEDS = [
         { category: "Technology", subcategory: "Software Development" },
         { category: "Finance", subcategory: "Financial Technology" }
       ],
-      identities: ["Professionals", "Freelancers", "Students"]
+      identities: ["Professional", "Freelancers", "Students"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/business-executives-participating-business-meeting_107420-63841.jpg"
   },
@@ -1307,8 +1212,8 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Agriculture",
     subcategoryName: "Agricultural Management",
-    industryCategoryName: "Agriculture & Agribusiness",
-    industrySubcategoryName: "Agro-processing",
+    industryCategoryName: "Agriculture & Food",
+    industrySubcategoryName: "Agricultural Services",
     createdAtDaysAgo: 10,
     audience: {
       categories: ["Agriculture", "Project Management"],
@@ -1316,7 +1221,7 @@ const JOB_SEEDS = [
         { category: "Agriculture", subcategory: "Crop Production" },
         { category: "Project Management", subcategory: "Agricultural Projects" }
       ],
-      identities: ["Professionals", "Business Owners / Businesses", "Government Officials"]
+      identities: ["Professional", "Established Entrepreneurs / Businesses", "Government Officials"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/photorealistic-woman-organic-sustainable-garden-harvesting-produce_23-2151463029.jpg"
   },
@@ -1338,7 +1243,7 @@ const JOB_SEEDS = [
     categoryName: "Energy",
     subcategoryName: "Renewable Energy",
     industryCategoryName: "Energy & Utilities",
-    industrySubcategoryName: "Renewable Energy (Solar, Wind, Hydro)",
+    industrySubcategoryName: "Renewable Energy",
     createdAtDaysAgo: 15,
     audience: {
       categories: ["Energy", "Engineering"],
@@ -1346,7 +1251,7 @@ const JOB_SEEDS = [
         { category: "Energy", subcategory: "Renewable Energy" },
         { category: "Engineering", subcategory: "Electrical Engineering" }
       ],
-      identities: ["Professionals", "Students", "Business Owners / Businesses"]
+      identities: ["Professional", "Students", "Established Entrepreneurs / Businesses"]
     },
     coverImageBase64: "https://img.freepik.com/premium-photo/high-angle-view-buildings-trees-city_1048944-8253395.jpg"
   },
@@ -1367,8 +1272,8 @@ const JOB_SEEDS = [
     postedByEmail: "kenya-logistics@54links.com",
     categoryName: "Marketing & Advertising",
     subcategoryName: "Digital Marketing",
-    industryCategoryName: "Creative & Cultural Industries",
-    industrySubcategoryName: "Fashion & Design",
+    industryCategoryName: "Marketing & Advertising",
+    industrySubcategoryName: "Digital Marketing",
     createdAtDaysAgo: 7,
     audience: {
       categories: ["Marketing & Advertising", "Fashion & Apparel"],
@@ -1376,9 +1281,9 @@ const JOB_SEEDS = [
         { category: "Marketing & Advertising", subcategory: "Digital Marketing" },
         { category: "Fashion & Apparel", subcategory: "Fashion Marketing" }
       ],
-      identities: ["Professionals", "Creative & Artist", "Freelancers"]
+      identities: ["Professional", "Creative & Artist", "Freelancers"]
     },
-    coverImageBase64: "https://img.freepik.com/stock-photo/representations-user-experience-interface-design_23-2150038909.jpg"
+    coverImageBase64: "https://img.freepik.com/free-photo/representations-user-experience-interface-design_23-2150038909.jpg"
   },
   {
     title: "Healthcare Technology Consultant",
@@ -1397,8 +1302,8 @@ const JOB_SEEDS = [
     postedByEmail: "afri-agro@54links.com",
     categoryName: "Healthcare",
     subcategoryName: "Health Technology",
-    industryCategoryName: "Healthcare & Life Sciences",
-    industrySubcategoryName: "Medical Equipment",
+    industryCategoryName: "Healthcare & Pharmaceuticals",
+    industrySubcategoryName: "Health Technology",
     createdAtDaysAgo: 12,
     audience: {
       categories: ["Healthcare", "Technology"],
@@ -1406,14 +1311,11 @@ const JOB_SEEDS = [
         { category: "Healthcare", subcategory: "Health & Wellbeing" },
         { category: "Technology", subcategory: "Health Tech" }
       ],
-      identities: ["Professionals", "Freelancers", "Business Owners / Businesses"]
+      identities: ["Professional", "Freelancers", "Established Entrepreneurs / Businesses"]
     },
     coverImageBase64: "https://img.freepik.com/free-photo/woman-using-ai-llm-greets-friend-videocall-green-screen-phone_482257-127297.jpg"
   }
 ];
-
-/** ------------------------- Main ------------------------- **/
-
 
 /** ------------------------- Main ------------------------- **/
 
@@ -1685,11 +1587,11 @@ async function run(){
       let generalSubsub = null;
 
       if (f.generalCategoryName) {
-        generalCat = await upsertGeneralCategoryByName(f.generalCategoryName, 'opportunity');
+        generalCat = await upsertGeneralCategoryByName(f.generalCategoryName, 'funding');
         if (f.generalSubcategoryName) {
-          generalSub = await upsertGeneralSubcategoryByName(f.generalCategoryName, f.generalSubcategoryName, 'opportunity');
+          generalSub = await upsertGeneralSubcategoryByName(f.generalCategoryName, f.generalSubcategoryName, 'funding');
           if (f.generalSubsubCategoryName) {
-            generalSubsub = await upsertGeneralSubsubCategoryByName(f.generalCategoryName, f.generalSubcategoryName, f.generalSubsubCategoryName, 'opportunity');
+            generalSubsub = await upsertGeneralSubsubCategoryByName(f.generalCategoryName, f.generalSubcategoryName, f.generalSubsubCategoryName, 'funding');
           }
         }
       }
@@ -1853,21 +1755,6 @@ async function run(){
         ? await upsertSubcategoryByName(j.categoryName, j.subcategoryName)
         : null;
 
-      // Handle industry categories for jobs
-      let industryCat = null;
-      let industrySub = null;
-      let industrySubsub = null;
-
-      if (j.industryCategoryName) {
-        industryCat = await upsertIndustryCategoryByName(j.industryCategoryName);
-        if (j.industrySubcategoryName) {
-          industrySub = await upsertIndustrySubcategoryByName(j.industryCategoryName, j.industrySubcategoryName);
-          if (j.industrySubsubCategoryName) {
-            industrySubsub = await upsertIndustrySubsubCategoryByName(j.industryCategoryName, j.industrySubcategoryName, j.industrySubsubCategoryName);
-          }
-        }
-      }
-
       const [job, created] = await Job.findOrCreate({
         where: {
           title: j.title,
@@ -1894,9 +1781,9 @@ async function run(){
           contactEmail: j.contactEmail || null,
           categoryId: cat ? cat.id : null,
           subcategoryId: sub ? sub.id : null,
-          industryCategoryId: industryCat ? industryCat.id : null,
-          industrySubcategoryId: industrySub ? industrySub.id : null,
-          industrySubsubCategoryId: industrySubsub ? industrySubsub.id : null,
+          industryCategoryId: null, // Jobs don't have industry categories in the current model
+          industrySubcategoryId: null, // Jobs don't have industry subcategories in the current model
+          industrySubsubCategoryId: null, // Jobs don't have industry subsubcategories in the current model
           status: "published",
           createdAt: daysAgo(j.createdAtDaysAgo ?? randBetween(1, 25)),
           updatedAt: new Date(),

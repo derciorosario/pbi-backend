@@ -44,6 +44,7 @@ exports.searchPeople = async (req, res) => {
       audienceCategoryIds,
       audienceSubcategoryIds,
       audienceSubsubCategoryIds,
+      industryIds,
       limit = 20,
       offset = 0,
     } = req.query;
@@ -117,6 +118,7 @@ exports.searchPeople = async (req, res) => {
     const effAudienceCategoryIds = ensureArray(audienceCategoryIds).filter(Boolean);
     const effAudienceSubcategoryIds = ensureArray(audienceSubcategoryIds).filter(Boolean);
     const effAudienceSubsubCategoryIds = ensureArray(audienceSubsubCategoryIds).filter(Boolean);
+    const effIndustryIds = ensureArray(industryIds).filter(Boolean);
 
     // --- Blocklist exclusion (both directions) ---
     let excludeIds = [];
@@ -222,6 +224,21 @@ exports.searchPeople = async (req, res) => {
       }
     }
 
+    const hasExplicitFilter = !!(
+      effGoalIds.length ||
+      effCategoryIds.length ||
+      effSubcategoryIds.length ||
+      effIdentityIds.length ||
+      effAudienceCategoryIds.length ||
+      effAudienceSubcategoryIds.length ||
+      effAudienceSubsubCategoryIds.length ||
+      effIndustryIds.length ||
+      country || city || q || experienceLevel
+    );
+
+    // Profile should be required when filters that depend on profile data are used
+    const profileRequired =  true
+
     // =============== Includes =====================
     // Interests include
     const interestsWhere = {};
@@ -257,12 +274,12 @@ exports.searchPeople = async (req, res) => {
     const rows = await User.findAll({
       where: whereUser,
       include: [
-        // IMPORTANT: include profile as required so title filter applies
+        // IMPORTANT: include profile as required when profile-dependent filters are used
         {
           model: Profile,
           as: "profile",
-          required: true, // we require professionalTitle to be non-empty
-          where: whereProfile,
+          required:  profileRequired,
+          where: profileRequired ? whereProfile : undefined,
           attributes: ["id", "userId", "professionalTitle", "about", "primaryIdentity", "avatarUrl", "experienceLevel"],
         },
         interestsInclude,
@@ -318,6 +335,15 @@ exports.searchPeople = async (req, res) => {
               include: [{ model: SubsubCategory, as: "subsubCategory" }],
             }]
           : []),
+        ...(effIndustryIds.length
+          ? [{
+              model: require("../models").UserIndustryCategory,
+              as: "industryCategories",
+              required: true,
+              where: { industryCategoryId: { [Op.in]: effIndustryIds } },
+              include: [{ model: require("../models").IndustryCategory, as: "industryCategory" }],
+            }]
+          : []),
       ],
       order: [["createdAt", "DESC"]],
       limit: fetchLimit,
@@ -347,20 +373,106 @@ exports.searchPeople = async (req, res) => {
       incomingPendingSet = new Set(incomingReqs.map((r) => String(r.fromUserId)));
     }
 
-    const hasExplicitFilter = !!(
-      effGoalIds.length ||
-      effCategoryIds.length ||
-      effSubcategoryIds.length ||
-      effIdentityIds.length ||
-      effAudienceCategoryIds.length ||
-      effAudienceSubcategoryIds.length ||
-      effAudienceSubsubCategoryIds.length ||
-      country || city || q || experienceLevel
-    );
 
     // =============== Match % ===============
     const calculateMatchPercentage = (u) => {
-      if (!currentUserId) return 20;
+      if (!currentUserId) {
+        // When no current user, calculate based on applied filters
+        const WEIGHTS = { category: 20, subcategory: 20, goal: 15, identity: 10, industry: 10, location: 15, text: 10, experienceLevel: 10 };
+        let totalScore = 0, matchedFactors = 0;
+
+        // Category matching
+        if (effCategoryIds.length) {
+          const userCats = (u.interests || []).map((i) => String(i.categoryId)).filter(Boolean);
+          const catMatches = userCats.filter((id) => effCategoryIds.includes(id));
+          if (catMatches.length) {
+            const pct = Math.min(1, catMatches.length / effCategoryIds.length);
+            totalScore += WEIGHTS.category * pct; matchedFactors++;
+          }
+        }
+
+        // Subcategory matching
+        if (effSubcategoryIds.length) {
+          const userSubs = (u.interests || []).map((i) => String(i.subcategoryId)).filter(Boolean);
+          const subMatches = userSubs.filter((id) => effSubcategoryIds.includes(id));
+          if (subMatches.length) {
+            const pct = Math.min(1, subMatches.length / effSubcategoryIds.length);
+            totalScore += WEIGHTS.subcategory * pct; matchedFactors++;
+          }
+        }
+
+        // Goal matching
+        if (effGoalIds.length) {
+          const userGoalIds = (u.goals || []).map((g) => String(g.id));
+          const goalMatches = userGoalIds.filter((id) => effGoalIds.includes(id));
+          if (goalMatches.length) {
+            const pct = Math.min(1, goalMatches.length / effGoalIds.length);
+            totalScore += WEIGHTS.goal * pct; matchedFactors++;
+          }
+        }
+
+        // Identity matching
+        if (effIdentityIds.length) {
+          const userIdentityIds = (u.identityInterests || []).map((i) => String(i.identityId)).filter(Boolean);
+          const identityMatches = userIdentityIds.filter((id) => effIdentityIds.includes(id));
+          if (identityMatches.length) {
+            const pct = Math.min(1, identityMatches.length / effIdentityIds.length);
+            totalScore += WEIGHTS.identity * pct; matchedFactors++;
+          }
+        }
+
+        // Industry matching
+        if (effIndustryIds.length) {
+          const userIndustryIds = (u.industryCategories || []).map((i) => String(i.industryCategoryId)).filter(Boolean);
+          const industryMatches = userIndustryIds.filter((id) => effIndustryIds.includes(id));
+          if (industryMatches.length) {
+            const pct = Math.min(1, industryMatches.length / effIndustryIds.length);
+            totalScore += WEIGHTS.industry * pct; matchedFactors++;
+          }
+        }
+
+        // Location matching based on filters
+        let locationScore = 0;
+        if (country && u.country && String(country) === String(u.country)) locationScore += 0.6;
+        if (city && u.city) {
+          const a = String(city).toLowerCase(), b = String(u.city).toLowerCase();
+          if (a === b) locationScore += 0.4; else if (a.includes(b) || b.includes(a)) locationScore += 0.2;
+        }
+        if (locationScore) { totalScore += WEIGHTS.location * locationScore; matchedFactors++; }
+
+        // Text matching for q filter
+        if (q) {
+          const qLower = q.toLowerCase();
+          let textMatches = 0;
+          const textFields = [
+            u.name, u.email, u.phone, u.biography, u.nationality, u.country, u.city,
+            u.countryOfResidence, u.profile?.professionalTitle, u.profile?.about, u.profile?.primaryIdentity
+          ].filter(Boolean);
+
+          textFields.forEach(field => {
+            if (String(field).toLowerCase().includes(qLower)) textMatches++;
+          });
+
+          if (textMatches > 0) {
+            const textScore = Math.min(1, textMatches / textFields.length);
+            totalScore += WEIGHTS.text * textScore;
+            matchedFactors++;
+          }
+        }
+
+        // Experience level matching
+        if (experienceLevel) {
+          const filteredLevels = experienceLevel.split(",").filter(Boolean);
+          if (filteredLevels.includes(u.profile?.experienceLevel)) {
+            totalScore += WEIGHTS.experienceLevel;
+            matchedFactors++;
+          }
+        }
+
+        return Math.max(0, Math.min(100, Math.round(totalScore)));
+      }
+
+      // Original logic for logged-in users
       const userGoalIds = (u.goals || []).map((g) => String(g.id));
       const userCats = (u.interests || []).map((i) => String(i.categoryId)).filter(Boolean);
       const userSubs = (u.interests || []).map((i) => String(i.subcategoryId)).filter(Boolean);
@@ -400,10 +512,10 @@ exports.searchPeople = async (req, res) => {
       if (locationScore) { totalScore += WEIGHTS.location * locationScore; matchedFactors++; }
 
       if (matchedFactors < REQUIRED_FACTORS) totalScore *= Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
-      return Math.max(20, Math.min(100, Math.round(totalScore)));
-    };
+       return Math.max(0, Math.min(100, Math.round(totalScore)));
+      };
 
-    let items = rows.map((u) => {
+      let items = rows.map((u) => {
       const matchPercentage = calculateMatchPercentage(u);
       let cStatus = "none";
       if (currentUserId) {
@@ -475,4 +587,3 @@ exports.searchPeople = async (req, res) => {
     return res.status(500).json({ message: "Failed to search people" });
   }
 };
-

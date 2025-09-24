@@ -121,7 +121,7 @@ exports.createRequest = async (req, res) => {
       
       if (isEnabled) {
         const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
-        const link = `${baseUrl}/people`;
+        const link = `${baseUrl}/notifications?tab=Connections`;
         
         await sendTemplatedEmail({
           to: toUser.email,

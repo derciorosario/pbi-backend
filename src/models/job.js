@@ -13,7 +13,14 @@ module.exports = (sequelize, DataTypes) => {
       companyId: { type: DataTypes.UUID, allowNull: true },
       make_company_name_private: { type: DataTypes.BOOLEAN, defaultValue: false },
       department:     { type: DataTypes.STRING(120) },
-      experienceLevel:{ type: DataTypes.ENUM("Junior","Mid-level","Senior","Lead"), allowNull: true },
+      experienceLevel:{ type: DataTypes.ENUM("Junior","Mid-level","Senior","Lead"), allowNull: true,
+
+        set(v) {
+          // turn "", null, undefined into NULL in DB
+          this.setDataValue("experienceLevel", v && String(v).trim() ? v : null);
+        },
+
+      },
 
       //new Fields here - Details
      

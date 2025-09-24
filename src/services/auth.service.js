@@ -111,13 +111,12 @@ async function resendVerification(email) {
 
 
 
-
 async function login({ email, password }) {
   const user = await User.findOne({ where: { email } });
-  if (!user) throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  if (!user) throw Object.assign(new Error("Email not found"), { status: 401 });
 
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  if (!ok) throw Object.assign(new Error("Incorrect password"), { status: 401 });
 
   if (!user.isVerified) throw Object.assign(new Error("Email not verified"), { status: 403 });
 

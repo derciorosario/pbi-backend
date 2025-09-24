@@ -12,8 +12,6 @@ const {
 
 
 
-
-
 exports.getIdentityCatalog = async (req, res) => {
   try {
     // 🔑 Determine type priority
@@ -21,89 +19,54 @@ exports.getIdentityCatalog = async (req, res) => {
       req.body?.type ||
       req.query?.type ||
       (req.user && req?.user?.accountType) ||
-      "individual"; // 'individual' | 'company' | 'all'
+      "individual";
 
     // Load the single JSON blueprint
     const file = path.join(__dirname, "../../seed/identity_category_map.json");
     const blueprint = JSON.parse(fs.readFileSync(file, "utf8"));
 
-    // Pick correct section based on type (for 'all' we merge both)
-    let blueprintIdentities;
-    if (type === "all") {
-      const indy = (blueprint.identities || []).map((i) => ({
-        ...i,
-        __identityType: "individual",
-      }));
-      const comp = (blueprint.company_identities || []).map((i) => ({
-        ...i,
-        __identityType: "company",
-      }));
-      blueprintIdentities = [...indy, ...comp];
-    } else if (type === "company") {
-      blueprintIdentities = (blueprint.company_identities || []).map((i) => ({
-        ...i,
-        __identityType: "company",
-      }));
-    } else {
-      blueprintIdentities = (blueprint.identities || []).map((i) => ({
-        ...i,
-        __identityType: "individual",
-      }));
-    }
+    // Pick correct section based on type
+    const blueprintIdentities =
+      type === "company" ? blueprint.company_identities || [] : blueprint.identities || [];
 
-    // ---- Fetch canonical taxonomy from DB ----
-    // Categories (+ subcategories) — filter by type unless "all"
-    const catWhere =
-      type === "all" ? {} : { type }; // include both types when 'all'
+      console.log({type})
 
+    // Load canonical taxonomy from DB filtered by type
     const cats = await Category.findAll({
       attributes: ["id", "name", "type"],
-      where: catWhere,
+      where: { type },
       include: [
         {
           model: Subcategory,
           as: "subcategories",
           attributes: ["id", "name", "categoryId", "type"],
-          // If 'all', do not filter subcategory type; otherwise keep same filter
-          where: type === "all" ? undefined : { type },
+          where: { type },
           required: false,
         },
       ],
       order: [["name", "ASC"]],
     });
 
-    // Subsubs — filter by type unless 'all'
-    const subsubWhere =
-      type === "all" ? {} : { type };
-
-    const allSubsubs = await SubsubCategory.findAll({
-      attributes: ["id", "name", "subcategoryId", "type"],
-      where: subsubWhere,
-    });
-
-    // ---- Build lookup maps (type-aware to avoid collisions) ----
-    // Category by (type:name)
-    const catByTypeAndName = new Map(
-      cats.map((c) => [
-        `${(c.type || "").trim().toLowerCase()}::${c.name.trim().toLowerCase()}`,
-        c,
-      ])
+    // Build quick lookup maps for ID resolution
+    const catByName = new Map(
+      cats.map((c) => [c.name.trim().toLowerCase(), c])
     );
 
-    // Subcategory by (catType:catName::subName)
-    const subsByTypeCatAndSubName = new Map();
+    const subsByPair = new Map();
     for (const c of cats) {
       for (const s of c.subcategories || []) {
-        subsByTypeCatAndSubName.set(
-          `${(c.type || "").trim().toLowerCase()}::${c.name
-            .trim()
-            .toLowerCase()}::${s.name.trim().toLowerCase()}`,
+        subsByPair.set(
+          `${c.name.trim().toLowerCase()}::${s.name.trim().toLowerCase()}`,
           s
         );
       }
     }
 
-    // Subsub by (subcategoryId::subsubName)
+    const allSubsubs = await SubsubCategory.findAll({
+      attributes: ["id", "name", "subcategoryId", "type"],
+      where: { type },
+    });
+
     const subsubsBySubIdAndName = new Map(
       allSubsubs.map((ss) => [
         `${ss.subcategoryId}::${ss.name.trim().toLowerCase()}`,
@@ -111,22 +74,19 @@ exports.getIdentityCatalog = async (req, res) => {
       ])
     );
 
-    // ---- Map JSON blueprint → attach IDs from canonical taxonomy where possible ----
+    // Map JSON blueprint → attach IDs from canonical taxonomy where possible
     const identities = await Promise.all(
       blueprintIdentities.map(async (identity) => {
-        const identityType = identity.__identityType; // 'individual' | 'company'
-
         const categories = (identity.categories || []).map((cat) => {
-          const catKey = `${identityType}::${cat.name.trim().toLowerCase()}`;
-          const foundCat = catByTypeAndName.get(catKey) || null;
+          const foundCat = catByName.get(cat.name.trim().toLowerCase()) || null;
 
           const subcategories = (cat.subcategories || []).map((sub) => {
             let foundSub = null;
             if (foundCat) {
-              const key = `${identityType}::${foundCat.name
+              const key = `${foundCat.name.trim().toLowerCase()}::${sub.name
                 .trim()
-                .toLowerCase()}::${sub.name.trim().toLowerCase()}`;
-              foundSub = subsByTypeCatAndSubName.get(key) || null;
+                .toLowerCase()}`;
+              foundSub = subsByPair.get(key) || null;
             }
 
             const subsubs = (sub.subsubs || []).map((ssName) => {
@@ -154,14 +114,13 @@ exports.getIdentityCatalog = async (req, res) => {
           };
         });
 
-        // Fetch identity row filtered by the specific identity's type
+        // Fetch identity row filtered by type
         const identityRow = await Identity.findOne({
-          where: { name: identity.name.trim(), type: identityType },
+          where: { name: identity.name.trim(), type },
         });
 
         return {
           name: identity.name,
-          type: identityType,
           id: identityRow ? identityRow.id : null,
           categories,
         };

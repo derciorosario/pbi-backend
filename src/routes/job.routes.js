@@ -9,5 +9,6 @@ router.get("/", ctrl.listJobs);
 router.get("/:id", ctrl.getJob);
 router.post("/", requireAuth(), ctrl.createJob);
 router.put("/:id", requireAuth(), ctrl.updateJob);
+router.delete("/:id", requireAuth(), ctrl.deleteJob);
 
 module.exports = router;

@@ -134,9 +134,17 @@ async function googleSignIn(req, res, next) {
 async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body;
+
+    // ✅ check if the user exists
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ message: "Email not registered" });
+    }
+
+    // send the reset link
     await requestPasswordReset(email);
-    // Always respond success to avoid user enumeration
-    res.json({ message: "If that email exists, a reset link has been sent." });
+
+    res.json({ message: "Password reset link has been sent." });
   } catch (err) {
     next(err);
   }

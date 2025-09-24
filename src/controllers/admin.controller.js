@@ -101,8 +101,8 @@ exports.getAllUsers = async (req, res) => {
 };
 
 /**
- * Get a single user by ID
- */
+  Get a single user by ID
+ 
 exports.getUserById = async (req, res) => {
   try {
     // Check if user is admin
@@ -124,6 +124,7 @@ exports.getUserById = async (req, res) => {
         { model: Category, as: "categories", attributes: ["id", "name"], through: { attributes: [] } },
         { model: Subcategory, as: "subcategories", attributes: ["id", "name"], through: { attributes: [] } },
         { model: SubsubCategory, as: "subsubcategories", attributes: ["id", "name"], through: { attributes: [] } },
+       
         { model: UserIdentityInterest, as: "identityInterests", include: [{ model: Identity, as: "identity" }] },
         { model: UserCategoryInterest, as: "categoryInterests", include: [{ model: Category, as: "category" }] },
         { model: UserSubcategoryInterest, as: "subcategoryInterests", include: [{ model: Subcategory, as: "subcategory" }] },
@@ -191,6 +192,157 @@ exports.getUserById = async (req, res) => {
     res.status(500).json({ message: "Failed to get user" });
   }
 };
+*/
+
+
+
+exports.getUserById = async (req, res) => {
+  try {
+    // 🔐 Admin gate
+    if (!req.user || req.user.accountType !== "admin") {
+      return res
+        .status(403)
+        .json({ message: "Unauthorized: Admin access required" });
+    }
+
+    const { id } = req.params;
+
+    // 1) Base user + core taxonomy (no interest includes here)
+    const user = await User.findByPk(id, {
+      attributes: [
+        "id",
+        "name",
+        "email",
+        "phone",
+        "accountType",
+        "isVerified",
+        "provider",
+        "country",
+        "countryOfResidence",
+        "city",
+        "nationality",
+        "avatarUrl",
+        "createdAt",
+        "updatedAt",
+      ],
+      include: [
+        { model: Profile, as: "profile", required: false },
+
+        { model: Goal, as: "goals", attributes: ["id", "name"], through: { attributes: [] } },
+        { model: Identity, as: "identities", attributes: ["id", "name"], through: { attributes: [] } },
+        { model: Category, as: "categories", attributes: ["id", "name"], through: { attributes: [] } },
+        { model: Subcategory, as: "subcategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { model: SubsubCategory, as: "subsubcategories", attributes: ["id", "name"], through: { attributes: [] } },
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 2) Fetch Interests in separate queries (each resolves its taxonomy)
+    const [
+      identityInterestsRows,
+      categoryInterestsRows,
+      subcategoryInterestsRows,
+      subsubInterestsRows,
+    ] = await Promise.all([
+      UserIdentityInterest.findAll({
+        where: { userId: id },
+        include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }],
+      }),
+      UserCategoryInterest.findAll({
+        where: { userId: id },
+        include: [{ model: Category, as: "category", attributes: ["id", "name"] }],
+      }),
+      UserSubcategoryInterest.findAll({
+        where: { userId: id },
+        include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name"] }],
+      }),
+      UserSubsubCategoryInterest.findAll({
+        where: { userId: id },
+        include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }],
+      }),
+    ]);
+
+    // 3) Counts for progress
+    const counts = {
+      categories: user.categories?.length || 0,
+      subcategories: user.subcategories?.length || 0,
+      subsubs: user.subsubcategories?.length || 0,
+      goals: user.goals?.length || 0,
+    };
+
+    const progress = computeProfileProgress({
+      user,
+      profile: user.profile,
+      counts,
+    });
+
+    // 4) Build the response in the same shape as before
+    const userData = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      accountType: user.accountType,
+      isVerified: user.isVerified,
+      provider: user.provider,
+      country: user.country,
+      countryOfResidence: user.countryOfResidence,
+      city: user.city,
+      nationality: user.nationality,
+      avatarUrl: user.avatarUrl || user.profile?.avatarUrl,
+      profile: user.profile,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+
+      // Progress info
+      progress,
+
+      // Taxonomy (selected)
+      identities: user.identities?.map(i => ({ id: i.id, name: i.name })) ?? [],
+      categories: user.categories?.map(c => ({ id: c.id, name: c.name })) ?? [],
+      subcategories: user.subcategories?.map(s => ({ id: s.id, name: s.name })) ?? [],
+      subsubcategories: user.subsubcategories?.map(s3 => ({ id: s3.id, name: s3.name })) ?? [],
+
+      // Interests (fetched separately)
+      interests: {
+        identities:
+          identityInterestsRows?.map(ii => ({
+            id: ii.identity?.id,
+            name: ii.identity?.name,
+          })) ?? [],
+        categories:
+          categoryInterestsRows?.map(ci => ({
+            id: ci.category?.id,
+            name: ci.category?.name,
+          })) ?? [],
+        subcategories:
+          subcategoryInterestsRows?.map(si => ({
+            id: si.subcategory?.id,
+            name: si.subcategory?.name,
+          })) ?? [],
+        subsubcategories:
+          subsubInterestsRows?.map(ssi => ({
+            id: ssi.subsubCategory?.id,
+            name: ssi.subsubCategory?.name,
+          })) ?? [],
+      },
+
+      // Goals
+      goals: user.goals?.map(g => ({ id: g.id, name: g.name })) ?? [],
+    };
+
+    return res.json(userData);
+  } catch (error) {
+    console.error("Error getting user:", error);
+    return res.status(500).json({ message: "Failed to get user" });
+  }
+};
+
+
+
 
 /**
  * Update a user
