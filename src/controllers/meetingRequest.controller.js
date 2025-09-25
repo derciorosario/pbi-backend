@@ -70,6 +70,7 @@ exports.createMeetingRequest = async (req, res) => {
       link: mode === "video" ? link : null,
       status: "pending"
     });
+    
     console.log("Meeting request created:", meetingRequest.id);
 
     // Get requester info for notification
@@ -90,6 +91,9 @@ exports.createMeetingRequest = async (req, res) => {
         title,
         scheduledAt,
         mode
+      },
+      payload:{
+        title,
       }
     });
 

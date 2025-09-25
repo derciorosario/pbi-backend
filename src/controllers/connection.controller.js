@@ -18,8 +18,6 @@ function normalizePair(a, b) {
 
 
 
-
-
 exports.removeConnection = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -59,8 +57,6 @@ exports.removeConnection = async (req, res) => {
     return res.status(500).json({ message: "Failed to remove connection" });
   }
 };
-
-
 
 exports.createRequest = async (req, res) => {
   try {
@@ -243,11 +239,15 @@ exports.respond = async (req, res) => {
       const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
       const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
 
+      console.log('----accepted----')
       Notification.create({
         userId: row.fromUserId,
         type: "connection.accepted",
         payload: { byUserId: userId, requestId: row.id },
-      }).catch(() => {});
+      }).catch((e) => {
+        console.log(e)
+      });
+
 
       (async () => {
         try {

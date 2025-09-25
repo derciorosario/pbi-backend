@@ -52,6 +52,38 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 mins
   max: 100, // limit per IP
 });
+
+
+// --- Response size guard: cap at 10MB and log big payloads ---
+const TEN_MB = 10 * 1024 * 1024;
+const FIVE_MB = 5 * 1024 * 1024;
+
+app.use((req, res, next) => {
+  const _json = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      const str = JSON.stringify(body);            // ⚠️ where OOM usually happens
+      const bytes = Buffer.byteLength(str);
+      if (bytes >= TEN_MB) {
+        console.warn(`[RESPONSE TOO LARGE] ${req.method} ${req.originalUrl} -> ${bytes} bytes`);
+        return res.status(413).type("application/json").send(JSON.stringify({
+          message: "Response too large (max 10MB)",
+        }));
+      }
+      if (bytes >= FIVE_MB) {
+        console.warn(`[LARGE RESPONSE] ${req.method} ${req.originalUrl} -> ${bytes} bytes`);
+      }
+      return res.type("application/json").send(str);
+    } catch (e) {
+      console.error("res.json guard error:", e);
+      return _json(body); // fallback
+    }
+  };
+  next();
+});
+
+
+
 app.use("/api/auth", limiter, authRoutes);
 
 const onboardingRoutes = require("./src/routes/onboarding.routes");
@@ -242,16 +274,33 @@ const PORT = process.env.PORT || 5000;
   
 
 
-const { Message, Conversation, User, Connection, Profile, ConnectionRequest, MeetingRequest  } = require("./src/models");
+const { Message, Conversation, User, Connection, Profile, ConnectionRequest, MeetingRequest, Notification  } = require("./src/models");
 
   
 
 // helper: compute counts for this user
 async function getHeaderBadgeCounts(userId) {
+  const { Notification } = require("./src/models");
+
   const [connectionsPending, meetingsPending] = await Promise.all([
-    ConnectionRequest.count({ where: { toUserId: userId, status: "pending" } }),
-    MeetingRequest.count({ where: { toUserId: userId, status: "pending" } }), // only requests you need to respond to
+    // Count unread connection notifications (connection.request)
+    Notification.count({
+      where: {
+        userId,
+        type: { [Op.like]: 'connection.%' },
+        readAt: null
+      }
+    }),
+    // Count unread meeting notifications (meeting_request)
+    Notification.count({
+      where: {
+        userId,
+        type: { [Op.like]: 'meeting_%' },
+        readAt: null
+      }
+    })
   ]);
+
   return { connectionsPending, meetingsPending };
 }
 
@@ -758,6 +807,7 @@ async function pushHeaderCounts(socketOrUserId) {
 
       // mark_read
       socket.on("mark_read", async (...args) => {
+
         const ack = extractAck(args);
         const payload = args[0] && !isFn(args[0]) ? args[0] : {};
         const { conversationId } = payload || {};
@@ -897,6 +947,247 @@ async function pushHeaderCounts(socketOrUserId) {
         }
       });
 
+
+
+
+
+
+
+
+
+
+
+            // Add to your existing socket.io server code
+
+            // --- Notification-related socket events ---
+
+            // Fetch notifications with pagination and filtering
+            socket.on("qa_fetch_notifications", async (...args) => {
+              const ack = extractAck(args);
+              const payload = args[0] && typeof args[0] === "object" ? args[0] : {};
+              const { type, limit = 50, offset = 0 } = payload || {};
+              
+              try {
+                const userId = socket.userId;
+                
+                const whereClause = { userId };
+                if (type && type !== "all") {
+                  console.log({type})
+                  whereClause.type = { [Op.like]: `${type}%` };
+                }
+
+                const { count, rows: notifications } = await Notification.findAndCountAll({
+                  where: whereClause,
+                  order: [["createdAt", "DESC"]],
+                  limit: Math.min(parseInt(limit), 100),
+                  offset: parseInt(offset),
+                  include: [
+                    {
+                      model: User,
+                      as: "user",
+                      attributes: ["id", "name", "avatarUrl"]
+                    }
+                  ]
+                });
+
+
+                reply(socket, ack, "qa_fetch_notifications_result", {
+                  ok: true,
+                  data: {
+                    notifications,
+                    pagination: {
+                      total: count,
+                      limit: parseInt(limit),
+                      offset: parseInt(offset),
+                      hasMore: (parseInt(offset) + notifications.length) < count
+                    }
+                  }
+                });
+              } catch (e) {
+                console.error("qa_fetch_notifications error:", e);
+                reply(socket, ack, "qa_fetch_notifications_result", {
+                  ok: false,
+                  error: "Failed to load notifications"
+                });
+              }
+            });
+
+            // Mark notification as read
+            socket.on("qa_mark_notification_read", async (...args) => {
+              const ack = extractAck(args);
+              const payload = args[0] && typeof args[0] === "object" ? args[0] : {};
+              const { notificationId } = payload || {};
+              
+              try {
+                const userId = socket.userId;
+                
+                const notification = await Notification.findByPk(notificationId);
+                if (!notification) {
+                  return reply(socket, ack, "qa_mark_notification_read_result", {
+                    ok: false,
+                    error: "Notification not found"
+                  });
+                }
+
+                if (notification.userId !== userId) {
+                  return reply(socket, ack, "qa_mark_notification_read_result", {
+                    ok: false,
+                    error: "Access denied"
+                  });
+                }
+
+                await notification.update({ readAt: new Date() });
+ 
+                reply(socket, ack, "qa_mark_notification_read_result", {
+                  ok: true,
+                  data: { notification }
+                });
+
+                // Push updated counts
+                pushHeaderCounts(userId);
+              } catch (e) {
+                console.error("qa_mark_notification_read error:", e);
+                reply(socket, ack, "qa_mark_notification_read_result", {
+                  ok: false,
+                  error: "Failed to mark notification as read"
+                });
+              }
+            });
+
+            // Mark all notifications as read
+            socket.on("qa_mark_all_notifications_read", async (...args) => {
+              const ack = extractAck(args);
+              
+              try {
+                const userId = socket.userId;
+                
+                await Notification.update(
+                  { readAt: new Date() },
+                  { where: { userId, readAt: null } }
+                );
+                
+                reply(socket, ack, "qa_mark_all_notifications_read_result", {
+                  ok: true,
+                  data: { message: "All notifications marked as read" }
+                });
+
+                // Push updated counts
+                pushHeaderCounts(userId);
+              } catch (e) {
+                console.error("qa_mark_all_notifications_read error:", e);
+                reply(socket, ack, "qa_mark_all_notifications_read_result", {
+                  ok: false,
+                  error: "Failed to mark all notifications as read"
+                });
+              }
+            });
+
+            // Delete notification
+            socket.on("qa_delete_notification", async (...args) => {
+              const ack = extractAck(args);
+              const payload = args[0] && typeof args[0] === "object" ? args[0] : {};
+              const { notificationId } = payload || {};
+              
+              try {
+                const userId = socket.userId;
+                
+                const notification = await Notification.findByPk(notificationId);
+                if (!notification) {
+                  return reply(socket, ack, "qa_delete_notification_result", {
+                    ok: false,
+                    error: "Notification not found"
+                  });
+                }
+
+                if (notification.userId !== userId) {
+                  return reply(socket, ack, "qa_delete_notification_result", {
+                    ok: false,
+                    error: "Access denied"
+                  });
+                }
+
+                await notification.destroy();
+                
+                reply(socket, ack, "qa_delete_notification_result", {
+                  ok: true,
+                  data: { message: "Notification deleted" }
+                });
+              } catch (e) {
+                console.error("qa_delete_notification error:", e);
+                reply(socket, ack, "qa_delete_notification_result", {
+                  ok: false,
+                  error: "Failed to delete notification"
+                });
+              }
+            });
+
+            // Get unread notification count
+            socket.on("qa_get_notification_counts", async (...args) => {
+              const ack = extractAck(args);
+              
+              try {
+                const userId = socket.userId;
+                
+                const totalUnread = await Notification.count({
+                  where: { userId, readAt: null }
+                });
+
+                // Count by type for badge breakdown
+                const countsByType = await Notification.findAll({
+                  where: { userId, readAt: null },
+                  attributes: ['type', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+                  group: ['type']
+                });
+
+                const typeCounts = {};
+                countsByType.forEach(item => {
+                  typeCounts[item.type] = parseInt(item.get('count'));
+                });
+
+                reply(socket, ack, "qa_get_notification_counts_result", {
+                  ok: true,
+                  data: {
+                    totalUnread,
+                    byType: typeCounts
+                  }
+                });
+              } catch (e) {
+                console.error("qa_get_notification_counts error:", e);
+                reply(socket, ack, "qa_get_notification_counts_result", {
+                  ok: false,
+                  error: "Failed to get notification counts"
+                });
+              }
+            });
+
+            // Real-time notification push
+            // This will be called from your controllers when new notifications are created
+            function pushNotificationToUser(userId, notification) {
+              const userSockets = Array.from(io.sockets.sockets.values())
+                .filter(s => s.userId === userId);
+              
+              userSockets.forEach(socket => {
+                socket.emit("new_notification", { notification });
+                
+                // Also update badge counts
+                pushHeaderCounts(userId);
+              });
+            }
+
+            // Listen for new notifications and push to clients
+            socket.on("subscribe_to_notifications", () => {
+              // Client is now subscribed to real-time notifications
+              console.log(`User ${socket.userId} subscribed to notifications`);
+            });
+
+
+
+
+
+
+
+
+
       // Disconnect
       socket.on("disconnect", () => {
         console.log(`User disconnected: ${socket.userId}`);
@@ -906,6 +1197,7 @@ async function pushHeaderCounts(socketOrUserId) {
     });
 
 
+    
     
 
     // Start notification cron jobs
