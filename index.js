@@ -9,6 +9,8 @@ const socketIo = require("socket.io");
 const { Message, Conversation, User, Connection } = require("./src/models");
 const { Op } = require("sequelize");
 const { authenticate } = require("./src/middleware/auth");
+const path = require("path");
+const fs = require("fs");
 
 const { sequelize } = require("./src/models");
 const authRoutes = require("./src/routes/auth.routes");
@@ -175,6 +177,30 @@ app.use("/api/company", require("./src/routes/company.routes"))
 // Organization join request routes
 app.use("/api/organization", require("./src/routes/organization.routes"))
 
+
+app.get('/api/uploads/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, './uploads', filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "File not found" });
+    }
+    
+     res.sendFile(filePath, (err) => {
+      if (err) {
+           res.status(404).send('File not found');
+       }
+     });
+
+  } catch (err) {
+    console.error("getUploadedFile error", err);
+    res.status(500).json({ message: err.message });
+  }
+})
+
+
 // ❌ 404 handler
 app.use((req, res) => res.status(404).json({ message: "Not found" }));
 
@@ -202,7 +228,7 @@ const PORT = process.env.PORT || 5000;
 
     // Auto-sync DB tables (use migrations in production)
     // Temporarily disabled to avoid schema issues during development
-     await sequelize.sync({ force: false, alter: true });
+    // await sequelize.sync({ force: false, alter: true });
     
     // 👉 Run seeding if needed
     //await seedIfEmpty();

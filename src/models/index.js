@@ -339,6 +339,19 @@ SubsubCategory.belongsToMany(Job, {
   as: "jobs",
 });
 
+// Add belongsTo associations for through tables
+JobIdentity.belongsTo(Job, { foreignKey: "jobId" });
+JobIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+JobCategory.belongsTo(Job, { foreignKey: "jobId" });
+JobCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+JobSubcategory.belongsTo(Job, { foreignKey: "jobId" });
+JobSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+JobSubsubCategory.belongsTo(Job, { foreignKey: "jobId" });
+JobSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
 // Event audience associations
 Event.belongsToMany(Identity, {
   through: EventIdentity,
@@ -353,6 +366,10 @@ Identity.belongsToMany(Event, {
   as: "events",
 });
 
+// Add belongsTo associations for through tables
+EventIdentity.belongsTo(Event, { foreignKey: "eventId" });
+EventIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
 Event.belongsToMany(Category, {
   through: EventCategory,
   foreignKey: "eventId",
@@ -365,6 +382,10 @@ Category.belongsToMany(Event, {
   otherKey: "eventId",
   as: "events",
 });
+
+// Add belongsTo associations for through tables
+EventCategory.belongsTo(Event, { foreignKey: "eventId" });
+EventCategory.belongsTo(Category, { foreignKey: "categoryId" });
 
 Event.belongsToMany(Subcategory, {
   through: EventSubcategory,
@@ -379,6 +400,10 @@ Subcategory.belongsToMany(Event, {
   as: "events",
 });
 
+// Add belongsTo associations for through tables
+EventSubcategory.belongsTo(Event, { foreignKey: "eventId" });
+EventSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
 Event.belongsToMany(SubsubCategory, {
   through: EventSubsubCategory,
   foreignKey: "eventId",
@@ -391,6 +416,10 @@ SubsubCategory.belongsToMany(Event, {
   otherKey: "eventId",
   as: "events",
 });
+
+// Add belongsTo associations for through tables
+EventSubsubCategory.belongsTo(Event, { foreignKey: "eventId" });
+EventSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
 
 // Service audience associations
 Service.belongsToMany(Identity, {
@@ -497,6 +526,84 @@ SubsubCategory.belongsToMany(Product, {
   otherKey: "productId",
   as: "products",
 });
+
+// Add belongsTo associations for through tables
+ProductIdentity.belongsTo(Product, { foreignKey: "productId" });
+ProductIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+ProductCategory.belongsTo(Product, { foreignKey: "productId" });
+ProductCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+ProductSubcategory.belongsTo(Product, { foreignKey: "productId" });
+ProductSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+ProductSubsubCategory.belongsTo(Product, { foreignKey: "productId" });
+ProductSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
+// Add belongsTo associations for service through tables
+ServiceIdentity.belongsTo(Service, { foreignKey: "serviceId" });
+ServiceIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+ServiceCategory.belongsTo(Service, { foreignKey: "serviceId" });
+ServiceCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+ServiceSubcategory.belongsTo(Service, { foreignKey: "serviceId" });
+ServiceSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+ServiceSubsubCategory.belongsTo(Service, { foreignKey: "serviceId" });
+ServiceSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
+// Add belongsTo associations for tourism through tables
+TourismIdentity.belongsTo(Tourism, { foreignKey: "tourismId" });
+TourismIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+TourismCategory.belongsTo(Tourism, { foreignKey: "tourismId" });
+TourismCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+TourismSubcategory.belongsTo(Tourism, { foreignKey: "tourismId" });
+TourismSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+TourismSubsubCategory.belongsTo(Tourism, { foreignKey: "tourismId" });
+TourismSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
+// Add belongsTo associations for funding through tables
+FundingIdentity.belongsTo(Funding, { foreignKey: "fundingId" });
+FundingIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+FundingCategory.belongsTo(Funding, { foreignKey: "fundingId" });
+FundingCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+FundingSubcategory.belongsTo(Funding, { foreignKey: "fundingId" });
+FundingSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+FundingSubsubCategory.belongsTo(Funding, { foreignKey: "fundingId" });
+FundingSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
+// Add belongsTo associations for moment through tables
+MomentIdentity.belongsTo(Moment, { foreignKey: "momentId" });
+MomentIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+MomentCategory.belongsTo(Moment, { foreignKey: "momentId" });
+MomentCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+MomentSubcategory.belongsTo(Moment, { foreignKey: "momentId" });
+MomentSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+MomentSubsubCategory.belongsTo(Moment, { foreignKey: "momentId" });
+MomentSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
+
+// Add belongsTo associations for need through tables
+NeedIdentity.belongsTo(Need, { foreignKey: "needId" });
+NeedIdentity.belongsTo(Identity, { foreignKey: "identityId" });
+
+NeedCategory.belongsTo(Need, { foreignKey: "needId" });
+NeedCategory.belongsTo(Category, { foreignKey: "categoryId" });
+
+NeedSubcategory.belongsTo(Need, { foreignKey: "needId" });
+NeedSubcategory.belongsTo(Subcategory, { foreignKey: "subcategoryId" });
+
+NeedSubsubCategory.belongsTo(Need, { foreignKey: "needId" });
+NeedSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId" });
 
 
 // Tourism audience associations
@@ -1164,6 +1271,11 @@ module.exports = {
   EventRegistration,
   Job,
   JobApplication,
+  // Export job audience association models
+  JobIdentity,
+  JobCategory,
+  JobSubcategory,
+  JobSubsubCategory,
   Message,
   Conversation,
   // Export event audience association models

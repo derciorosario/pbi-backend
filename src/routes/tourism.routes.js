@@ -1,9 +1,13 @@
 const router = require("express").Router();
 const C = require("../controllers/tourism.controller");
 const auth = require("../middleware/auth"); // auth(true) -> requires token
+const upload = require("../utils/multerConfig");
 
 // Metadata for form
 router.get("/meta", auth(false), C.getMeta);
+
+// Upload images
+router.post("/upload-images", auth(true), upload.array('images', 20), C.uploadImages);
 
 // CRUD
 router.get("/", auth(false), C.list);

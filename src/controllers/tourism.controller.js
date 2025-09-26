@@ -1,6 +1,13 @@
 const { Tourism, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setTourismAudience } = require("./_tourismAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const TOURISM_CACHE_TTL = 300;
+
+function generateTourismCacheKey(tourismId) {
+  return `tourism:${tourismId}`;
+}
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -18,6 +25,21 @@ exports.getMeta = async (req, res) => {
     seasons,
     budgetRanges
   });
+};
+
+exports.uploadImages = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    const filenames = req.files.map(file => file.filename);
+
+    res.json({ filenames });
+  } catch (error) {
+    console.error('Error uploading images:', error);
+    res.status(500).json({ message: 'Failed to upload images' });
+  }
 };
 
 exports.create = async (req, res) => {
@@ -88,7 +110,7 @@ exports.create = async (req, res) => {
       season: season || null,
       budgetRange: budgetRange || null,
       tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images.map(img => typeof img === 'string' ? img : img.filename).filter(Boolean) : [],
 
       generalCategoryId,
       generalSubcategoryId,
@@ -181,7 +203,9 @@ exports.update = async (req, res) => {
     // Handle images array
     let images = tourism.images;
     if (body.images !== undefined) {
-      images = Array.isArray(body.images) ? body.images : [];
+      images = Array.isArray(body.images)
+        ? body.images.map(img => typeof img === 'string' ? img : img.filename).filter(Boolean)
+        : [];
     }
 
     // Simple update
@@ -233,19 +257,45 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const tourism = await Tourism.findByPk(id, {
-    include: [
-      { model: User, as: "author", attributes: ["id", "name", "email"] },
-      // Include audience associations
-      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!tourism) return res.status(404).json({ message: "Tourism post not found" });
-  res.json(tourism);
+  try {
+    const { id } = req.params;
+
+    // Tourism cache: try read first
+    const __tourismCacheKey = generateTourismCacheKey(id);
+    try {
+      const cached = await cache.get(__tourismCacheKey);
+      if (cached) {
+        console.log(`✅ Tourism cache hit for key: ${__tourismCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Tourism cache read error:", e.message);
+    }
+
+    const tourism = await Tourism.findByPk(id, {
+      include: [
+        { model: User, as: "author", attributes: ["id", "name", "email"] },
+        // Include audience associations
+        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!tourism) return res.status(404).json({ message: "Tourism post not found" });
+
+    try {
+      await cache.set(__tourismCacheKey, tourism, TOURISM_CACHE_TTL);
+      console.log(`💾 Tourism cached: ${__tourismCacheKey}`);
+    } catch (e) {
+      console.error("Tourism cache write error:", e.message);
+    }
+
+    res.json(tourism);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch tourism post" });
+  }
 };
 
 exports.list = async (req, res) => {

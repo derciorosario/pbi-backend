@@ -1,6 +1,13 @@
 const { Funding, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setFundingAudience } = require("./_fundingAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const FUNDING_CACHE_TTL = 300;
+
+function generateFundingCacheKey(fundingId) {
+  return `funding:${fundingId}`;
+}
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -18,6 +25,23 @@ exports.getMeta = async (req, res) => {
     statuses,
     visibilities
   });
+};
+
+
+
+exports.uploadImages = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    const filenames = req.files.map(file => file.filename);
+
+    res.json({ filenames });
+  } catch (error) {
+    console.error('Error uploading images:', error);
+    res.status(500).json({ message: 'Failed to upload images' });
+  }
 };
 
 exports.create = async (req, res) => {
@@ -108,7 +132,7 @@ exports.create = async (req, res) => {
       phone: phone || null,
       links: Array.isArray(links) ? links : [],
       tags: Array.isArray(tags) ? tags : [],
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images.map(img => typeof img === 'string' ? img : img.filename).filter(Boolean) : [],
       status: status || "draft",
       visibility: visibility || "public",
 
@@ -208,7 +232,9 @@ exports.update = async (req, res) => {
     // Handle images array
     let images = funding.images;
     if (body.images !== undefined) {
-      images = Array.isArray(body.images) ? body.images : [];
+      images = Array.isArray(body.images)
+        ? body.images.map(img => typeof img === 'string' ? img : img.filename).filter(Boolean)
+        : [];
     }
 
     // Simple update
@@ -271,20 +297,46 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const funding = await Funding.findByPk(id, {
-    include: [
-      { model: User, as: "creator", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      // Include audience associations
-      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!funding) return res.status(404).json({ message: "Funding project not found" });
-  res.json(funding);
+  try {
+    const { id } = req.params;
+
+    // Funding cache: try read first
+    const __fundingCacheKey = generateFundingCacheKey(id);
+    try {
+      const cached = await cache.get(__fundingCacheKey);
+      if (cached) {
+        console.log(`✅ Funding cache hit for key: ${__fundingCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Funding cache read error:", e.message);
+    }
+
+    const funding = await Funding.findByPk(id, {
+      include: [
+        { model: User, as: "creator", attributes: ["id", "name", "email"] },
+        { model: Category, as: "category" },
+        // Include audience associations
+        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!funding) return res.status(404).json({ message: "Funding project not found" });
+
+    try {
+      await cache.set(__fundingCacheKey, funding, FUNDING_CACHE_TTL);
+      console.log(`💾 Funding cached: ${__fundingCacheKey}`);
+    } catch (e) {
+      console.error("Funding cache write error:", e.message);
+    }
+
+    res.json(funding);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch funding project" });
+  }
 };
 
 exports.list = async (req, res) => {

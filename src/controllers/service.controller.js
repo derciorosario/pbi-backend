@@ -1,6 +1,13 @@
 const { Service, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setServiceAudience } = require("./_serviceAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const SERVICE_CACHE_TTL = 300;
+
+function generateServiceCacheKey(serviceId) {
+  return `service:${serviceId}`;
+}
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -14,14 +21,29 @@ exports.getMeta = async (req, res) => {
   const locationTypes = ["Remote", "On-site"];
   const experienceLevels = ["Entry Level", "Intermediate", "Expert"];
 
-  res.json({ 
-    categories, 
-    serviceTypes, 
-    priceTypes, 
-    deliveryTimes, 
-    locationTypes, 
-    experienceLevels 
+  res.json({
+    categories,
+    serviceTypes,
+    priceTypes,
+    deliveryTimes,
+    locationTypes,
+    experienceLevels
   });
+};
+
+exports.uploadAttachments = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    const filenames = req.files.map(file => file.filename);
+
+    res.json({ filenames });
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    res.status(500).json({ message: 'Failed to upload attachments' });
+  }
 };
 
 exports.create = async (req, res) => {
@@ -208,7 +230,9 @@ exports.update = async (req, res) => {
     // Handle attachments array
     let attachments = service.attachments;
     if (body.attachments !== undefined) {
-      attachments = Array.isArray(body.attachments) ? body.attachments : [];
+      attachments = Array.isArray(body.attachments)
+        ? body.attachments.map(a => typeof a === 'string' ? a : a.filename).filter(Boolean)
+        : [];
     }
 
     // Simple update
@@ -224,7 +248,7 @@ exports.update = async (req, res) => {
       categoryId: body.categoryId === '' ? null : (body.categoryId ?? service.categoryId),
       subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? service.subcategoryId),
       skills,
-      attachments,
+      attachments: attachments ? attachments.map(a => typeof a === 'string' ? a : a.filename).filter(Boolean) : [],
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
       generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
       generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
@@ -274,21 +298,47 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const service = await Service.findByPk(id, {
-    include: [
-      { model: User, as: "provider", attributes: ["id", "name", "email"] },
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
-      // Include audience associations
-      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!service) return res.status(404).json({ message: "Service not found" });
-  res.json(service);
+  try {
+    const { id } = req.params;
+
+    // Service cache: try read first
+    const __serviceCacheKey = generateServiceCacheKey(id);
+    try {
+      const cached = await cache.get(__serviceCacheKey);
+      if (cached) {
+        console.log(`✅ Service cache hit for key: ${__serviceCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Service cache read error:", e.message);
+    }
+
+    const service = await Service.findByPk(id, {
+      include: [
+        { model: User, as: "provider", attributes: ["id", "name", "email"] },
+        { model: Category, as: "category" },
+        { model: Subcategory, as: "subcategory" },
+        // Include audience associations
+        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!service) return res.status(404).json({ message: "Service not found" });
+
+    try {
+      await cache.set(__serviceCacheKey, service, SERVICE_CACHE_TTL);
+      console.log(`💾 Service cached: ${__serviceCacheKey}`);
+    } catch (e) {
+      console.error("Service cache write error:", e.message);
+    }
+
+    res.json(service);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch service" });
+  }
 };
 
 exports.list = async (req, res) => {

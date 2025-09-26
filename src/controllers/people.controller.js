@@ -18,6 +18,7 @@ const {
   UserBlock,
   CompanyStaff,
 } = require("../models");
+const { cache } = require("../utils/redis");
 
 function like(v) { return { [Op.like]: `%${v}%` }; }
 function ensureArray(val) {
@@ -25,6 +26,61 @@ function ensureArray(val) {
   if (Array.isArray(val)) return val.filter(Boolean);
   if (typeof val === "string") return val.split(",").map((s) => s.trim()).filter(Boolean);
   return [val];
+}
+
+const PEOPLE_CACHE_TTL = 300;
+
+function generatePeopleCacheKey(req) {
+  const {
+    q,
+    country,
+    accountType,
+    city,
+    categoryId,
+    cats,
+    subcategoryId,
+    goalId,
+    experienceLevel,
+    connectionStatus,
+    identityIds,
+    audienceCategoryIds,
+    audienceSubcategoryIds,
+    audienceSubsubCategoryIds,
+    industryIds,
+    limit = 20,
+    offset = 0,
+  } = req.query;
+
+  const currentUserId = req.user?.id || 'anonymous';
+
+  const keyData = {
+    q,
+    country,
+    accountType,
+    city,
+    categoryId,
+    cats,
+    subcategoryId,
+    goalId,
+    experienceLevel,
+    connectionStatus,
+    identityIds: ensureArray(identityIds),
+    audienceCategoryIds: ensureArray(audienceCategoryIds),
+    audienceSubcategoryIds: ensureArray(audienceSubcategoryIds),
+    audienceSubsubCategoryIds: ensureArray(audienceSubsubCategoryIds),
+    industryIds: ensureArray(industryIds),
+    limit,
+    offset,
+    currentUserId,
+  };
+
+  Object.keys(keyData).forEach(k => {
+    if (Array.isArray(keyData[k])) {
+      keyData[k] = keyData[k].map(String).sort();
+    }
+  });
+
+  return `people:${JSON.stringify(keyData)}`;
 }
 
 exports.searchPeople = async (req, res) => {
@@ -52,6 +108,18 @@ exports.searchPeople = async (req, res) => {
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
     const currentUserId = req.user?.id || null;
+
+    // People cache: try read first
+    let __peopleCacheKey = generatePeopleCacheKey(req);
+    try {
+      const cached = await cache.get(__peopleCacheKey);
+      if (cached) {
+        console.log(`✅ People cache hit for key: ${__peopleCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("People cache read error:", e.message);
+    }
 
     // Check if user has connectionsOnly enabled
     let connectionsOnly = false;
@@ -581,7 +649,14 @@ exports.searchPeople = async (req, res) => {
     }
 
     const windowed = items.slice(off, off + lim).map((x) => x.out);
-    return res.json({ count: items.length, items: windowed, sortedBy: "matchPercentage" });
+    const response = { count: items.length, items: windowed, sortedBy: "matchPercentage" };
+    try {
+      await cache.set(__peopleCacheKey, response, PEOPLE_CACHE_TTL);
+      console.log(`💾 People cached: ${__peopleCacheKey}`);
+    } catch (e) {
+      console.error("People cache write error:", e.message);
+    }
+    return res.json(response);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Failed to search people" });

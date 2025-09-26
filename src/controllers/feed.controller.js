@@ -31,8 +31,220 @@ const {
   IndustrySubcategory,
   IndustrySubsubCategory,
   UserSettings,
+  EventCategory,
+  EventSubcategory,
+  EventSubsubCategory,
+  EventIdentity,
+  JobCategory,
+  JobSubcategory,
+  JobSubsubCategory,
+  JobIdentity,
+  ProductCategory,
+  ProductSubcategory,
+  ProductSubsubCategory,
+  ProductIdentity,
+  ServiceCategory,
+  ServiceSubcategory,
+  ServiceSubsubCategory,
+  ServiceIdentity,
+  TourismCategory,
+  TourismSubcategory,
+  TourismSubsubCategory,
+  TourismIdentity,
+  FundingCategory,
+  FundingSubcategory,
+  FundingSubsubCategory,
+  FundingIdentity,
+  NeedCategory,
+  NeedSubcategory,
+  NeedSubsubCategory,
+  NeedIdentity,
+  MomentCategory,
+  MomentSubcategory,
+  MomentSubsubCategory,
+  MomentIdentity,
+  sequelize,
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
+const { cache } = require("../utils/redis");
+
+// Cache configuration
+const CACHE_TTL = {
+  FEED: 300, // 5 minutes for feed data
+  META: 3600, // 1 hour for meta data
+  SUGGESTIONS: 600, // 10 minutes for suggestions
+};
+
+// Generate cache key for feed requests
+function generateFeedCacheKey(req) {
+  const {
+    tab,
+    q,
+    country,
+    city,
+    categoryId,
+    subcategoryId,
+    subsubCategoryId,
+    identityId,
+    industryIds,
+    generalCategoryIds,
+    generalSubcategoryIds,
+    generalSubsubCategoryIds,
+    audienceIdentityIds,
+    audienceCategoryIds,
+    audienceSubcategoryIds,
+    audienceSubsubCategoryIds,
+    price,
+    serviceType,
+    priceType,
+    deliveryTime,
+    experienceLevel,
+    locationType,
+    jobType,
+    workMode,
+    workLocation,
+    workSchedule,
+    careerLevel,
+    paymentType,
+    jobsView,
+    postType,
+    season,
+    budgetRange,
+    fundingGoal,
+    amountRaised,
+    deadline,
+    date,
+    eventType,
+    registrationType,
+    limit = 40,
+    offset = 0,
+  } = req.query;
+
+  const currentUserId = req.user?.id || 'anonymous';
+  const userSettings = req.userSettings || {};
+
+  // Create a deterministic key based on all query parameters
+  const keyData = {
+    tab,
+    q,
+    country,
+    city,
+    categoryId,
+    subcategoryId,
+    subsubCategoryId,
+    identityId,
+    industryIds,
+    generalCategoryIds,
+    generalSubcategoryIds,
+    generalSubsubCategoryIds,
+    audienceIdentityIds,
+    audienceCategoryIds,
+    audienceSubcategoryIds,
+    audienceSubsubCategoryIds,
+    price,
+    serviceType,
+    priceType,
+    deliveryTime,
+    experienceLevel,
+    locationType,
+    jobType,
+    workMode,
+    workLocation,
+    workSchedule,
+    careerLevel,
+    paymentType,
+    jobsView,
+    postType,
+    season,
+    budgetRange,
+    fundingGoal,
+    amountRaised,
+    deadline,
+    date,
+    eventType,
+    registrationType,
+    limit,
+    offset,
+    currentUserId,
+    connectionsOnly: userSettings.connectionsOnly,
+    contentType: userSettings.contentType,
+  };
+
+  // Sort arrays and stringify for consistent key generation
+  Object.keys(keyData).forEach(key => {
+    if (Array.isArray(keyData[key])) {
+      keyData[key] = keyData[key].sort();
+    }
+  });
+
+  return `feed:${JSON.stringify(keyData)}`;
+}
+
+// Cache wrapper for feed endpoints
+async function withCache(cacheKey, ttl, handler, res) {
+  try {
+    // Try to get from cache first
+    const cachedResult = await cache.get(cacheKey);
+    if (cachedResult) {
+      console.log(`✅ Cache hit for key: ${cacheKey}`);
+      res.json(cachedResult);
+      return cachedResult;
+    }
+
+    console.log(`❌ Cache miss for key: ${cacheKey}`);
+    // Execute the handler to get the data
+    const data = await handler();
+
+    // Cache the result
+    try {
+      await cache.set(cacheKey, data, ttl);
+      console.log(`💾 Cached result for key: ${cacheKey}`);
+    } catch (cacheError) {
+      console.error('Cache serialization error:', cacheError.message);
+      // Continue without caching if serialization fails
+    }
+
+    // Send the response
+    res.json(data);
+    return data;
+  } catch (error) {
+    console.error('Cache error:', error);
+    // If caching fails, execute handler without caching
+    try {
+      const data = await handler();
+      res.json(data);
+      return data;
+    } catch (handlerError) {
+      console.error('Handler error:', handlerError);
+      res.status(500).json({ message: "Failed to get feed" });
+      throw handlerError; // Re-throw to propagate the error
+    }
+  }
+}
+
+// Cache invalidation functions
+async function invalidateFeedCache() {
+  try {
+    const deletedCount = await cache.delPattern('feed:*');
+    console.log(`🗑️ Invalidated ${deletedCount} feed cache entries`);
+    return deletedCount;
+  } catch (error) {
+    console.error('Cache invalidation error:', error);
+    return 0;
+  }
+}
+
+async function invalidateUserFeedCache(userId) {
+  try {
+    const pattern = `feed:*${userId}*`;
+    const deletedCount = await cache.delPattern(pattern);
+    console.log(`🗑️ Invalidated ${deletedCount} user feed cache entries for user ${userId}`);
+    return deletedCount;
+  } catch (error) {
+    console.error('User cache invalidation error:', error);
+    return 0;
+  }
+}
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -155,115 +367,424 @@ function timeAgo(date) {
   return d.toLocaleDateString();
 }
 
+async function lazyLoadEventAudienceData(events, currentUserId = null) {
+  if (!events.length) return events;
+
+  const eventIds = events.map(e => e.id);
+
+  // Batch load all audience data in parallel
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    EventCategory.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [{ model: Category, attributes: ['id', 'name'] }]
+    }),
+    EventSubcategory.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [{ model: Subcategory, attributes: ['id', 'name'] }]
+    }),
+    EventSubsubCategory.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [{ model: SubsubCategory, attributes: ['id', 'name'] }]
+    }),
+    EventIdentity.findAll({
+      where: { eventId: { [Op.in]: eventIds } },
+      include: [{ model: Identity, attributes: ['id', 'name'] }]
+    })
+  ]);
+
+  // Map data back to events
+  return events.map(event => ({
+    ...event.toJSON ? event.toJSON() : event,
+    audienceCategories: audienceCategories.filter(ac => ac.eventId === event.id).map(ac => ac.Category),
+    audienceSubcategories: audienceSubcategories.filter(as => as.eventId === event.id).map(as => as.Subcategory),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.eventId === event.id).map(ass => ass.SubsubCategory),
+    audienceIdentities: audienceIdentities.filter(ai => ai.eventId === event.id).map(ai => ai.Identity)
+  }));
+}
+
+async function lazyLoadJobAudienceData(jobs, currentUserId = null) {
+  if (!jobs.length) return jobs;
+
+  const jobIds = jobs.map(j => j.id);
+
+  // Batch load all audience data in parallel
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    JobCategory.findAll({
+      where: { jobId: { [Op.in]: jobIds } },
+      include: [{ model: Category, attributes: ['id', 'name'] }]
+    }),
+    JobSubcategory.findAll({
+      where: { jobId: { [Op.in]: jobIds } },
+      include: [{ model: Subcategory, attributes: ['id', 'name'] }]
+    }),
+    JobSubsubCategory.findAll({
+      where: { jobId: { [Op.in]: jobIds } },
+      include: [{ model: SubsubCategory, attributes: ['id', 'name'] }]
+    }),
+    JobIdentity.findAll({
+      where: { jobId: { [Op.in]: jobIds } },
+      include: [{ model: Identity, attributes: ['id', 'name'] }]
+    })
+  ]);
+
+  // Map data back to jobs
+  return jobs.map(job => ({
+    ...job.toJSON ? job.toJSON() : job,
+    audienceCategories: audienceCategories.filter(ac => ac.jobId === job.id).map(ac => ac.Category),
+    audienceSubcategories: audienceSubcategories.filter(as => as.jobId === job.id).map(as => as.Subcategory),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.jobId === job.id).map(ass => ass.SubsubCategory),
+    audienceIdentities: audienceIdentities.filter(ai => ai.jobId === job.id).map(ai => ai.Identity)
+  }));
+}
+
+async function lazyLoadProductAudienceData(products, currentUserId = null) {
+  if (!products.length) return products;
+
+  const productIds = products.map(p => p.id);
+
+  // Batch load all audience data in parallel
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    ProductCategory.findAll({
+      where: { productId: { [Op.in]: productIds } },
+      include: [{ model: Category, attributes: ['id', 'name'] }]
+    }),
+    ProductSubcategory.findAll({
+      where: { productId: { [Op.in]: productIds } },
+      include: [{ model: Subcategory, attributes: ['id', 'name'] }]
+    }),
+    ProductSubsubCategory.findAll({
+      where: { productId: { [Op.in]: productIds } },
+      include: [{ model: SubsubCategory, attributes: ['id', 'name'] }]
+    }),
+    ProductIdentity.findAll({
+      where: { productId: { [Op.in]: productIds } },
+      include: [{ model: Identity, attributes: ['id', 'name'] }]
+    })
+  ]);
+
+  // Map data back to products
+  return products.map(product => ({
+    ...product.toJSON ? product.toJSON() : product,
+    audienceCategories: audienceCategories.filter(ac => ac.productId === product.id).map(ac => ac.Category),
+    audienceSubcategories: audienceSubcategories.filter(as => as.productId === product.id).map(as => as.Subcategory),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.productId === product.id).map(ass => ass.SubsubCategory),
+    audienceIdentities: audienceIdentities.filter(ai => ai.productId === product.id).map(ai => ai.Identity)
+  }));
+}
+
+async function lazyLoadServiceAudienceData(services, currentUserId = null) {
+  if (!services.length) return services;
+
+  const serviceIds = services.map(s => s.id);
+
+  // Batch load all audience data in parallel
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    ServiceCategory.findAll({
+      where: { serviceId: { [Op.in]: serviceIds } },
+      include: [{ model: Category, attributes: ['id', 'name'] }]
+    }),
+    ServiceSubcategory.findAll({
+      where: { serviceId: { [Op.in]: serviceIds } },
+      include: [{ model: Subcategory, attributes: ['id', 'name'] }]
+    }),
+    ServiceSubsubCategory.findAll({
+      where: { serviceId: { [Op.in]: serviceIds } },
+      include: [{ model: SubsubCategory, attributes: ['id', 'name'] }]
+    }),
+    ServiceIdentity.findAll({
+      where: { serviceId: { [Op.in]: serviceIds } },
+      include: [{ model: Identity, attributes: ['id', 'name'] }]
+    })
+  ]);
+
+  // Map data back to services
+  return services.map(service => ({
+    ...service.toJSON ? service.toJSON() : service,
+    audienceCategories: audienceCategories.filter(ac => ac.serviceId === service.id).map(ac => ac.Category),
+    audienceSubcategories: audienceSubcategories.filter(as => as.serviceId === service.id).map(as => as.Subcategory),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.serviceId === service.id).map(ass => ass.SubsubCategory),
+    audienceIdentities: audienceIdentities.filter(ai => ai.serviceId === service.id).map(ai => ai.Identity)
+  }));
+}
+
+async function lazyLoadTourismAudienceData(tourism, currentUserId = null) {
+  if (!tourism.length) return tourism;
+
+  const tourismIds = tourism.map(t => t.id);
+
+  // Batch load all audience data in parallel using raw SQL queries
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    sequelize.query(`
+      SELECT tc.tourismId, c.id, c.name
+      FROM tourism_categories tc
+      JOIN categories c ON tc.categoryId = c.id
+      WHERE tc.tourismId IN (:tourismIds)
+    `, {
+      replacements: { tourismIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT tsc.tourismId, sc.id, sc.name
+      FROM tourism_subcategories tsc
+      JOIN subcategories sc ON tsc.subcategoryId = sc.id
+      WHERE tsc.tourismId IN (:tourismIds)
+    `, {
+      replacements: { tourismIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT tssc.tourismId, ssc.id, ssc.name
+      FROM tourism_subsubcategories tssc
+      JOIN subsubcategories ssc ON tssc.subsubcategoryId = ssc.id
+      WHERE tssc.tourismId IN (:tourismIds)
+    `, {
+      replacements: { tourismIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT ti.tourismId, i.id, i.name
+      FROM tourism_identities ti
+      JOIN identities i ON ti.identityId = i.id
+      WHERE ti.tourismId IN (:tourismIds)
+    `, {
+      replacements: { tourismIds },
+      type: sequelize.QueryTypes.SELECT
+    })
+  ]);
+
+  // Map data back to tourism
+  return tourism.map(tour => ({
+    ...tour.toJSON ? tour.toJSON() : tour,
+    audienceCategories: audienceCategories.filter(ac => ac.tourismId === tour.id).map(ac => ({ id: ac.id, name: ac.name })),
+    audienceSubcategories: audienceSubcategories.filter(as => as.tourismId === tour.id).map(as => ({ id: as.id, name: as.name })),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.tourismId === tour.id).map(ass => ({ id: ass.id, name: ass.name })),
+    audienceIdentities: audienceIdentities.filter(ai => ai.tourismId === tour.id).map(ai => ({ id: ai.id, name: ai.name }))
+  }));
+}
+
+async function lazyLoadFundingAudienceData(funding, currentUserId = null) {
+  if (!funding.length) return funding;
+
+  const fundingIds = funding.map(f => f.id);
+
+  // Batch load all audience data in parallel using raw SQL queries
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    sequelize.query(`
+      SELECT fc.fundingId, c.id, c.name
+      FROM funding_categories fc
+      JOIN categories c ON fc.categoryId = c.id
+      WHERE fc.fundingId IN (:fundingIds)
+    `, {
+      replacements: { fundingIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT fsc.fundingId, sc.id, sc.name
+      FROM funding_subcategories fsc
+      JOIN subcategories sc ON fsc.subcategoryId = sc.id
+      WHERE fsc.fundingId IN (:fundingIds)
+    `, {
+      replacements: { fundingIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT fssc.fundingId, ssc.id, ssc.name
+      FROM funding_subsubcategories fssc
+      JOIN subsubcategories ssc ON fssc.subsubcategoryId = ssc.id
+      WHERE fssc.fundingId IN (:fundingIds)
+    `, {
+      replacements: { fundingIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT fi.fundingId, i.id, i.name
+      FROM funding_identities fi
+      JOIN identities i ON fi.identityId = i.id
+      WHERE fi.fundingId IN (:fundingIds)
+    `, {
+      replacements: { fundingIds },
+      type: sequelize.QueryTypes.SELECT
+    })
+  ]);
+
+  // Map data back to funding
+  return funding.map(fund => ({
+    ...fund.toJSON ? fund.toJSON() : fund,
+    audienceCategories: audienceCategories.filter(ac => ac.fundingId === fund.id).map(ac => ({ id: ac.id, name: ac.name })),
+    audienceSubcategories: audienceSubcategories.filter(as => as.fundingId === fund.id).map(as => ({ id: as.id, name: as.name })),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.fundingId === fund.id).map(ass => ({ id: ass.id, name: ass.name })),
+    audienceIdentities: audienceIdentities.filter(ai => ai.fundingId === fund.id).map(ai => ({ id: ai.id, name: ai.name }))
+  }));
+}
+
+async function lazyLoadNeedAudienceData(needs, currentUserId = null) {
+  if (!needs.length) return needs;
+
+  const needIds = needs.map(n => n.id);
+
+  // Batch load all audience data in parallel using raw SQL queries
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    sequelize.query(`
+      SELECT nc.needId, c.id, c.name
+      FROM need_categories nc
+      JOIN categories c ON nc.categoryId = c.id
+      WHERE nc.needId IN (:needIds)
+    `, {
+      replacements: { needIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT nsc.needId, sc.id, sc.name
+      FROM need_subcategories nsc
+      JOIN subcategories sc ON nsc.subcategoryId = sc.id
+      WHERE nsc.needId IN (:needIds)
+    `, {
+      replacements: { needIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT nssc.needId, ssc.id, ssc.name
+      FROM need_subsubcategories nssc
+      JOIN subsubcategories ssc ON nssc.subsubcategoryId = ssc.id
+      WHERE nssc.needId IN (:needIds)
+    `, {
+      replacements: { needIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT ni.needId, i.id, i.name
+      FROM need_identities ni
+      JOIN identities i ON ni.identityId = i.id
+      WHERE ni.needId IN (:needIds)
+    `, {
+      replacements: { needIds },
+      type: sequelize.QueryTypes.SELECT
+    })
+  ]);
+
+  // Map data back to needs
+  return needs.map(need => ({
+    ...need.toJSON ? need.toJSON() : need,
+    audienceCategories: audienceCategories.filter(ac => ac.needId === need.id).map(ac => ({ id: ac.id, name: ac.name })),
+    audienceSubcategories: audienceSubcategories.filter(as => as.needId === need.id).map(as => ({ id: as.id, name: as.name })),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.needId === need.id).map(ass => ({ id: ass.id, name: ass.name })),
+    audienceIdentities: audienceIdentities.filter(ai => ai.needId === need.id).map(ai => ({ id: ai.id, name: ai.name }))
+  }));
+}
+
+async function lazyLoadMomentAudienceData(moments, currentUserId = null) {
+  if (!moments.length) return moments;
+
+  const momentIds = moments.map(m => m.id);
+
+  // Batch load all audience data in parallel using raw SQL queries
+  const [audienceCategories, audienceSubcategories, audienceSubsubs, audienceIdentities] = await Promise.all([
+    sequelize.query(`
+      SELECT mc.momentId, c.id, c.name
+      FROM moment_categories mc
+      JOIN categories c ON mc.categoryId = c.id
+      WHERE mc.momentId IN (:momentIds)
+    `, {
+      replacements: { momentIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT msc.momentId, sc.id, sc.name
+      FROM moment_subcategories msc
+      JOIN subcategories sc ON msc.subcategoryId = sc.id
+      WHERE msc.momentId IN (:momentIds)
+    `, {
+      replacements: { momentIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT mssc.momentId, ssc.id, ssc.name
+      FROM moment_subsubcategories mssc
+      JOIN subsubcategories ssc ON mssc.subsubcategoryId = ssc.id
+      WHERE mssc.momentId IN (:momentIds)
+    `, {
+      replacements: { momentIds },
+      type: sequelize.QueryTypes.SELECT
+    }),
+    sequelize.query(`
+      SELECT mi.momentId, i.id, i.name
+      FROM moment_identities mi
+      JOIN identities i ON mi.identityId = i.id
+      WHERE mi.momentId IN (:momentIds)
+    `, {
+      replacements: { momentIds },
+      type: sequelize.QueryTypes.SELECT
+    })
+  ]);
+
+  // Map data back to moments
+  return moments.map(moment => ({
+    ...moment.toJSON ? moment.toJSON() : moment,
+    audienceCategories: audienceCategories.filter(ac => ac.momentId === moment.id).map(ac => ({ id: ac.id, name: ac.name })),
+    audienceSubcategories: audienceSubcategories.filter(as => as.momentId === moment.id).map(as => ({ id: as.id, name: as.name })),
+    audienceSubsubs: audienceSubsubs.filter(ass => ass.momentId === moment.id).map(ass => ({ id: ass.id, name: ass.name })),
+    audienceIdentities: audienceIdentities.filter(ai => ai.momentId === moment.id).map(ai => ({ id: ai.id, name: ai.name }))
+  }));
+}
+
+function filterByAudienceCriteria(items, audienceIdentityIds, audienceCategoryIds, audienceSubcategoryIds, audienceSubsubCategoryIds) {
+  if (!items.length) return items;
+
+  // If no audience filters are applied, return all items
+  if (!audienceIdentityIds?.length && !audienceCategoryIds?.length &&
+      !audienceSubcategoryIds?.length && !audienceSubsubCategoryIds?.length) {
+    return items;
+  }
+
+  return items.filter(item => {
+    const itemAudienceCategories = (item.audienceCategories || []).map(c => String(c.id));
+    const itemAudienceSubcategories = (item.audienceSubcategories || []).map(s => String(s.id));
+    const itemAudienceSubsubs = (item.audienceSubsubs || []).map(s => String(s.id));
+    const itemAudienceIdentities = (item.audienceIdentities || []).map(i => String(i.id));
+
+    // Check if item matches any of the audience criteria
+    const matchesIdentity = !audienceIdentityIds?.length ||
+      audienceIdentityIds.some(id => itemAudienceIdentities.includes(String(id)));
+
+    const matchesCategory = !audienceCategoryIds?.length ||
+      audienceCategoryIds.some(id => itemAudienceCategories.includes(String(id)));
+
+    const matchesSubcategory = !audienceSubcategoryIds?.length ||
+      audienceSubcategoryIds.some(id => itemAudienceSubcategories.includes(String(id)));
+
+    const matchesSubsubCategory = !audienceSubsubCategoryIds?.length ||
+      audienceSubsubCategoryIds.some(id => itemAudienceSubsubs.includes(String(id)));
+
+    // Item matches if it matches ALL applied criteria (AND logic)
+    return matchesIdentity && matchesCategory && matchesSubcategory && matchesSubsubCategory;
+  });
+}
+
 const includeCategoryRefs = [
-  { model: Category, as: "category", attributes: ["id", "name"] },
-  { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
-  { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] },
   {
     model: User,
     as: "postedBy",
     attributes: ["id", "name", "avatarUrl"],
     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
   },
-  {
-    model: Category,
-    as: "audienceCategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Subcategory,
-    as: "audienceSubcategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: SubsubCategory,
-    as: "audienceSubsubs",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Identity,
-    as: "audienceIdentities",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
 ];
 
 const includeEventRefs = [
-  { model: Category, as: "category", attributes: ["id", "name"] },
-  { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
-  { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] },
-  { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-  { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-  { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
   {
     model: User,
     as: "organizer",
     attributes: ["id", "name", "avatarUrl"],
     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
   },
-  {
-    model: Category,
-    as: "audienceCategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Subcategory,
-    as: "audienceSubcategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: SubsubCategory,
-    as: "audienceSubsubs",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Identity,
-    as: "audienceIdentities",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
 ];
 
 const includeNeedRefs = [
-  {
-    model: User,
-    as: "user",
-    attributes: ["id", "name", "avatarUrl"],
-    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
-  },
-  { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-  { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-  { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
-  {
-    model: Category,
-    as: "audienceCategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Subcategory,
-    as: "audienceSubcategories",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: SubsubCategory,
-    as: "audienceSubsubs",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
-  {
-    model: Identity,
-    as: "audienceIdentities",
-    attributes: ["id", "name"],
-    through: { attributes: [] },
-  },
+   {
+     model: User,
+     as: "user",
+     attributes: ["id", "name", "avatarUrl"],
+     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+   },
 ];
 
 async function makeCompanyMapById(ids) {
@@ -312,42 +833,6 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
         { model: Profile, as: "profile", attributes: ["avatarUrl"] },
       ],
     },
-    { model: Category, as: "category", attributes: ["id", "name"] },
-    { model: Subcategory, as: "subcategory", attributes: ["id", "name"] },
-    { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] },
-    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
-    {
-      model: Category,
-      as: "audienceCategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: !!categoryId,
-      where: categoryId ? { id: categoryId } : undefined,
-    },
-    {
-      model: Subcategory,
-      as: "audienceSubcategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: !!subcategoryId,
-      where: subcategoryId ? { id: subcategoryId } : undefined,
-    },
-    {
-      model: SubsubCategory,
-      as: "audienceSubsubs",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: !!subsubCategoryId,
-      where: subsubCategoryId ? { id: subsubCategoryId } : undefined,
-    },
-    {
-      model: Identity,
-      as: "audienceIdentities",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-    },
   ];
 }
 
@@ -359,181 +844,44 @@ function makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }) {
       attributes: ["id", "name", "avatarUrl"],
       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
     },
-    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
-    {
-      model: Category,
-      as: "audienceCategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Subcategory,
-      as: "audienceSubcategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: SubsubCategory,
-      as: "audienceSubsubs",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Identity,
-      as: "audienceIdentities",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
   ];
-  if (categoryId) include[1] = { ...include[1], required: true, where: { id: categoryId } };
-  if (subcategoryId) include[2] = { ...include[2], required: true, where: { id: subcategoryId } };
-  if (subsubCategoryId) include[3] = { ...include[3], required: true, where: { id: subsubCategoryId } };
   return include;
 }
 
 function makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }) {
-  const include = [
-    {
-      model: User,
-      as: "author",
-      attributes: ["id", "name", "avatarUrl"],
-      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
-    },
-    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
-    {
-      model: Category,
-      as: "audienceCategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Subcategory,
-      as: "audienceSubcategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: SubsubCategory,
-      as: "audienceSubsubs",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Identity,
-      as: "audienceIdentities",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-  ];
-  if (categoryId) include[1] = { ...include[1], required: true, where: { id: categoryId } };
-  if (subcategoryId) include[2] = { ...include[2], required: true, where: { id: subcategoryId } };
-  if (subsubCategoryId) include[3] = { ...include[3], required: true, where: { id: subsubCategoryId } };
-  return include;
-}
+   const include = [
+     {
+       model: User,
+       as: "author",
+       attributes: ["id", "name", "avatarUrl"],
+       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+     },
+    ];
+     return include;
+ }
 
 function makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }) {
-  const include = [
-    {
-      model: User,
-      as: "user",
-      attributes: ["id", "name", "avatarUrl"],
-      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
-    },
-    { model: IndustryCategory, as: "industryCategory", attributes: ["id", "name"], required: false },
-    { model: IndustrySubcategory, as: "industrySubcategory", attributes: ["id", "name"], required: false },
-    { model: IndustrySubsubCategory, as: "industrySubsubCategory", attributes: ["id", "name"], required: false },
-    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"], required: false },
-    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"], required: false },
-    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"], required: false },
-    {
-      model: Category,
-      as: "audienceCategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Subcategory,
-      as: "audienceSubcategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: SubsubCategory,
-      as: "audienceSubsubs",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Identity,
-      as: "audienceIdentities",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-  ];
-  if (categoryId) include[3] = { ...include[3], required: true, where: { id: categoryId } };
-  if (subcategoryId) include[4] = { ...include[4], required: true, where: { id: subcategoryId } };
-  if (subsubCategoryId) include[5] = { ...include[5], required: true, where: { id: subsubCategoryId } };
-  return include;
-}
+    const include = [
+      {
+        model: User,
+        as: "user",
+        attributes: ["id", "name", "avatarUrl"],
+        include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+      },
+    ];
+    return include;
+  }
 
 function makeFundingInclude() {
-  return [
-    {
-      model: User,
-      as: "creator",
-      attributes: ["id", "name", "avatarUrl"],
-      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
-    },
-    { model: Category, as: "category", attributes: ["id", "name"], required: false },
-    { model: GeneralCategory, as: "generalCategory", attributes: ["id", "name"] },
-    { model: GeneralSubcategory, as: "generalSubcategory", attributes: ["id", "name"] },
-    { model: GeneralSubsubCategory, as: "generalSubsubCategory", attributes: ["id", "name"] },
-    {
-      model: Category,
-      as: "audienceCategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Subcategory,
-      as: "audienceSubcategories",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: SubsubCategory,
-      as: "audienceSubsubs",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
-    {
-      model: Identity,
-      as: "audienceIdentities",
-      attributes: ["id", "name"],
-      through: { attributes: [] },
-      required: false,
-    },
+   return [
+     {
+       model: User,
+       as: "creator",
+       attributes: ["id", "name", "avatarUrl"],
+       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+     },
   ];
-}
+ }
 
 
 function sortByMatchThenRecency(arr) {
@@ -606,6 +954,11 @@ const W = { x: 3, sub: 2.5, cat: 2, id: 1.5, city: 1.5, country: 1 };
 
 exports.getFeed = async (req, res) => {
   try {
+    // Generate cache key for this request
+    const cacheKey = generateFeedCacheKey(req);
+
+    // Use caching wrapper
+    const result = await withCache(cacheKey, CACHE_TTL.FEED, async () => {
     const {
       tab,
       q,
@@ -645,7 +998,7 @@ exports.getFeed = async (req, res) => {
       date,
       eventType,
       registrationType,
-      limit = 20,
+      limit = 40,
       offset = 0,
     } = req.query;
 
@@ -970,46 +1323,8 @@ exports.getFeed = async (req, res) => {
       whereNeed.industryCategoryId = { [Op.in]: effIndustryIds };
     }
 
-    if (effAudienceIdentityIdsStr.length > 0) {
-      const f = { "$audienceIdentities.id$": { [Op.in]: effAudienceIdentityIdsStr } };
-      whereJob[Op.and] = [...(whereJob[Op.and] || []), f];
-      whereEvent[Op.and] = [...(whereEvent[Op.and] || []), f];
-      whereService[Op.and] = [...(whereService[Op.and] || []), f];
-      whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
-      whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
-      whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
-      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
-    }
-    if (effAudienceCategoryIdsStr.length > 0) {
-      const f = { "$audienceCategories.id$": { [Op.in]: effAudienceCategoryIdsStr } };
-      whereJob[Op.and] = [...(whereJob[Op.and] || []), f];
-      whereEvent[Op.and] = [...(whereEvent[Op.and] || []), f];
-      whereService[Op.and] = [...(whereService[Op.and] || []), f];
-      whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
-      whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
-      whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
-      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
-    }
-    if (effAudienceSubcategoryIdsStr.length > 0) {
-      const f = { "$audienceSubcategories.id$": { [Op.in]: effAudienceSubcategoryIdsStr } };
-      whereJob[Op.and] = [...(whereJob[Op.and] || []), f];
-      whereEvent[Op.and] = [...(whereEvent[Op.and] || []), f];
-      whereService[Op.and] = [...(whereService[Op.and] || []), f];
-      whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
-      whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
-      whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
-      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
-    }
-    if (effAudienceSubsubCategoryIdsStr.length > 0) {
-      const f = { "$audienceSubsubs.id$": { [Op.in]: effAudienceSubsubCategoryIdsStr } };
-      whereJob[Op.and] = [...(whereJob[Op.and] || []), f];
-      whereEvent[Op.and] = [...(whereEvent[Op.and] || []), f];
-      whereService[Op.and] = [...(whereService[Op.and] || []), f];
-      whereProduct[Op.and] = [...(whereProduct[Op.and] || []), f];
-      whereTourism[Op.and] = [...(whereTourism[Op.and] || []), f];
-      whereFunding[Op.and] = [...(whereFunding[Op.and] || []), f];
-      whereNeed[Op.and] = [...(whereNeed[Op.and] || []), f];
-    }
+    // Audience filtering is now handled after lazy loading since we removed eager loading
+    // The filtering will be applied to the results after audience data is loaded
 
     if (jobType) {
       const jobTypes = jobType.split(",").filter(Boolean);
@@ -2018,6 +2333,8 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
+        const eventsWithAudience = await lazyLoadEventAudienceData(events, currentUserId);
+        const eventsFiltered = filterByAudienceCriteria(eventsWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
         const relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'event', moderation_status: "approved" },
@@ -2032,13 +2349,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mappedEvents = events.map(mapEvent);
+        const mappedEvents = eventsFiltered.map(mapEvent);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const combined = [...mappedEvents, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
 
       if (tab === "jobs") {
@@ -2057,6 +2374,15 @@ exports.getFeed = async (req, res) => {
             limit: lim,
             offset: off,
           });
+          jobs = await lazyLoadJobAudienceData(jobs, currentUserId);
+          // Apply audience filters for unauthenticated users too
+          jobs = filterByAudienceCriteria(
+            jobs,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          );
         }
         if (showJobSeekers) {
           relatedNeeds = await Need.findAll({
@@ -2067,12 +2393,31 @@ exports.getFeed = async (req, res) => {
             limit: lim,
             offset: off,
           });
+          // Load audience for needs and filter by audience params
+          relatedNeeds = await lazyLoadNeedAudienceData(relatedNeeds, currentUserId);
+          relatedNeeds = filterByAudienceCriteria(
+            relatedNeeds,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          );
+
           relatedMomentsRows = await fetchMomentsPaged({
             where: { ...whereCommon, relatedEntityType: "job" },
             include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
             limit: lim,
             offset: off,
           });
+          // Load audience for moments and filter by audience params
+          relatedMomentsRows = await lazyLoadMomentAudienceData(relatedMomentsRows, currentUserId);
+          relatedMomentsRows = filterByAudienceCriteria(
+            relatedMomentsRows,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          );
         }
         const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
         const mappedJobs = jobs.map((j) => mapJob(j, companyMap));
@@ -2081,7 +2426,7 @@ exports.getFeed = async (req, res) => {
         const combined = [...mappedJobs, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
 
       if (tab === "services") {
@@ -2095,6 +2440,8 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
+        const servicesWithAudience = await lazyLoadServiceAudienceData(services, currentUserId);
+        const servicesFiltered = filterByAudienceCriteria(servicesWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
         const relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'service', moderation_status: "approved" },
@@ -2109,13 +2456,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mappedServices = services.map(mapService);
+        const mappedServices = servicesFiltered.map(mapService);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const combined = [...mappedServices, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
 
       if (tab === "products") {
@@ -2127,6 +2474,8 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
+        const productsWithAudience = await lazyLoadProductAudienceData(products, currentUserId);
+        const productsFiltered = filterByAudienceCriteria(productsWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
         const relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'product', moderation_status: "approved" },
@@ -2141,13 +2490,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mappedProducts = products.map(mapProduct);
+        const mappedProducts = productsFiltered.map(mapProduct);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const combined = [...mappedProducts, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
 
       if (tab === "tourism") {
@@ -2159,6 +2508,8 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
+        const tourismWithAudience = await lazyLoadTourismAudienceData(tourism, currentUserId);
+        const tourismFiltered = filterByAudienceCriteria(tourismWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
         const relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'tourism', moderation_status: "approved" },
@@ -2173,13 +2524,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mappedTourism = tourism.map(mapTourism);
+        const mappedTourism = tourismFiltered.map(mapTourism);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const combined = [...mappedTourism, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
 
       if (tab === "funding") {
@@ -2191,6 +2542,14 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
+        const fundingWithAudience = await lazyLoadFundingAudienceData(funding, currentUserId);
+        const fundingFiltered = filterByAudienceCriteria(
+          fundingWithAudience,
+          effAudienceIdentityIds,
+          effAudienceCategoryIds,
+          effAudienceSubcategoryIds,
+          effAudienceSubsubCategoryIds
+        );
         const relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'funding', moderation_status: "approved" },
@@ -2205,38 +2564,54 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mappedFunding = funding.map(mapFunding);
+        const mappedFunding = fundingFiltered.map(mapFunding);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const combined = [...mappedFunding, ...mappedNeeds, ...mappedMoments];
         const filtered = applyContentTypeFilter(combined, contentType);
         sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
+        return { items: await getConStatusItems(filtered) };
       }
+if (tab === "needs") {
+  const needs = await Need.findAll({
+    subQuery: false,
+    where: { ...whereNeed, moderation_status: "approved" },
+    include: includeNeedRefs,
+    order: [["createdAt", "DESC"]],
+    limit: lim,
+    offset: off,
+  });
+  let needsWithAudience = await lazyLoadNeedAudienceData(needs, currentUserId);
+  needsWithAudience = filterByAudienceCriteria(
+    needsWithAudience,
+    effAudienceIdentityIds,
+    effAudienceCategoryIds,
+    effAudienceSubcategoryIds,
+    effAudienceSubsubCategoryIds
+  );
 
-      if (tab === "needs") {
-        const needs = await Need.findAll({
-          subQuery: false,
-          where: { ...whereNeed, moderation_status: "approved" },
-          include: includeNeedRefs,
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-          offset: off,
-        });
-        const relatedMomentsRows = await fetchMomentsPaged({
-          where: { ...whereCommon, relatedEntityType: "need" },
-          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          limit: lim,
-          offset: off,
-        });
-        const mappedNeeds = needs.map(mapNeed);
-        const mappedMoments = relatedMomentsRows.map(mapMoment);
-        const combined = [...mappedNeeds, ...mappedMoments];
-        const filtered = applyContentTypeFilter(combined, contentType);
-        sortByMatchThenRecency(filtered);
-        return res.json({ items: await getConStatusItems(filtered) });
-      }
+  const relatedMomentsRows = await fetchMomentsPaged({
+    where: { ...whereCommon, relatedEntityType: "need" },
+    include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+    limit: lim,
+    offset: off,
+  });
+  let momentsWithAudience = await lazyLoadMomentAudienceData(relatedMomentsRows, currentUserId);
+  momentsWithAudience = filterByAudienceCriteria(
+    momentsWithAudience,
+    effAudienceIdentityIds,
+    effAudienceCategoryIds,
+    effAudienceSubcategoryIds,
+    effAudienceSubsubCategoryIds
+  );
 
+  const mappedNeeds = needsWithAudience.map(mapNeed);
+  const mappedMoments = momentsWithAudience.map(mapMoment);
+  const combined = [...mappedNeeds, ...mappedMoments];
+  const filtered = applyContentTypeFilter(combined, contentType);
+  sortByMatchThenRecency(filtered);
+  return { items: await getConStatusItems(filtered) };
+}
       if (tab === "moments") {
         const momentsRows = await fetchMomentsPaged({
           where: { ...whereCommon },
@@ -2244,11 +2619,19 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const mapped = momentsRows.map(mapMoment);
+        let momentsWithAudience = await lazyLoadMomentAudienceData(momentsRows, currentUserId);
+        momentsWithAudience = filterByAudienceCriteria(
+          momentsWithAudience,
+          effAudienceIdentityIds,
+          effAudienceCategoryIds,
+          effAudienceSubcategoryIds,
+          effAudienceSubsubCategoryIds
+        );
+  
+        const mapped = applyContentTypeFilter(momentsWithAudience.map(mapMoment), contentType);
         sortByMatchThenRecency(mapped);
-        return res.json({ items: await getConStatusItems(mapped) });
+        return { items: await getConStatusItems(mapped) };
       }
-
       const [
         jobsAll,
         eventsAll,
@@ -2259,50 +2642,68 @@ exports.getFeed = async (req, res) => {
         needsAll,
         momentsAll,
       ] = await Promise.all([
-        Job.findAll({
-          subQuery: false,
-          where: { ...whereJob, moderation_status: "approved" },
-          include: includeCategoryRefs,
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
-        Event.findAll({
-          subQuery: false,
-          where: { ...whereEvent, moderation_status: "approved" },
-          include: includeEventRefs,
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
-        Service.findAll({
-          distinct: true,
-          col: "Service.id",
-          subQuery: false,
-          where: { ...whereService, moderation_status: "approved" },
-          include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
-        Product.findAll({
-          subQuery: false,
-          where: { ...whereProduct, moderation_status: "approved" },
-          include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
-        Tourism.findAll({
-          subQuery: false,
-          where: { ...whereTourism, moderation_status: "approved" },
-          include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
-        Funding.findAll({
-          subQuery: false,
-          where: categoryId ? { ...whereFunding, categoryId, moderation_status: "approved" } : { ...whereFunding, moderation_status: "approved" },
-          include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-        }),
+        (async () => {
+          const jobs = await Job.findAll({
+            subQuery: false,
+            where: { ...whereJob, moderation_status: "approved" },
+            include: includeCategoryRefs,
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadJobAudienceData(jobs, currentUserId);
+        })(),
+        (async () => {
+          const events = await Event.findAll({
+            subQuery: false,
+            where: { ...whereEvent, moderation_status: "approved" },
+            include: includeEventRefs,
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadEventAudienceData(events, currentUserId);
+        })(),
+        (async () => {
+          const services = await Service.findAll({
+            distinct: true,
+            col: "Service.id",
+            subQuery: false,
+            where: { ...whereService, moderation_status: "approved" },
+            include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadServiceAudienceData(services, currentUserId);
+        })(),
+        (async () => {
+          const products = await Product.findAll({
+            subQuery: false,
+            where: { ...whereProduct, moderation_status: "approved" },
+            include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadProductAudienceData(products, currentUserId);
+        })(),
+        (async () => {
+          const tourism = await Tourism.findAll({
+            subQuery: false,
+            where: { ...whereTourism, moderation_status: "approved" },
+            include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadTourismAudienceData(tourism, currentUserId);
+        })(),
+         (async () => {
+          const funding = await Funding.findAll({
+            subQuery: false,
+            where: categoryId ? { ...whereFunding, categoryId, moderation_status: "approved" } : { ...whereFunding, moderation_status: "approved" },
+            include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+          });
+          return await lazyLoadFundingAudienceData(funding, currentUserId);
+        })(),
         Need.findAll({
           subQuery: false,
           where: { ...whereNeed, moderation_status: "approved" },
@@ -2339,20 +2740,84 @@ exports.getFeed = async (req, res) => {
       const companyMap = await makeCompanyMapById(jobsAll.map((j) => j.companyId));
 
       const merged = [
-        ...applyTextMatchFlag(jobsAll.map((j) => mapJob(j, companyMap))),
-        ...applyTextMatchFlag(eventsAll.map(mapEvent)),
-        ...applyTextMatchFlag(servicesAll.map(mapService)),
-        ...applyTextMatchFlag(productsAll.map(mapProduct)),
-        ...applyTextMatchFlag(tourismAll.map(mapTourism)),
-        ...applyTextMatchFlag(fundingAll.map(mapFunding)),
-        ...applyTextMatchFlag(needsAll.map(mapNeed)),
-        ...applyTextMatchFlag(momentsAll.map(mapMoment)),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            jobsAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map((j) => mapJob(j, companyMap))
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            eventsAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapEvent)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            servicesAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapService)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            productsAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapProduct)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            tourismAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapTourism)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            fundingAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapFunding)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            needsAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapNeed)
+        ),
+        ...applyTextMatchFlag(
+          filterByAudienceCriteria(
+            momentsAll,
+            effAudienceIdentityIds,
+            effAudienceCategoryIds,
+            effAudienceSubcategoryIds,
+            effAudienceSubsubCategoryIds
+          ).map(mapMoment)
+        ),
       ];
 
       sortByMatchThenRecency(merged);
       const diversified = diversifyFeed(merged, { maxSeq: 1 });
       const windowed = diversified.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     const bufferFactor = 2;
@@ -2366,6 +2831,7 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
+      const eventsWithAudience = await lazyLoadEventAudienceData(events, currentUserId);
       const relatedNeeds = await Need.findAll({
         subQuery: false,
         where: { ...whereNeed, relatedEntityType: "event", moderation_status: "approved" },
@@ -2379,14 +2845,14 @@ exports.getFeed = async (req, res) => {
         limit: bufferLimit,
         offset: 0,
       });
-      const mappedEvents = events.map(mapEvent);
+      const mappedEvents = eventsWithAudience.map(mapEvent);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
       const combined = [...mappedEvents, ...mappedNeeds, ...mappedMoments];
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "jobs") {
@@ -2406,6 +2872,8 @@ exports.getFeed = async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: bufferLimit,
         });
+        jobs = await lazyLoadJobAudienceData(jobs, currentUserId);
+        jobs = filterByAudienceCriteria(jobs, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
       }
 
       if (showJobSeekers) {
@@ -2416,6 +2884,15 @@ exports.getFeed = async (req, res) => {
           order: [["createdAt", "DESC"]],
           limit: bufferLimit,
         });
+        // Load audience data for needs and filter by provided audience params
+        relatedNeeds = await lazyLoadNeedAudienceData(relatedNeeds, currentUserId);
+        relatedNeeds = filterByAudienceCriteria(
+          relatedNeeds,
+          effAudienceIdentityIds,
+          effAudienceCategoryIds,
+          effAudienceSubcategoryIds,
+          effAudienceSubsubCategoryIds
+        );
 
         relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "job" },
@@ -2423,6 +2900,15 @@ exports.getFeed = async (req, res) => {
           limit: bufferLimit,
           offset: 0,
         });
+        // Load audience data for moments and filter by provided audience params
+        relatedMomentsRows = await lazyLoadMomentAudienceData(relatedMomentsRows, currentUserId);
+        relatedMomentsRows = filterByAudienceCriteria(
+          relatedMomentsRows,
+          effAudienceIdentityIds,
+          effAudienceCategoryIds,
+          effAudienceSubcategoryIds,
+          effAudienceSubsubCategoryIds
+        );
       }
 
       const companyMap = await makeCompanyMapById(jobs.map((j) => j.companyId));
@@ -2433,7 +2919,7 @@ exports.getFeed = async (req, res) => {
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "services") {
@@ -2446,6 +2932,7 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
+      const servicesWithAudience = await lazyLoadServiceAudienceData(services, currentUserId);
 
       const relatedNeeds = await Need.findAll({
         subQuery: false,
@@ -2462,7 +2949,7 @@ exports.getFeed = async (req, res) => {
         offset: 0,
       });
 
-      const mappedServices = services.map(mapService);
+      const mappedServices = servicesWithAudience.map(mapService);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
 
@@ -2470,7 +2957,7 @@ exports.getFeed = async (req, res) => {
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "products") {
@@ -2481,6 +2968,7 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
+      const productsWithAudience = await lazyLoadProductAudienceData(products, currentUserId);
 
       const relatedNeeds = await Need.findAll({
         subQuery: false,
@@ -2497,7 +2985,7 @@ exports.getFeed = async (req, res) => {
         offset: 0,
       });
 
-      const mappedProducts = products.map(mapProduct);
+      const mappedProducts = productsWithAudience.map(mapProduct);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
 
@@ -2505,7 +2993,7 @@ exports.getFeed = async (req, res) => {
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "tourism") {
@@ -2516,6 +3004,7 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
+      const tourismWithAudience = await lazyLoadTourismAudienceData(tourism, currentUserId);
 
       const relatedNeeds = await Need.findAll({
         subQuery: false,
@@ -2532,7 +3021,7 @@ exports.getFeed = async (req, res) => {
         offset: 0,
       });
 
-      const mappedTourism = tourism.map(mapTourism);
+      const mappedTourism = tourismWithAudience.map(mapTourism);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
 
@@ -2540,7 +3029,7 @@ exports.getFeed = async (req, res) => {
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "funding") {
@@ -2551,6 +3040,9 @@ exports.getFeed = async (req, res) => {
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
+
+      const fundingWithAudience= await lazyLoadFundingAudienceData(funding, currentUserId);
+      const fundingFiltered = filterByAudienceCriteria(fundingWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
 
       const relatedNeeds = await Need.findAll({
         subQuery: false,
@@ -2567,7 +3059,7 @@ exports.getFeed = async (req, res) => {
         offset: 0,
       });
 
-      const mappedFunding = funding.map(mapFunding);
+      const mappedFunding = fundingWithAudience.map(mapFunding);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
 
@@ -2575,7 +3067,7 @@ exports.getFeed = async (req, res) => {
       combined.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(combined);
       const windowed = combined.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "needs") {
@@ -2602,7 +3094,7 @@ exports.getFeed = async (req, res) => {
       filtered.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(filtered);
       const windowed = filtered.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     if (tab === "moments") {
@@ -2618,7 +3110,7 @@ exports.getFeed = async (req, res) => {
       filtered.forEach((x) => (x._score = scoreItem(x)));
       sortByMatchThenRecency(filtered);
       const windowed = filtered.slice(off, off + lim);
-      return res.json({ items: await getConStatusItems(windowed) });
+      return { items: await getConStatusItems(windowed) };
     }
 
     const [
@@ -2631,56 +3123,80 @@ exports.getFeed = async (req, res) => {
       needsBuf,
       momentsBuf,
     ] = await Promise.all([
-      Job.findAll({
-        subQuery: false,
-        where: { ...whereJob, moderation_status: "approved" },
-        include: includeCategoryRefs,
-        limit: bufferLimit,
-      }),
-      Event.findAll({
-        subQuery: false,
-        where: { ...whereEvent, moderation_status: "approved" },
-        include: includeEventRefs,
-        limit: bufferLimit,
-      }),
-      Service.findAll({
-        distinct: true,
-        col: "Service.id",
-        subQuery: false,
-        where: { ...whereService, moderation_status: "approved" },
-        include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-      }),
-      Product.findAll({
-        subQuery: false,
-        where: { ...whereProduct, moderation_status: "approved" },
-        include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-      }),
-      Tourism.findAll({
-        subQuery: false,
-        where: { ...whereTourism, moderation_status: "approved" },
-        include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-      }),
-      Funding.findAll({
-        subQuery: false,
-        where: { ...whereFunding, moderation_status: "approved" },
-        include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-      }),
-      Need.findAll({
-        subQuery: false,
-        where: { ...whereNeed, moderation_status: "approved" },
-        include: includeNeedRefs,
-        limit: bufferLimit,
-      }),
-      fetchMomentsPaged({
-        where: { ...whereCommon },
-        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-        offset: 0,
-      }),
+      (async () => {
+        const jobs = await Job.findAll({
+          subQuery: false,
+          where: { ...whereJob, moderation_status: "approved" },
+          include: includeCategoryRefs,
+          limit: bufferLimit,
+        });
+        return await lazyLoadJobAudienceData(jobs, currentUserId);
+      })(),
+      (async () => {
+        const events = await Event.findAll({
+          subQuery: false,
+          where: { ...whereEvent, moderation_status: "approved" },
+          include: includeEventRefs,
+          limit: bufferLimit,
+        });
+        return await lazyLoadEventAudienceData(events, currentUserId);
+      })(),
+      (async () => {
+        const services = await Service.findAll({
+          distinct: true,
+          col: "Service.id",
+          subQuery: false,
+          where: { ...whereService, moderation_status: "approved" },
+          include: makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: bufferLimit,
+        });
+        return await lazyLoadServiceAudienceData(services, currentUserId);
+      })(),
+      (async () => {
+        const products = await Product.findAll({
+          subQuery: false,
+          where: { ...whereProduct, moderation_status: "approved" },
+          include: makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: bufferLimit,
+        });
+        return await lazyLoadProductAudienceData(products, currentUserId);
+      })(),
+      (async () => {
+        const tourism = await Tourism.findAll({
+          subQuery: false,
+          where: { ...whereTourism, moderation_status: "approved" },
+          include: makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: bufferLimit,
+        });
+        return await lazyLoadTourismAudienceData(tourism, currentUserId);
+      })(),
+      (async () => {
+        const funding = await Funding.findAll({
+          subQuery: false,
+          where: { ...whereFunding, moderation_status: "approved" },
+          include: makeFundingInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: bufferLimit,
+        });
+        return await lazyLoadFundingAudienceData(funding, currentUserId);
+      })(),
+      (async () => {
+        const needs = await Need.findAll({
+          subQuery: false,
+          where: { ...whereNeed, moderation_status: "approved" },
+          include: includeNeedRefs,
+          limit: bufferLimit,
+        });
+        return await lazyLoadNeedAudienceData(needs, currentUserId);
+      })(),
+      (async () => {
+        const moments = await fetchMomentsPaged({
+          where: { ...whereCommon },
+          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: bufferLimit,
+          offset: 0,
+        });
+        return await lazyLoadMomentAudienceData(moments, currentUserId);
+      })(),
     ]);
 
     const applyTextMatchFlag = (items) => {
@@ -2720,7 +3236,8 @@ exports.getFeed = async (req, res) => {
     sortByMatchThenRecency(scored);
     const diversified = diversifyFeed(scored, { maxSeq: 1 });
     const windowed = diversified.slice(off, off + lim);
-    return res.json({ items: await getConStatusItems(windowed) });
+    return { items: await getConStatusItems(windowed) };
+    }, res);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to get feed" });

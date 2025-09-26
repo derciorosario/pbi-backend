@@ -11,7 +11,22 @@ const {
   MeetingRequest, CompanyStaff,
   WorkSample
 } = require("../models");
+const { cache } = require("../utils/redis");
 const { getBlockStatus } = require("../utils/blocking");
+
+const USER_CACHE_TTL = 300;
+
+function generateProfileCacheKey(userId, viewerId) {
+  return `profile:${userId}:${viewerId || 'anonymous'}`;
+}
+
+function generateSearchUsersCacheKey(q, currentUserId) {
+  return `searchUsers:${q}:${currentUserId || 'anonymous'}`;
+}
+
+function generateCompaniesCacheKey(q, limit) {
+  return `companies:${q || ''}:${limit || 'default'}`;
+}
 
 const normalizePair = (id1, id2) => {
   const a = String(id1);
@@ -36,6 +51,18 @@ exports.getPublicProfile = async (req, res) => {
   try {
     const { id } = req.params;
     const viewerId = req.user?.id || null;
+
+    // User profile cache: try read first
+    const __profileCacheKey = generateProfileCacheKey(id, viewerId);
+    try {
+      const cached = await cache.get(__profileCacheKey);
+      if (cached) {
+        console.log(`✅ Profile cache hit for key: ${__profileCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Profile cache read error:", e.message);
+    }
 
     // ── Base user with taxonomy selections kept as before ─────────────────────
     const user = await User.findByPk(id, {
@@ -315,6 +342,13 @@ exports.getPublicProfile = async (req, res) => {
       connectionStatus,
     };
 
+    try {
+      await cache.set(__profileCacheKey, payload, USER_CACHE_TTL);
+      console.log(`💾 Profile cached: ${__profileCacheKey}`);
+    } catch (e) {
+      console.error("Profile cache write error:", e.message);
+    }
+
     res.json(payload);
   } catch (err) {
     console.error(err);
@@ -334,9 +368,21 @@ exports.searchUsers = async (req, res, next) => {
   try {
     const { q } = req.query;
     const currentUserId = req.user.sub;
-    
+
     if (!q || q.length < 3) {
       return res.json([]);
+    }
+
+    // Search users cache: try read first
+    const __searchCacheKey = generateSearchUsersCacheKey(q, currentUserId);
+    try {
+      const cached = await cache.get(__searchCacheKey);
+      if (cached) {
+        console.log(`✅ Search users cache hit for key: ${__searchCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Search users cache read error:", e.message);
     }
     
     const users = await User.findAll({
@@ -370,7 +416,14 @@ exports.searchUsers = async (req, res, next) => {
       country: user.country || null,
       accountType:user.accountType
     }));
-    
+
+    try {
+      await cache.set(__searchCacheKey, formattedUsers, USER_CACHE_TTL);
+      console.log(`💾 Search users cached: ${__searchCacheKey}`);
+    } catch (e) {
+      console.error("Search users cache write error:", e.message);
+    }
+
     res.json(formattedUsers);
   } catch (error) {
     next(error);
@@ -387,6 +440,18 @@ exports.listCompanies = async (req, res, next) => {
   try {
     const { q, limit } = req.query;
     const where = { accountType: "company" };
+
+    // Companies cache: try read first
+    const __companiesCacheKey = generateCompaniesCacheKey(q, limit);
+    try {
+      const cached = await cache.get(__companiesCacheKey);
+      if (cached) {
+        console.log(`✅ Companies cache hit for key: ${__companiesCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Companies cache read error:", e.message);
+    }
 
     if (q && q.trim()) {
       where[Op.or] = [
@@ -416,7 +481,16 @@ exports.listCompanies = async (req, res, next) => {
       avatarUrl: u.profile?.avatarUrl || u.avatarUrl || null,
     }));
 
-    res.json({ companies });
+    const response = { companies };
+
+    try {
+      await cache.set(__companiesCacheKey, response, USER_CACHE_TTL);
+      console.log(`💾 Companies cached: ${__companiesCacheKey}`);
+    } catch (e) {
+      console.error("Companies cache write error:", e.message);
+    }
+
+    res.json(response);
   } catch (err) {
     next(err);
   }

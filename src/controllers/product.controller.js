@@ -1,6 +1,13 @@
 const { Product, Category, Subcategory, SubsubCategory, User } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setProductAudience } = require("./_productAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const PRODUCT_CACHE_TTL = 300;
+
+function generateProductCacheKey(productId) {
+  return `product:${productId}`;
+}
 
 exports.getMeta = async (req, res) => {
   const categories = await Category.findAll({
@@ -89,7 +96,10 @@ exports.create = async (req, res) => {
       description,
       country,
       tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map(s => s.trim()) : []),
-      images: Array.isArray(images) ? images : [],
+      images: Array.isArray(images) ? images.map(img => ({
+        filename: img.filename,
+        title: img.title
+      })) : [],
 
       generalCategoryId,
       generalSubcategoryId,
@@ -181,7 +191,10 @@ exports.update = async (req, res) => {
     // Handle images array
     let images = product.images;
     if (body.images !== undefined) {
-      images = Array.isArray(body.images) ? body.images : [];
+      images = Array.isArray(body.images) ? body.images.map(img => ({
+        filename: img.filename,
+        title: img.title
+      })) : [];
     }
 
     // Simple update
@@ -235,21 +248,47 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const product = await Product.findByPk(id, {
-    include: [
-      { model: User, as: "seller", attributes: ["id", "name", "email"] },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      // Include audience associations
-      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json(product);
+  try {
+    const { id } = req.params;
+
+    // Product cache: try read first
+    const __productCacheKey = generateProductCacheKey(id);
+    try {
+      const cached = await cache.get(__productCacheKey);
+      if (cached) {
+        console.log(`✅ Product cache hit for key: ${__productCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Product cache read error:", e.message);
+    }
+
+    const product = await Product.findByPk(id, {
+      include: [
+        { model: User, as: "seller", attributes: ["id", "name", "email"] },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        // Include audience associations
+        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!product) return res.status(404).json({ message: "Product not found" });
+
+    try {
+      await cache.set(__productCacheKey, product, PRODUCT_CACHE_TTL);
+      console.log(`💾 Product cached: ${__productCacheKey}`);
+    } catch (e) {
+      console.error("Product cache write error:", e.message);
+    }
+
+    res.json(product);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch product" });
+  }
 };
 
 exports.list = async (req, res) => {
@@ -304,4 +343,29 @@ exports.getMyProducts = async (req, res) => {
   });
 
   res.json(products);
+};
+
+// Handle multiple image uploads
+exports.uploadImages = async (req, res) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+
+    // Check if files exist
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    // Return the filenames to be stored in the database
+    const filenames = req.files.map(file => file.filename);
+    const filePaths = filenames.map(filename => `/uploads/${filename}`);
+
+    res.status(200).json({
+      success: true,
+      filenames: filenames,
+      filePaths: filePaths
+    });
+  } catch (err) {
+    console.error("uploadImages error", err);
+    res.status(500).json({ message: err.message });
+  }
 };

@@ -1,6 +1,13 @@
 const { Event, Category, Subcategory, SubsubCategory } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setEventAudience } = require("./_eventAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const EVENT_CACHE_TTL = 300;
+
+function generateEventCacheKey(eventId) {
+  return `event:${eventId}`;
+}
 
 // tiny helper
 function ensurePaidFields(body) {
@@ -735,20 +742,46 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const event = await Event.findByPk(id, {
-    include: [
-      { model: Category, as: "category" },
-      { model: Subcategory, as: "subcategory" },
-      // Include audience associations
-      { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!event) return res.status(404).json({ message: "Event not found" });
-  res.json(event);
+  try {
+    const { id } = req.params;
+
+    // Event cache: try read first
+    const __eventCacheKey = generateEventCacheKey(id);
+    try {
+      const cached = await cache.get(__eventCacheKey);
+      if (cached) {
+        console.log(`✅ Event cache hit for key: ${__eventCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Event cache read error:", e.message);
+    }
+
+    const event = await Event.findByPk(id, {
+      include: [
+        { model: Category, as: "category" },
+        { model: Subcategory, as: "subcategory" },
+        // Include audience associations
+        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    try {
+      await cache.set(__eventCacheKey, event, EVENT_CACHE_TTL);
+      console.log(`💾 Event cached: ${__eventCacheKey}`);
+    } catch (e) {
+      console.error("Event cache write error:", e.message);
+    }
+
+    res.json(event);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch event" });
+  }
 };
 
 exports.list = async (req, res) => {
@@ -776,4 +809,29 @@ exports.list = async (req, res) => {
     ],
   });
   res.json(rows);
+};
+
+// Handle cover image upload
+exports.uploadCoverImage = async (req, res) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+
+    // Check if file exists
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Return the filename to be stored in the database
+    const filename = req.file.filename;
+    const filePath = `/uploads/${filename}`; // Path relative to server root
+
+    res.status(200).json({
+      success: true,
+      filename: filename,
+      filePath: filePath
+    });
+  } catch (err) {
+    console.error("uploadCoverImage error", err);
+    res.status(500).json({ message: err.message });
+  }
 };

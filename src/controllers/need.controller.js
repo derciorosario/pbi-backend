@@ -1,6 +1,13 @@
 const { Need, Category, Subcategory, SubsubCategory, GeneralCategory, GeneralSubcategory, IndustryCategory, IndustrySubcategory } = require("../models");
 const { Op } = require("sequelize");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setNeedAudience } = require("./_needAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const NEED_CACHE_TTL = 300;
+
+function generateNeedCacheKey(needId) {
+  return `need:${needId}`;
+}
 
 // Helper function to validate need data
 function validateNeedData(body) {
@@ -17,6 +24,19 @@ function validateNeedData(body) {
     throw new Error("Invalid related entity type");
   }
 }
+
+exports.uploadAttachments = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+    const filenames = req.files.map(file => file.filename);
+    res.json({ filenames });
+  } catch (error) {
+    console.error('Error uploading attachments:', error);
+    res.status(500).json({ message: 'Failed to upload attachments' });
+  }
+};
 
 exports.create = async (req, res) => {
   try {
@@ -202,7 +222,9 @@ exports.update = async (req, res) => {
       city: body.city ?? need.city,
       country: body.country ?? need.country,
       criteria: body.criteria ?? need.criteria,
-      attachments: body.attachments ?? need.attachments,
+      attachments: body.attachments !== undefined
+        ? (Array.isArray(body.attachments) ? body.attachments : [])
+        : need.attachments,
       categoryId: body.categoryId ?? need.categoryId,
       subcategoryId: body.subcategoryId ?? need.subcategoryId,
       subsubCategoryId: body.subsubCategoryId ?? need.subsubCategoryId,
@@ -238,24 +260,50 @@ exports.update = async (req, res) => {
 };
 
 exports.getOne = async (req, res) => {
-  const { id } = req.params;
-  const need = await Need.findByPk(id, {
-    include: [
-      { association: "user", attributes: ["id","name","email","accountType"] },
-      { association: "industryCategory" },
-      { association: "industrySubcategory" },
-      { association: "industrySubsubCategory" },
+  try {
+    const { id } = req.params;
 
-      // Audience associations
-      { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
-    ],
-  });
+    // Need cache: try read first
+    const __needCacheKey = generateNeedCacheKey(id);
+    try {
+      const cached = await cache.get(__needCacheKey);
+      if (cached) {
+        console.log(`✅ Need cache hit for key: ${__needCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Need cache read error:", e.message);
+    }
 
-  if (!need) return res.status(404).json({ message: "Need not found" });
-  res.json(need);
+    const need = await Need.findByPk(id, {
+      include: [
+        { association: "user", attributes: ["id","name","email","accountType"] },
+        { association: "industryCategory" },
+        { association: "industrySubcategory" },
+        { association: "industrySubsubCategory" },
+
+        // Audience associations
+        { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+
+    if (!need) return res.status(404).json({ message: "Need not found" });
+
+    try {
+      await cache.set(__needCacheKey, need, NEED_CACHE_TTL);
+      console.log(`💾 Need cached: ${__needCacheKey}`);
+    } catch (e) {
+      console.error("Need cache write error:", e.message);
+    }
+
+    res.json(need);
+  } catch (err) {
+    console.error("getOne error", err);
+    res.status(500).json({ message: "Failed to fetch need" });
+  }
 };
 
 exports.list = async (req, res) => {

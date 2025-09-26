@@ -1,13 +1,37 @@
 
 const { Moment, Category, Subcategory, SubsubCategory } = require("../models");
 const { toIdArray, validateAudienceHierarchy, setJobAudience } = require("./_jobAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const MOMENT_CACHE_TTL = 300;
+
+function generateMomentCacheKey(momentId) {
+  return `moment:${momentId}`;
+}
+
+// Handle image uploads for moments
+exports.uploadImages = async (req, res) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
+    }
+
+    const filenames = req.files.map(file => file.filename);
+    res.json({ filenames });
+  } catch (err) {
+    console.error("uploadImages error", err);
+    res.status(500).json({ message: err.message });
+  }
+};
 
 exports.createMoment = async (req, res) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
 
     const {
-      title, description, type, date, location, tags,
+      title, description, type, date, location, tags, images, attachments,
       relatedEntityType, relatedEntityId,
       country,
       city,
@@ -53,6 +77,8 @@ exports.createMoment = async (req, res) => {
       date: date || null,
       location: location || null,
       tags: parsedTags,
+      images: Array.isArray(images) ? images : [],
+      attachments: Array.isArray(attachments) ? attachments : [],
       relatedEntityType: relatedEntityType || null,
       relatedEntityId: relatedEntityId || null,
       country,
@@ -111,6 +137,10 @@ exports.updateMoment = async (req, res) => {
     // normalize tags
     if (data.tags !== undefined) data.tags = parseTags(data.tags);
 
+    // handle images and attachments arrays
+    if (data.images !== undefined) data.images = Array.isArray(data.images) ? data.images : [];
+    if (data.attachments !== undefined) data.attachments = Array.isArray(data.attachments) ? data.attachments : [];
+
     // Convert empty strings to null for foreign key fields
     if (data.industryCategoryId === '') data.industryCategoryId = null;
     if (data.industrySubcategoryId === '') data.industrySubcategoryId = null;
@@ -154,25 +184,52 @@ exports.updateMoment = async (req, res) => {
 };
 
 exports.getMoment = async (req, res) => {
-  const moment = await Moment.findByPk(req.params.id, {
-    include: [
-      { association: "user", attributes: ["id","name","email","accountType"] },
-      { association: "industryCategory" },
-      { association: "industrySubcategory" },
-      { association: "industrySubsubCategory" },
-      { association: "generalCategory" },
-      { association: "generalSubcategory" },
-      { association: "generalSubsubCategory" },
+  try {
+    const momentId = req.params.id;
 
-      // Audience associations
-      { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!moment) return res.status(404).json({ message: "Moment not found" });
-  res.json(moment);
+    // Moment cache: try read first
+    const __momentCacheKey = generateMomentCacheKey(momentId);
+    try {
+      const cached = await cache.get(__momentCacheKey);
+      if (cached) {
+        console.log(`✅ Moment cache hit for key: ${__momentCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Moment cache read error:", e.message);
+    }
+
+    const moment = await Moment.findByPk(momentId, {
+      include: [
+        { association: "user", attributes: ["id","name","email","accountType"] },
+        { association: "industryCategory" },
+        { association: "industrySubcategory" },
+        { association: "industrySubsubCategory" },
+        { association: "generalCategory" },
+        { association: "generalSubcategory" },
+        { association: "generalSubsubCategory" },
+
+        // Audience associations
+        { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!moment) return res.status(404).json({ message: "Moment not found" });
+
+    try {
+      await cache.set(__momentCacheKey, moment, MOMENT_CACHE_TTL);
+      console.log(`💾 Moment cached: ${__momentCacheKey}`);
+    } catch (e) {
+      console.error("Moment cache write error:", e.message);
+    }
+
+    res.json(moment);
+  } catch (err) {
+    console.error("getMoment error", err);
+    res.status(500).json({ message: "Failed to fetch moment" });
+  }
 };
 
 exports.listMoments = async (req, res) => {

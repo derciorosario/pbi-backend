@@ -1,5 +1,13 @@
 const { Job, Category, Subcategory, SubsubCategory } = require("../models");
 const { toIdArray, normalizeIdentityIds, validateAudienceHierarchy, setJobAudience } = require("./_jobAudienceHelpers");
+const { cache } = require("../utils/redis");
+
+const JOB_CACHE_TTL = 300;
+
+function generateJobCacheKey(jobId) {
+  return `job:${jobId}`;
+}
+
 
 exports.createJob = async (req, res) => {
   try {
@@ -74,7 +82,7 @@ exports.createJob = async (req, res) => {
       subcategoryId: primarySubcategoryId,
       status: status || "published",
       postedByUserId: req.user.id,
-      coverImageBase64,
+      coverImageBase64, // This field will now store the filename instead of base64 data
       companyId,
       industryCategoryId,
       industrySubcategoryId,
@@ -194,21 +202,50 @@ exports.updateJob = async (req, res) => {
 
 
 exports.getJob = async (req, res) => {
-  const job = await Job.findByPk(req.params.id, {
-    include: [
-      { association: "category" },
-      { association: "subcategory" },
-      { association: "postedBy", attributes: ["id","name","email","accountType"] },
+  try {
+    const jobId = req.params.id;
 
-      // NEW
-      { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
-      { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
-      { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
-    ],
-  });
-  if (!job) return res.status(404).json({ message: "Job not found" });
-  res.json({ job });
+    // Job cache: try read first
+    const __jobCacheKey = generateJobCacheKey(jobId);
+    try {
+      const cached = await cache.get(__jobCacheKey);
+      if (cached) {
+        console.log(`✅ Job cache hit for key: ${__jobCacheKey}`);
+        return res.json(cached);
+      }
+    } catch (e) {
+      console.error("Job cache read error:", e.message);
+    }
+
+    const job = await Job.findByPk(jobId, {
+      include: [
+        { association: "category" },
+        { association: "subcategory" },
+        { association: "postedBy", attributes: ["id","name","email","accountType"] },
+
+        // NEW
+        { association: "audienceIdentities", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceCategories", attributes: ["id","name"], through: { attributes: [] } },
+        { association: "audienceSubcategories", attributes: ["id","name","categoryId"], through: { attributes: [] } },
+        { association: "audienceSubsubs", attributes: ["id","name","subcategoryId"], through: { attributes: [] } },
+      ],
+    });
+    if (!job) return res.status(404).json({ message: "Job not found" });
+
+    const response = { job };
+
+    try {
+      await cache.set(__jobCacheKey, response, JOB_CACHE_TTL);
+      console.log(`💾 Job cached: ${__jobCacheKey}`);
+    } catch (e) {
+      console.error("Job cache write error:", e.message);
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error("getJob error", err);
+    res.status(500).json({ message: "Failed to fetch job" });
+  }
 };
 
 
@@ -244,3 +281,29 @@ exports.deleteJob = async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 };
+
+// Handle cover image upload
+exports.uploadCoverImage = async (req, res) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
+    
+    // Check if file exists
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Return the filename to be stored in the database
+    const filename = req.file.filename;
+    const filePath = `/uploads/${filename}`; // Path relative to server root
+
+    res.status(200).json({
+      success: true,
+      filename: filename,
+      filePath: filePath
+    });
+  } catch (err) {
+    console.error("uploadCoverImage error", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
