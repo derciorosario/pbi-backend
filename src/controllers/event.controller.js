@@ -693,6 +693,7 @@ exports.update = async (req, res) => {
       timezone: body.timezone ?? event.timezone,
       locationType: body.locationType ?? event.locationType,
       country: body.country ?? event.country,
+      coverImageBase64:body.coverImageBase64 ?? event.coverImageBase64,
       city: body.city ?? event.city,
       address: body.address ?? event.address,
       onlineUrl: body.onlineUrl ?? event.onlineUrl,

@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../../uploads');
@@ -17,13 +18,15 @@ const storage = multer.diskStorage({
     // Create a unique filename with original extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    cb(null, 'cover-' + uniqueSuffix + ext);
+    const filename = 'cover-' + uniqueSuffix + ext;
+    // Save filename in request so we can access full URL later
+    req.savedFileUrl = `${process.env.BACKEND_URL}/uploads/${filename}`;
+    cb(null, filename);
   }
 });
 
-
 const fileFilter = (req, file, cb) => {
-    cb(null, true);
+  cb(null, true);
 };
 
 // Create multer upload instance

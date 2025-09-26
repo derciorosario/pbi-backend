@@ -31,6 +31,8 @@ const io = socketIo(server, {
   }
 });
 
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // 🔒 Security headers
 app.use(helmet());
 
@@ -178,27 +180,6 @@ app.use("/api/company", require("./src/routes/company.routes"))
 app.use("/api/organization", require("./src/routes/organization.routes"))
 
 
-app.get('/api/uploads/:filename', async (req, res) => {
-  try {
-    const filename = req.params.filename;
-    const filePath = path.join(__dirname, './uploads', filename);
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found" });
-    }
-    
-     res.sendFile(filePath, (err) => {
-      if (err) {
-           res.status(404).send('File not found');
-       }
-     });
-
-  } catch (err) {
-    console.error("getUploadedFile error", err);
-    res.status(500).json({ message: err.message });
-  }
-})
 
 
 // ❌ 404 handler
