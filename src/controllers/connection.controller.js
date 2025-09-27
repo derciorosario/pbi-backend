@@ -107,7 +107,7 @@ exports.createRequest = async (req, res) => {
     await Notification.create({
       userId: toUserId,
       type: "connection.request",
-      payload: { requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
+      payload: {item_id: reqRow.id,requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
     });
     
     // Send email notification if enabled
@@ -243,7 +243,7 @@ exports.respond = async (req, res) => {
       Notification.create({
         userId: row.fromUserId,
         type: "connection.accepted",
-        payload: { byUserId: userId, requestId: row.id },
+        payload: { byUserId: userId, requestId: row.id, item_id:row.id},
       }).catch((e) => {
         console.log(e)
       });
@@ -284,7 +284,7 @@ exports.respond = async (req, res) => {
       Notification.create({
         userId: row.fromUserId,
         type: "connection.rejected",
-        payload: { byUserId: userId, requestId: row.id },
+        payload: { byUserId: userId, requestId: row.id, item_id:row.item_id },
       }).catch(() => {});
 
       (async () => {

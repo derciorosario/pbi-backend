@@ -46,6 +46,7 @@ function generatePeopleCacheKey(req) {
     audienceCategoryIds,
     audienceSubcategoryIds,
     audienceSubsubCategoryIds,
+    viewOnlyConnections,
     industryIds,
     limit = 20,
     offset = 0,
@@ -64,6 +65,7 @@ function generatePeopleCacheKey(req) {
     goalId,
     experienceLevel,
     connectionStatus,
+    viewOnlyConnections,
     identityIds: ensureArray(identityIds),
     audienceCategoryIds: ensureArray(audienceCategoryIds),
     audienceSubcategoryIds: ensureArray(audienceSubcategoryIds),
@@ -100,6 +102,7 @@ exports.searchPeople = async (req, res) => {
       audienceCategoryIds,
       audienceSubcategoryIds,
       audienceSubsubCategoryIds,
+      viewOnlyConnections,
       industryIds,
       limit = 20,
       offset = 0,
@@ -132,7 +135,7 @@ exports.searchPeople = async (req, res) => {
           where: { userId: currentUserId },
           attributes: ['connectionsOnly']
         });
-        connectionsOnly = false //userSettings?.connectionsOnly || false;
+        connectionsOnly = userSettings?.connectionsOnly || viewOnlyConnections === 'true' || viewOnlyConnections === true;
 
         if (connectionsOnly) {
           // Get all connected user IDs (both directions)
@@ -151,6 +154,19 @@ exports.searchPeople = async (req, res) => {
           );
 
           console.log(`Connections only filter enabled. Connected users: ${connectedUserIds.length}`);
+
+           // If no connections, return empty result immediately
+          if (connectedUserIds.length === 0) {
+            const emptyResponse = { count: 0, items: [], sortedBy: "matchPercentage" };
+            try {
+              await cache.set(__peopleCacheKey, emptyResponse, PEOPLE_CACHE_TTL);
+            } catch (e) {
+              console.error("People cache write error:", e.message);
+            }
+            return res.json(emptyResponse);
+          }
+
+
         }
       } catch (error) {
         console.error("Error loading user settings for connectionsOnly filter:", error);

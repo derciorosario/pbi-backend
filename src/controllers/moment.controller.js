@@ -176,7 +176,8 @@ exports.updateMoment = async (req, res) => {
       subsubCategoryIds: subsubCategoryIds ?? undefined,
     });
 
-    res.json({ moment });
+    await exports.getMoment({ params: { id: moment.id }, query: { updated: true } }, res);
+
   } catch (err) {
     console.error("updateMoment error", err);
     res.status(400).json({ message: err.message });
@@ -186,10 +187,14 @@ exports.updateMoment = async (req, res) => {
 exports.getMoment = async (req, res) => {
   try {
     const momentId = req.params.id;
+     const updated = req.query.updated;
 
     // Moment cache: try read first
     const __momentCacheKey = generateMomentCacheKey(momentId);
-    try {
+
+    if(!updated){
+
+        try {
       const cached = await cache.get(__momentCacheKey);
       if (cached) {
         console.log(`✅ Moment cache hit for key: ${__momentCacheKey}`);
@@ -199,6 +204,8 @@ exports.getMoment = async (req, res) => {
       console.error("Moment cache read error:", e.message);
     }
 
+    }
+  
     const moment = await Moment.findByPk(momentId, {
       include: [
         { association: "user", attributes: ["id","name","email","accountType"] },

@@ -20,8 +20,8 @@ const storage = multer.diskStorage({
     const ext = path.extname(file.originalname);
     const filename = 'attachment-' + uniqueSuffix + ext;
 
-    // Save the public URL in request for later use
-    req.savedFileUrl = `${process.env.BACKEND_URL}/uploads/${filename}`;
+    // Save the public URL in request for later use (served via /api/uploads)
+    req.savedFileUrl = `${process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`}/api/uploads/${filename}`;
     cb(null, filename);
   }
 });

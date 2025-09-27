@@ -84,17 +84,14 @@ exports.createMeetingRequest = async (req, res) => {
       type: "meeting_request",
       title: "New Meeting Request",
       message: `${requester.name || requester.email} has requested a meeting with you: "${title}"`,
-      data: {
-        meetingRequestId: meetingRequest.id,
+      payload: {
+        item_id:meetingRequest.id,
         fromUserId,
         fromName: requester.name || requester.email,
         title,
         scheduledAt,
         mode
       },
-      payload:{
-        title,
-      }
     });
 
     // Send email notification if enabled
@@ -235,8 +232,8 @@ exports.respondToMeetingRequest = async (req, res) => {
       type: "meeting_response",
       title: action === "accept" ? "Meeting Request Accepted" : "Meeting Request Declined",
       message: notificationMessage,
-      data: {
-        meetingRequestId: meetingRequest.id,
+      payload: {
+        item_id:meetingRequest,
         action,
         title: meetingRequest.title,
         scheduledAt: meetingRequest.scheduledAt,
@@ -349,7 +346,8 @@ exports.cancelMeetingRequest = async (req, res) => {
         type: "meeting_cancelled",
         title: "Meeting Request Cancelled",
         message: `${meetingRequest.requester.name || meetingRequest.requester.email} cancelled the meeting request: "${meetingRequest.title}"`,
-        data: {
+        payload: {
+          item_id: meetingRequest.id,
           meetingRequestId: meetingRequest.id,
           title: meetingRequest.title,
           scheduledAt: meetingRequest.scheduledAt

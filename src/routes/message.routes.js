@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const messageController = require("../controllers/message.controller");
 const auth = require("../middleware/auth");
+const upload = require("../utils/multerConfigAttachments");
 
 // Get all conversations for the current user
 router.get("/conversations", auth(), messageController.getConversations);
@@ -14,7 +15,7 @@ router.get("/conversations/:conversationId/messages", auth(), messageController.
 router.get("/users/:userId/messages", auth(), messageController.getMessagesWithUser);
 
 // Send a message to a user
-router.post("/users/:userId/messages", auth(), messageController.sendMessage);
+router.post("/users/:userId/messages", auth(), upload.array('attachments', 10), messageController.sendMessage);
 
 // Mark messages as read
 router.put("/conversations/:conversationId/read", auth(), messageController.markAsRead);

@@ -250,9 +250,9 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Need.findByPk(need.id);
+    
+    await exports.getOne({ params: { id: need.id }, query: { updated: true } }, res);
 
-    res.json(updated);
   } catch (err) {
     console.error("updateNeed error:", err);
     res.status(400).json({ message: err.message || "Could not update need" });
@@ -262,19 +262,23 @@ exports.update = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { id } = req.params;
+    const updated = req.query.updated;
 
     // Need cache: try read first
     const __needCacheKey = generateNeedCacheKey(id);
-    try {
-      const cached = await cache.get(__needCacheKey);
-      if (cached) {
-        console.log(`✅ Need cache hit for key: ${__needCacheKey}`);
-        return res.json(cached);
-      }
-    } catch (e) {
-      console.error("Need cache read error:", e.message);
-    }
 
+    if(!updated){
+      try {
+          const cached = await cache.get(__needCacheKey);
+          if (cached) {
+            console.log(`✅ Need cache hit for key: ${__needCacheKey}`);
+            return res.json(cached);
+          }
+        } catch (e) {
+          console.error("Need cache read error:", e.message);
+        }
+    }
+ 
     const need = await Need.findByPk(id, {
       include: [
         { association: "user", attributes: ["id","name","email","accountType"] },

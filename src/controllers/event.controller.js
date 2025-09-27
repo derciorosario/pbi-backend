@@ -723,19 +723,10 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Event.findByPk(event.id, {
-      include: [
-        { model: Category, as: "category" },
-        { model: Subcategory, as: "subcategory" },
-        // Include audience associations
-        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-      ],
-    });
+ 
 
-    res.json(updated);
+    await exports.getOne({ params: { id: event.id }, query: { updated: true } }, res);
+ 
   } catch (err) {
     console.error("updateEvent error:", err);
     res.status(400).json({ message: err.message || "Could not update event" });
@@ -745,18 +736,23 @@ exports.update = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { id } = req.params;
+    const updated = req.query.updated;
 
     // Event cache: try read first
     const __eventCacheKey = generateEventCacheKey(id);
-    try {
-      const cached = await cache.get(__eventCacheKey);
-      if (cached) {
-        console.log(`✅ Event cache hit for key: ${__eventCacheKey}`);
-        return res.json(cached);
+
+    if(!updated){
+      try {
+        const cached = await cache.get(__eventCacheKey);
+        if (cached) {
+          console.log(`✅ Event cache hit for key: ${__eventCacheKey}`);
+          return res.json(cached);
+        }
+      } catch (e) {
+        console.error("Event cache read error:", e.message);
       }
-    } catch (e) {
-      console.error("Event cache read error:", e.message);
     }
+   
 
     const event = await Event.findByPk(id, {
       include: [

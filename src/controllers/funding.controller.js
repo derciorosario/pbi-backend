@@ -277,19 +277,9 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Funding.findByPk(funding.id, {
-      include: [
-        { model: User, as: "creator", attributes: ["id", "name", "email"] },
-        { model: Category, as: "category" },
-        // Include audience associations
-        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-      ],
-    });
+   
+    await exports.getOne({ params: { id: funding.id }, query: { updated: true } }, res);
 
-    res.json(updated);
   } catch (err) {
     console.error("updateFunding error:", err);
     res.status(400).json({ message: err.message || "Could not update funding project" });
@@ -299,17 +289,20 @@ exports.update = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { id } = req.params;
+    const updated = req.query.updated;
 
     // Funding cache: try read first
     const __fundingCacheKey = generateFundingCacheKey(id);
-    try {
-      const cached = await cache.get(__fundingCacheKey);
-      if (cached) {
-        console.log(`✅ Funding cache hit for key: ${__fundingCacheKey}`);
-        return res.json(cached);
+    if(!updated){
+      try {
+        const cached = await cache.get(__fundingCacheKey);
+        if (cached) {
+          console.log(`✅ Funding cache hit for key: ${__fundingCacheKey}`);
+          return res.json(cached);
+        }
+      } catch (e) {
+        console.error("Funding cache read error:", e.message);
       }
-    } catch (e) {
-      console.error("Funding cache read error:", e.message);
     }
 
     const funding = await Funding.findByPk(id, {

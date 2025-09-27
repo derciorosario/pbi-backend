@@ -63,6 +63,8 @@ const {
   MomentSubcategory,
   MomentSubsubCategory,
   MomentIdentity,
+  JobApplication, // Add this
+  EventRegistration, // Add this
   sequelize,
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
@@ -365,6 +367,47 @@ function timeAgo(date) {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
   return d.toLocaleDateString();
+}
+
+
+// Helper function to check if user has applied to jobs
+async function getUserJobApplicationsStatus(currentUserId, jobIds) {
+  if (!currentUserId || !jobIds.length) return {};
+  
+  const applications = await JobApplication.findAll({
+    where: {
+      userId: currentUserId,
+      jobId: { [Op.in]: jobIds }
+    },
+    attributes: ['jobId']
+  });
+  
+  const statusMap = {};
+  applications.forEach(app => {
+    statusMap[app.jobId] = 'applied'; // Default to 'applied' if status is null
+  });
+  
+  return statusMap;
+}
+
+// Helper function to check if user has registered for events
+async function getUserEventRegistrationsStatus(currentUserId, eventIds) {
+  if (!currentUserId || !eventIds.length) return {};
+  
+  const registrations = await EventRegistration.findAll({
+    where: {
+      userId: currentUserId,
+      eventId: { [Op.in]: eventIds }
+    },
+    attributes: ['eventId']
+  });
+  
+  const statusMap = {};
+  registrations.forEach(reg => {
+    statusMap[reg.eventId] ='registered'; // Default to 'registered' if status is null
+  });
+  
+  return statusMap;
 }
 
 async function lazyLoadEventAudienceData(events, currentUserId = null) {
@@ -1479,10 +1522,18 @@ exports.getFeed = async (req, res) => {
         )
         .filter(Boolean);
 
-      const statusMap = await getConnectionStatusMap(currentUserId, targetIds, {
-        Connection,
-        ConnectionRequest,
-      });
+        // Get job applications and event registrations status
+      const jobIds = items.filter(it => it.kind === 'job').map(job => job.id);
+      const eventIds = items.filter(it => it.kind === 'event').map(event => event.id);
+
+      const [statusMap, jobApplicationsMap, eventRegistrationsMap] = await Promise.all([
+        getConnectionStatusMap(currentUserId, targetIds, {
+          Connection,
+          ConnectionRequest,
+        }),
+        getUserJobApplicationsStatus(currentUserId, jobIds),
+        getUserEventRegistrationsStatus(currentUserId, eventIds)
+     ]);
 
       const withStatus = items.map((it) => {
         const ownerId =
@@ -1504,18 +1555,28 @@ exports.getFeed = async (req, res) => {
             ? it.userId
             : null;
 
-        return {
-          ...it,
-          connectionStatus: ownerId
-            ? statusMap[ownerId] || (currentUserId ? "none" : "unauthenticated")
-            : currentUserId
-            ? "none"
-            : "unauthenticated",
-        };
-      });
-
-      return withStatus;
+        
+    if (it.kind === 'job') {
+      it.applicationStatus = currentUserId ? (jobApplicationsMap[it.id] || 'not_applied') : 'unauthenticated';
     }
+   
+
+    if (it.kind === 'event') {
+      it.registrationStatus = currentUserId ? (eventRegistrationsMap[it.id] || 'not_registered') : 'unauthenticated';
+    }
+
+    return {
+      ...it,
+      connectionStatus: ownerId
+        ? statusMap[ownerId] || (currentUserId ? "none" : "unauthenticated")
+        : currentUserId
+        ? "none"
+        : "unauthenticated",
+    };
+  });
+
+  return withStatus;
+}
 
     const mapJob = (j, companyMap = null) => {
       const jobData = {

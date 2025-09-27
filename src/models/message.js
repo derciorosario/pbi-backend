@@ -10,6 +10,7 @@ module.exports = (sequelize, DataTypes) => {
         defaultValue: () => uuidv4(),
         primaryKey: true,
       },
+      attachments: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
       senderId: {
         type: DataTypes.UUID,
         allowNull: false,
@@ -28,7 +29,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       content: {
         type: DataTypes.TEXT,
-        allowNull: false,
+        allowNull: true,
       },
       read: {
         type: DataTypes.BOOLEAN,

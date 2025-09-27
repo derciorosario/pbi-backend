@@ -240,6 +240,19 @@ const PORT = process.env.PORT || 5000;
       console.error("❌ Error running migration script:", error);
     }
 
+    // Run schema guard to add 'attachments' column to messages if missing
+    try {
+      const { addAttachmentsColumnToMessages } = require('./scripts/add_attachments_to_messages');
+      const ok = await addAttachmentsColumnToMessages();
+      if (ok) {
+        console.log("✅ Attachments column check complete");
+      } else {
+        console.error("❌ Attachments column migration failed");
+      }
+    } catch (error) {
+      console.error("❌ Error running attachments column script:", error);
+    }
+
     // Run migration script to create job_applications table
     /*try {
       const { createJobApplicationsTable } = require('./scripts/create_job_applications_table');

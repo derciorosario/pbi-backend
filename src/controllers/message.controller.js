@@ -234,8 +234,20 @@ async function sendMessage(req, res, next) {
     const { userId: receiverId } = req.params;
     const { content } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ message: "Message content is required" });
+    // Handle attachments
+    let attachments = [];
+    if (req.files && req.files.length > 0) {
+      const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 5000}`;
+      attachments = req.files.map(file => ({
+        filename: file.originalname,
+        url: `${baseUrl}/api/uploads/${file.filename}`,
+        mimetype: file.mimetype,
+        size: file.size
+      }));
+    }
+
+    if (!content && attachments.length === 0) {
+      return res.status(400).json({ message: "Message content or attachments are required" });
     }
 
     // Check if receiver exists
@@ -254,18 +266,25 @@ async function sendMessage(req, res, next) {
       }
     });
 
+    // Build a lastMessage preview: text if provided, otherwise "Attachment(s)"
+    const lastMessagePreview = content && content.trim().length > 0
+      ? content
+      : (attachments && attachments.length > 0
+        ? (attachments.length === 1 ? "Attachment" : `${attachments.length} attachments`)
+        : "");
+
     if (!conversation) {
       conversation = await Conversation.create({
         user1Id: senderId,
         user2Id: receiverId,
-        lastMessageContent: content,
+        lastMessageContent: lastMessagePreview,
         lastMessageTime: new Date(),
         user1UnreadCount: senderId === receiverId ? 1 : 0,
         user2UnreadCount: receiverId === senderId ? 0 : 1
       });
     } else {
       // Update conversation with last message
-      conversation.lastMessageContent = content;
+      conversation.lastMessageContent = lastMessagePreview;
       conversation.lastMessageTime = new Date();
       
       // Increment unread count for receiver
@@ -283,7 +302,8 @@ async function sendMessage(req, res, next) {
       senderId,
       receiverId,
       content,
-      conversationId: conversation.id
+      conversationId: conversation.id,
+      attachments
     });
 
     // Include sender info in response

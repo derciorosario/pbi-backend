@@ -189,13 +189,9 @@ exports.update = async (req, res) => {
     }
 
     // Handle images array
-    let images = product.images;
-    if (body.images !== undefined) {
-      images = Array.isArray(body.images) ? body.images.map(img => ({
-        filename: img.filename,
-        title: img.title
-      })) : [];
-    }
+    let images = product.images || [];
+
+
 
     // Simple update
     Object.assign(product, {
@@ -227,40 +223,33 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Product.findByPk(product.id, {
-      include: [
-        { model: User, as: "seller", attributes: ["id", "name", "email"] },
-        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-        // Include audience associations
-        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-      ],
-    });
+    await exports.getOne({ params: { id: product.id }, query: { updated: true } }, res);
 
-    res.json(updated);
   } catch (err) {
     console.error("updateProduct error:", err);
     res.status(400).json({ message: err.message || "Could not update product" });
   }
+
 };
 
 exports.getOne = async (req, res) => {
   try {
     const { id } = req.params;
+    const updated = req.query.updated;
 
     // Product cache: try read first
     const __productCacheKey = generateProductCacheKey(id);
-    try {
-      const cached = await cache.get(__productCacheKey);
-      if (cached) {
-        console.log(`✅ Product cache hit for key: ${__productCacheKey}`);
-        return res.json(cached);
-      }
-    } catch (e) {
-      console.error("Product cache read error:", e.message);
+
+    if(!updated){
+        try {
+          const cached = await cache.get(__productCacheKey);
+          if (cached) {
+            console.log(`Product cache hit for key: ${__productCacheKey}`);
+            return res.json(cached);
+          }
+        } catch (e) {
+          console.error("Product cache read error:", e.message);
+        }
     }
 
     const product = await Product.findByPk(id, {

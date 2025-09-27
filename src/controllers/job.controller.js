@@ -192,7 +192,8 @@ exports.updateJob = async (req, res) => {
       subsubCategoryIds: subsubCategoryIds ?? undefined,
     });
 
-    res.json({ job });
+
+    await exports.getJob({ params: { id: job.id }, query: { updated: true } }, res);
   } catch (err) {
     console.error("updateJob error", err);
     res.status(400).json({ message: err.message });
@@ -204,17 +205,22 @@ exports.updateJob = async (req, res) => {
 exports.getJob = async (req, res) => {
   try {
     const jobId = req.params.id;
+    const updated = req.query.updated;
+
 
     // Job cache: try read first
     const __jobCacheKey = generateJobCacheKey(jobId);
-    try {
-      const cached = await cache.get(__jobCacheKey);
-      if (cached) {
-        console.log(`✅ Job cache hit for key: ${__jobCacheKey}`);
-        return res.json(cached);
-      }
-    } catch (e) {
-      console.error("Job cache read error:", e.message);
+
+    if(!updated){
+        try {
+          const cached = await cache.get(__jobCacheKey);
+          if (cached) {
+            console.log(`✅ Job cache hit for key: ${__jobCacheKey}`);
+            return res.json(cached);
+          }
+        } catch (e) {
+          console.error("Job cache read error:", e.message);
+        }
     }
 
     const job = await Job.findByPk(jobId, {

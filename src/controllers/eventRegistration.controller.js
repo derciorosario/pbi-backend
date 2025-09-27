@@ -29,6 +29,7 @@ exports.createRegistration = async (req, res) => {
         where: { eventId, status: "confirmed" }
       });
 
+     
       if (currentRegistrations + numberOfPeople > event.capacity) {
         return res.status(400).json({
           message: "Event is at full capacity"

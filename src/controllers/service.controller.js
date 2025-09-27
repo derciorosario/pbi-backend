@@ -279,20 +279,8 @@ exports.update = async (req, res) => {
       });
     }
 
-    const updated = await Service.findByPk(service.id, {
-      include: [
-        { model: User, as: "provider", attributes: ["id", "name", "email"] },
-        { model: Category, as: "category" },
-        { model: Subcategory, as: "subcategory" },
-        // Include audience associations
-        { association: "audienceIdentities", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceCategories", attributes: ["id", "name"], through: { attributes: [] } },
-        { association: "audienceSubcategories", attributes: ["id", "name", "categoryId"], through: { attributes: [] } },
-        { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
-      ],
-    });
-
-    res.json(updated);
+   
+    await exports.getOne({ params: { id: service.id }, query: { updated: true } }, res);
   } catch (err) {
     console.error("updateService error:", err);
     res.status(400).json({ message: err.message || "Could not update service" });
@@ -302,10 +290,13 @@ exports.update = async (req, res) => {
 exports.getOne = async (req, res) => {
   try {
     const { id } = req.params;
+    const updated = req.query.updated;
 
     // Service cache: try read first
     const __serviceCacheKey = generateServiceCacheKey(id);
-    try {
+
+    if(!updated){
+         try {
       const cached = await cache.get(__serviceCacheKey);
       if (cached) {
         console.log(`✅ Service cache hit for key: ${__serviceCacheKey}`);
@@ -314,6 +305,10 @@ exports.getOne = async (req, res) => {
     } catch (e) {
       console.error("Service cache read error:", e.message);
     }
+
+    }
+
+ 
 
     const service = await Service.findByPk(id, {
       include: [
