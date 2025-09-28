@@ -724,6 +724,12 @@ exports.update = async (req, res) => {
     }
 
  
+    await cache.deleteKeys([
+      ["feed", "events", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
 
     await exports.getOne({ params: { id: event.id }, query: { updated: true } }, res);
  

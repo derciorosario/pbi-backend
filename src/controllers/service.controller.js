@@ -184,6 +184,7 @@ exports.update = async (req, res) => {
     if (service.providerUserId !== uid && req.user?.accountType !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
+    
 
     const {
       identityIds: _identityIds,
@@ -279,6 +280,12 @@ exports.update = async (req, res) => {
       });
     }
 
+    await cache.deleteKeys([
+      ["feed", "services", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
    
     await exports.getOne({ params: { id: service.id }, query: { updated: true } }, res);
   } catch (err) {
@@ -322,6 +329,7 @@ exports.getOne = async (req, res) => {
         { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
       ],
     });
+
     if (!service) return res.status(404).json({ message: "Service not found" });
 
     try {

@@ -176,6 +176,10 @@ exports.updateMoment = async (req, res) => {
       subsubCategoryIds: subsubCategoryIds ?? undefined,
     });
 
+     await cache.deleteKeys([
+          ["feed",req.user.id] 
+     ]);
+
     await exports.getMoment({ params: { id: moment.id }, query: { updated: true } }, res);
 
   } catch (err) {

@@ -192,6 +192,12 @@ exports.updateJob = async (req, res) => {
       subsubCategoryIds: subsubCategoryIds ?? undefined,
     });
 
+    await cache.deleteKeys([
+      ["feed", "jobs", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
 
     await exports.getJob({ params: { id: job.id }, query: { updated: true } }, res);
   } catch (err) {

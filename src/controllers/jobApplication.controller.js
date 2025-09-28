@@ -1,4 +1,5 @@
 const { JobApplication, Job, User } = require("../models");
+const { cache } = require("../utils/redis");
 
 exports.createApplication = async (req, res) => {
   try {
@@ -31,6 +32,13 @@ exports.createApplication = async (req, res) => {
       availabilityDate: availability === 'specific' ? availabilityDate : null,
       employmentType: employmentType || null,
     });
+
+    await cache.deleteKeys([
+            ["feed", "jobs", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+           ["feed","all",req.user.id] 
+    ]);
 
     res.status(201).json({ application });
   } catch (err) {

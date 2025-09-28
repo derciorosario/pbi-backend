@@ -278,6 +278,13 @@ exports.update = async (req, res) => {
     }
 
    
+    await cache.deleteKeys([
+      
+      ["feed", "funding", req.user.id] 
+    ]);
+     await cache.deleteKeys([
+          ["feed","all",req.user.id] 
+        ]);
     await exports.getOne({ params: { id: funding.id }, query: { updated: true } }, res);
 
   } catch (err) {

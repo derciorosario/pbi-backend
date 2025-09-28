@@ -237,7 +237,12 @@ exports.update = async (req, res) => {
         subsubCategoryIds: subsubCategoryIds ?? undefined,
       });
     }
-
+    await cache.deleteKeys([
+      ["feed", "tourism", req.user.id] 
+    ]);
+     await cache.deleteKeys([
+          ["feed","all",req.user.id] 
+    ]);
     await exports.getOne({ params: { id: tourism.id }, query: { updated: true } }, res);
     
   } catch (err) {

@@ -1,5 +1,6 @@
 const { EventRegistration, User, Event } = require("../models");
 const { v4: uuidv4 } = require("uuid");
+const { cache } = require("../utils/redis");
 
 exports.createRegistration = async (req, res) => {
   try {
@@ -62,6 +63,13 @@ exports.createRegistration = async (req, res) => {
         }
       ]
     });
+
+    await cache.deleteKeys([ 
+          ["feed", "events", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+           ["feed","all",req.user.id] 
+    ]);
 
     res.status(201).json({
       message: "Registration submitted successfully",

@@ -180,6 +180,25 @@ app.use("/api/company", require("./src/routes/company.routes"))
 app.use("/api/organization", require("./src/routes/organization.routes"))
 
 
+app.get('/api/download/:filename', (req, res) => {
+  const fileName = req.params.filename;
+  const filePath = path.join(__dirname, './uploads', fileName); 
+
+  if (fs.existsSync(filePath)) {
+    const stat = fs.statSync(filePath);
+
+    res.writeHead(200, {
+      'Content-Type': 'application/octet-stream', 
+      'Content-Length': stat.size,
+      'Content-Disposition': `attachment; filename=${fileName}`,
+    });
+
+    const readStream = fs.createReadStream(filePath);
+    readStream.pipe(res);
+  } else {
+    res.status(404).send('File not found');
+  }
+})
 
 
 // ❌ 404 handler
