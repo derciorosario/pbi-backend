@@ -507,13 +507,30 @@ async function updateIndustrySelections(req, res, next) {
 async function updatePortfolio(req, res, next) {
   try {
     const userId = req.user.sub;
-    const { cvBase64, cvFileName } = req.body;
+    const { cvBase64 } = req.body;
 
     const profile = await Profile.findOne({ where: { userId } });
     if (!profile) return res.status(404).json({ message: "Profile not found" });
 
-    profile.cvBase64 = cvBase64 || null;
-    profile.cvFileName = cvFileName || null;
+    // Validate cvBase64 is an array
+    if (cvBase64 && !Array.isArray(cvBase64)) {
+      return res.status(400).json({ message: "cvBase64 must be an array" });
+    }
+
+    // Validate each CV object has required fields
+    if (cvBase64 && cvBase64.length > 0) {
+      for (const cv of cvBase64) {
+        if (!cv.original_filename || !cv.base64) {
+          return res.status(400).json({ message: "Each CV must have original_filename and base64" });
+        }
+        // Add created_at if missing
+        if (!cv.created_at) {
+          cv.created_at = new Date().toISOString();
+        }
+      }
+    }
+
+    profile.cvBase64 = cvBase64 || [];
     await profile.save();
 
     return getMe(req, res, next);

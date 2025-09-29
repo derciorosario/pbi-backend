@@ -25,6 +25,9 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
 
+      // CV/Resume data
+      cvBase64: { type: DataTypes.JSON, allowNull: true }, // CV data: {original_filename, title, base64, created_at}
+
       // Status
       status: {
         type: DataTypes.ENUM("pending", "reviewed", "accepted", "rejected"),

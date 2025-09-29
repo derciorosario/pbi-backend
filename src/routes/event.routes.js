@@ -11,6 +11,7 @@ router.get("/", auth(false), C.list);
 router.get("/:id", auth(false), C.getOne);
 router.post("/", auth(true), C.create);
 router.put("/:id", auth(true), C.update);
+router.delete("/:id", auth(true), C.deleteEvent);
 
 // File upload routes
 router.post("/upload-cover", auth(true), upload.single('coverImage'), C.uploadCoverImage);

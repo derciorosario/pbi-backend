@@ -380,6 +380,23 @@ exports.list = async (req, res) => {
   res.json(rows);
 };
 
+exports.deleteService = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const service = await Service.findByPk(id);
+    if (!service) return res.status(404).json({ message: "Service not found" });
+    if (String(service.providerUserId) !== String(req.user?.id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await service.destroy();
+    res.json({ message: "Service deleted successfully" });
+  } catch (err) {
+    console.error("deleteService error", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
 // Get services provided by the current user
 exports.getMyServices = async (req, res) => {
   const uid = req.user?.id;

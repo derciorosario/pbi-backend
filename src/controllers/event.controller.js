@@ -815,6 +815,24 @@ exports.list = async (req, res) => {
 };
 
 // Handle cover image upload
+exports.deleteEvent = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const event = await Event.findByPk(id);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (String(event.organizerUserId) !== String(req.user?.id)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await event.destroy();
+    res.json({ message: "Event deleted successfully" });
+  } catch (err) {
+    console.error("deleteEvent error", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
+// Handle cover image upload
 exports.uploadCoverImage = async (req, res) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });

@@ -223,6 +223,8 @@ const PORT = process.env.PORT || 5000;
 
 (async () => {
   try {
+    
+    
     await sequelize.authenticate();
     console.log("✅ Database connected");
 
@@ -233,13 +235,11 @@ const PORT = process.env.PORT || 5000;
     // 👉 Run seeding if needed
     //await seedIfEmpty();
 
-   
-
     // 🔑 Ensure default admin exists
     await ensureAdmin();
 
     // Create event_registrations table if it doesn't exist
-    try {
+   /* try {
       const { createEventRegistrationsTable } = require('./scripts/create_event_registrations_table');
       await createEventRegistrationsTable();
     } catch (error) {
@@ -257,7 +257,7 @@ const PORT = process.env.PORT || 5000;
       }
     } catch (error) {
       console.error("❌ Error running migration script:", error);
-    }
+    }*/
 
     // Run schema guard to add 'attachments' column to messages if missing
     try {

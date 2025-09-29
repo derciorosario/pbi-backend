@@ -5,7 +5,7 @@ exports.createApplication = async (req, res) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "Unauthorized" });
 
-    const { jobId, coverLetter, expectedSalary, availability, availabilityDate, employmentType } = req.body;
+    const { jobId, coverLetter, expectedSalary, availability, availabilityDate, employmentType, cvData } = req.body;
 
     if (!jobId || !coverLetter) {
       return res.status(400).json({ message: "jobId and coverLetter are required" });
@@ -31,6 +31,7 @@ exports.createApplication = async (req, res) => {
       availability: availability || null,
       availabilityDate: availability === 'specific' ? availabilityDate : null,
       employmentType: employmentType || null,
+      cvBase64: cvData || null,
     });
 
     await cache.deleteKeys([
