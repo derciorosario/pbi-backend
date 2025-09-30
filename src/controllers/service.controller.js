@@ -166,6 +166,13 @@ exports.create = async (req, res) => {
       ],
     });
 
+     await cache.deleteKeys([
+      ["feed", "services", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
+
     res.status(201).json(created);
   } catch (err) {
     console.error("createService error:", err);
@@ -236,6 +243,8 @@ exports.update = async (req, res) => {
         : [];
     }
 
+
+    console.log({a:body.country})
     // Simple update
     Object.assign(service, {
       title: body.title ?? service.title,
@@ -245,8 +254,8 @@ exports.update = async (req, res) => {
       priceType: body.priceType ?? service.priceType,
       deliveryTime: body.deliveryTime ?? service.deliveryTime,
       locationType: body.locationType ?? service.locationType,
-      country:  body.country || service.country,
-      city:  body.city || service.city,
+      country:  body.country ?? service.country,
+      city:  body.city ?? service.city,
       experienceLevel: body.experienceLevel ?? service.experienceLevel,
       categoryId: body.categoryId === '' ? null : (body.categoryId ?? service.categoryId),
       subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? service.subcategoryId),
@@ -260,13 +269,15 @@ exports.update = async (req, res) => {
     });
 
     // Handle location fields based on locationType
-    if (service.locationType === "Remote") {
+   /* if (service.locationType === "Remote") {
       service.country = null;
       service.city = null;
     } else {
       service.country = body.country ?? service.country;
       service.city = body.city ?? service.city;
-    }
+    }*/
+
+      
 
     await service.save();
 
@@ -390,6 +401,14 @@ exports.deleteService = async (req, res) => {
     }
 
     await service.destroy();
+
+     await cache.deleteKeys([
+      ["feed", "services", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
+    
     res.json({ message: "Service deleted successfully" });
   } catch (err) {
     console.error("deleteService error", err);

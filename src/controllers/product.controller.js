@@ -127,6 +127,14 @@ exports.create = async (req, res) => {
       ],
     });
 
+    await cache.deleteKeys([
+      ["feed", "products", req.user.id] 
+    ]);
+
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
+
     res.status(201).json(created);
   } catch (err) {
     console.error("createProduct error:", err);
@@ -226,9 +234,11 @@ exports.update = async (req, res) => {
     await cache.deleteKeys([
       ["feed", "products", req.user.id] 
     ]);
+    
     await cache.deleteKeys([
       ["feed","all",req.user.id] 
     ]);
+
     await exports.getOne({ params: { id: product.id }, query: { updated: true } }, res);
 
   } catch (err) {

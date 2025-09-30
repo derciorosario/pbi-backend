@@ -1,5 +1,7 @@
-const { JobApplication, Job, User } = require("../models");
+const { JobApplication, Job, User, Notification } = require("../models");
 const { cache } = require("../utils/redis");
+const { sendTemplatedEmail } = require("../utils/email");
+const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 
 exports.createApplication = async (req, res) => {
   try {
@@ -34,11 +36,57 @@ exports.createApplication = async (req, res) => {
       cvBase64: cvData || null,
     });
 
+    // Get job poster and applicant details for notifications and emails
+    const jobPoster = await User.findByPk(job.postedByUserId, { attributes: ["id", "name", "email"] });
+    const applicant = await User.findByPk(req.user.id, { attributes: ["id", "name", "email"] });
+
+    // Create notification for job poster
+    /*await Notification.create({
+      userId: job.postedByUserId,
+      type: "job.application.received",
+      payload: {
+        item_id: application.id,
+        applicationId: application.id,
+        applicantId: req.user.id,
+        applicantName: applicant?.name || "Someone",
+        jobId: job.id,
+        jobTitle: job.title
+      },
+    });*/
+
+    // Send email notification if enabled
+    try {
+      const isEnabled = true//await isEmailNotificationEnabled(job.postedByUserId, 'jobApplications');
+
+      if (isEnabled) {
+        const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+        const link = `${baseUrl}/profile`; //`${baseUrl}/job/${job.id}/applications`;
+
+        await sendTemplatedEmail({
+          to: jobPoster.email,
+          subject: `New Application for "${job.title}"`,
+          template: "job-application-received",
+          context: {
+            name: jobPoster.name,
+            applicantName: applicant?.name || "Someone",
+            jobTitle: job.title,
+            coverLetter: coverLetter?.substring(0, 200) + (coverLetter?.length > 200 ? "..." : ""),
+            expectedSalary: expectedSalary || "Not specified",
+            employmentType: employmentType || "Not specified",
+            link
+          }
+        });
+      }
+    } catch (emailErr) {
+      console.error("Failed to send job application email:", emailErr);
+      // Continue even if email fails
+    }
+
     await cache.deleteKeys([
-            ["feed", "jobs", req.user.id] 
+             ["feed", "jobs", req.user.id]
     ]);
     await cache.deleteKeys([
-           ["feed","all",req.user.id] 
+           ["feed","all",req.user.id]
     ]);
 
     res.status(201).json({ application });
@@ -117,7 +165,55 @@ exports.updateApplicationStatus = async (req, res) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    const oldStatus = application.status;
     await application.update({ status });
+
+    // Send notifications and emails if status changed
+    if (oldStatus !== status) {
+      const applicant = await User.findByPk(application.userId, { attributes: ["id", "name", "email"] });
+      const jobPoster = await User.findByPk(req.user.id, { attributes: ["id", "name", "email"] });
+
+      // Create notification for applicant
+      /*await Notification.create({
+        userId: application.userId,
+        type: `job.application.${status}`,
+        payload: {
+          item_id: application.id,
+          applicationId: application.id,
+          jobId: application.jobId,
+          jobTitle: application.job.title,
+          status: status,
+          updatedBy: req.user.id
+        },
+      });*/
+
+      // Send email notification if enabled
+      /**try {
+        const isEnabled = await isEmailNotificationEnabled(application.userId, 'jobApplicationUpdates');
+
+         if (isEnabled) {
+          const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+          const link = `${baseUrl}/my-applications`;
+
+          await sendTemplatedEmail({
+            to: applicant.email,
+            subject: `Update on Your Application for "${application.job.title}"`,
+            template: "job-application-update",
+            context: {
+              name: applicant.name,
+              jobTitle: application.job.title,
+              accepted: status === 'accepted',
+              message: `Your application has been ${status}`,
+              link
+            }
+          });
+        }
+      } catch (emailErr) {
+        console.error("Failed to send job application update email:", emailErr);
+        // Continue even if email fails
+      }
+      **/
+    }
 
     res.json({ application });
   } catch (err) {

@@ -97,6 +97,14 @@ exports.createJob = async (req, res) => {
       subcategoryIds: subcategoryIds.length ? subcategoryIds : (primarySubcategoryId ? [primarySubcategoryId] : []),
       subsubCategoryIds,
     });
+
+    await cache.deleteKeys([
+      ["feed", "jobs", req.user.id] 
+    ]);
+    
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
     
     res.status(201).json({ job });
   } catch (err) {
@@ -287,6 +295,13 @@ exports.deleteJob = async (req, res) => {
     }
 
     await job.destroy();
+     await cache.deleteKeys([
+      ["feed", "jobs", req.user.id] 
+    ])
+    
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
     res.json({ message: "Job deleted successfully" });
   } catch (err) {
     console.error("deleteJob error", err);

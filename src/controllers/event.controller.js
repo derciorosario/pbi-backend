@@ -617,6 +617,10 @@ exports.create = async (req, res) => {
         { association: "audienceSubsubs", attributes: ["id", "name", "subcategoryId"], through: { attributes: [] } },
       ],
     });
+    
+    await cache.deleteKeys([
+      ["feed", "events", req.user.id] 
+    ]);
 
     res.status(201).json(created);
   } catch (err) {
@@ -693,7 +697,7 @@ exports.update = async (req, res) => {
       timezone: body.timezone ?? event.timezone,
       locationType: body.locationType ?? event.locationType,
       country: body.country ?? event.country,
-      coverImageBase64:body.coverImageBase64 ?? event.coverImageBase64,
+      coverImageBase64:body.coverImageBase64 || null,
       city: body.city ?? event.city,
       address: body.address ?? event.address,
       onlineUrl: body.onlineUrl ?? event.onlineUrl,
@@ -702,7 +706,7 @@ exports.update = async (req, res) => {
       currency: (body.registrationType || event.registrationType) === "Paid" ? (body.currency ?? event.currency) : null,
       capacity: body.capacity ?? event.capacity,
       registrationDeadline: body.registrationDeadline ? new Date(`${body.registrationDeadline}T23:59:00Z`) : event.registrationDeadline,
-      coverImageUrl: body.coverImageUrl ?? event.coverImageUrl,
+      coverImageUrl: body.coverImageUrl || null,
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
       generalSubcategoryId: generalSubcategoryId === '' ? null : generalSubcategoryId,
       generalSubsubCategoryId: generalSubsubCategoryId === '' ? null : generalSubsubCategoryId,
@@ -825,6 +829,13 @@ exports.deleteEvent = async (req, res) => {
     }
 
     await event.destroy();
+    
+    await cache.deleteKeys([
+      ["feed", "events", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
     res.json({ message: "Event deleted successfully" });
   } catch (err) {
     console.error("deleteEvent error", err);

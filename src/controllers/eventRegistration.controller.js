@@ -1,6 +1,8 @@
-const { EventRegistration, User, Event } = require("../models");
+const { EventRegistration, User, Event, Notification } = require("../models");
 const { v4: uuidv4 } = require("uuid");
 const { cache } = require("../utils/redis");
+const { sendTemplatedEmail } = require("../utils/email");
+const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 
 exports.createRegistration = async (req, res) => {
   try {
@@ -63,6 +65,56 @@ exports.createRegistration = async (req, res) => {
         }
       ]
     });
+
+    // Notify event organizer about the new registration
+    try {
+      const organizerId = event.organizerUserId;
+      if (organizerId) {
+
+        const organizer = await User.findByPk(organizerId, { attributes: ["id", "name", "email"] });
+        const registrant = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
+
+       /* await Notification.create({
+          userId: organizerId,
+          type: "event.registration.received",
+          payload: {
+            item_id: registration.id,
+            registrationId: registration.id,
+            registrantId: userId,
+            registrantName: registrant?.name || "Someone",
+            eventId: event.id,
+            eventTitle: event.title,
+            numberOfPeople
+          },
+        }).catch(() => {});*/
+
+        // Send email to organizer if enabled
+        try {
+          const isEnabled = true// await isEmailNotificationEnabled(organizerId, "eventRegistrations");
+          if (isEnabled && organizer?.email) {
+            const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+            const link =`${baseUrl}/profile`; // `${baseUrl}/event/${event.id}/registrations`;
+            await sendTemplatedEmail({
+              to: organizer.email,
+              subject: `New Registration for "${event.title}"`,
+              template: "event-registration-received",
+              context: {
+                name: organizer.name,
+                registrantName: registrant?.name || "Someone",
+                eventTitle: event.title,
+                numberOfPeople,
+                reasonForAttending: reasonForAttending || null,
+                link
+              }
+            });
+          }
+        } catch (emailErr) {
+          console.error("Failed to send event registration email:", emailErr);
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to create event registration notification:", notifErr);
+    }
 
     await cache.deleteKeys([ 
           ["feed", "events", req.user.id] 
@@ -182,6 +234,51 @@ exports.updateRegistrationStatus = async (req, res) => {
     }
 
     await registration.update({ status });
+
+    // Notify registrant about status update
+    try {
+      const registrant = await User.findByPk(registration.userId, { attributes: ["id", "name", "email"] });
+      const organizer = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
+
+      /*await Notification.create({
+        userId: registration.userId,
+        type: `event.registration.${status}`,
+        payload: {
+          item_id: registration.id,
+          registrationId: registration.id,
+          eventId: registration.eventId,
+          eventTitle: registration.event?.title,
+          status,
+          updatedBy: userId
+        },
+      }).catch(() => {});*/
+
+      // Send email to registrant if enabled
+      /*try {
+        const isEnabled = await isEmailNotificationEnabled(registration.userId, "eventRegistrationUpdates");
+        if (isEnabled && registrant?.email) {
+          const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+          const link = `${baseUrl}/my-event-registrations`;
+          await sendTemplatedEmail({
+            to: registrant.email,
+            subject: `Update on Your Registration for "${registration.event?.title || "Event"}"`,
+            template: "event-registration-update",
+            context: {
+              name: registrant.name,
+              eventTitle: registration.event?.title || "Event",
+              status,
+              message: `Your registration has been ${status}`,
+              link
+            }
+          });
+        }
+      } catch (emailErr) {
+        console.error("Failed to send event registration update email:", emailErr);
+      }*/
+
+    } catch (notifErr) {
+      console.error("Failed to create event registration status notification:", notifErr);
+    }
 
     res.json({
       message: "Registration status updated successfully",

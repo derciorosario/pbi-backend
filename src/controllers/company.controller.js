@@ -365,15 +365,15 @@ exports.authorizeRepresentative = async (req, res, next) => {
     }
 
     // Verify the user is the one being invited
-    if (invitation.invitedUserId !== userId) {
+    /*if (invitation.invitedUserId !== userId) {
       return res.status(403).json({ message: "You are not authorized to accept this invitation" });
-    }
+    }*/
 
     // Check if already authorized
     const existingRep = await CompanyRepresentative.findOne({
       where: {
         companyId: invitation.companyId,
-        representativeId: userId
+        representativeId: invitation.invitedUserId//userId
       }
     });
 
@@ -389,7 +389,7 @@ exports.authorizeRepresentative = async (req, res, next) => {
     } else {
       await CompanyRepresentative.create({
         companyId: invitation.companyId,
-        representativeId: userId,
+        representativeId: invitation.invitedUserId,
         status: "authorized",
         authorizationToken: generateSecureToken(),
         authorizedAt: new Date()
@@ -402,7 +402,7 @@ exports.authorizeRepresentative = async (req, res, next) => {
     await invitation.save();
 
     // Update user flags
-    const user = await User.findByPk(userId);
+    const user = await User.findByPk(invitation.invitedUserId);
     user.isCompanyRepresentative = true;
     user.companyRepresentativeFor = invitation.companyId;
     user.representativeAuthorizedAt = new Date();

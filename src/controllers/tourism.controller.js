@@ -138,6 +138,13 @@ exports.create = async (req, res) => {
       ],
     });
 
+     await cache.deleteKeys([
+      ["feed", "tourism", req.user.id] 
+    ]);
+    await cache.deleteKeys([
+      ["feed","all",req.user.id] 
+    ]);
+
     res.status(201).json(created);
   } catch (err) {
     console.error("createTourism error:", err);
