@@ -54,7 +54,7 @@ async function createUserAndSendVerification({
     expiresInHours: 24,
     year: new Date().getFullYear(),
   },
-});
+ });
 
   return user;
 }

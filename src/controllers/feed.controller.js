@@ -79,98 +79,100 @@ const CACHE_TTL = {
 
 // Generate cache key for feed requests
 function generateFeedCacheKey(req) {
-  const {
-    tab,
-    q,
-    country,
-    city,
-    categoryId,
-    subcategoryId,
-    subsubCategoryId,
-    identityId,
-    industryIds,
-    generalCategoryIds,
-    generalSubcategoryIds,
-    generalSubsubCategoryIds,
-    audienceIdentityIds,
-    audienceCategoryIds,
-    audienceSubcategoryIds,
-    audienceSubsubCategoryIds,
-    price,
-    serviceType,
-    priceType,
-    deliveryTime,
-    experienceLevel,
-    locationType,
-    jobType,
-    workMode,
-    workLocation,
-    workSchedule,
-    careerLevel,
-    paymentType,
-    jobsView,
-    postType,
-    season,
-    budgetRange,
-    fundingGoal,
-    amountRaised,
-    deadline,
-    date,
-    eventType,
-    registrationType,
-    limit = 40,
-    offset = 0,
-  } = req.query;
+   const {
+     tab,
+     q,
+     country,
+     city,
+     categoryId,
+     subcategoryId,
+     subsubCategoryId,
+     identityId,
+     industryIds,
+     generalCategoryIds,
+     generalSubcategoryIds,
+     generalSubsubCategoryIds,
+     audienceIdentityIds,
+     audienceCategoryIds,
+     audienceSubcategoryIds,
+     audienceSubsubCategoryIds,
+     price,
+     serviceType,
+     priceType,
+     deliveryTime,
+     experienceLevel,
+     locationType,
+     jobType,
+     workMode,
+     workLocation,
+     workSchedule,
+     careerLevel,
+     paymentType,
+     jobsView,
+     postType,
+     season,
+     budgetRange,
+     fundingGoal,
+     amountRaised,
+     deadline,
+     date,
+     eventType,
+     registrationType,
+     limit = 40,
+     offset = 0,
+     userId, // Add userId parameter for filtering specific user's posts
+   } = req.query;
 
-  const currentUserId = req.user?.id || 'anonymous';
-  const userSettings = req.userSettings || {};
+   const currentUserId = req.user?.id || 'anonymous';
+   const userSettings = req.userSettings || {};
 
-  // Create a deterministic key based on all query parameters
-  const keyData = {
-    tab,
-    q,
-    country,
-    city,
-    categoryId,
-    subcategoryId,
-    subsubCategoryId,
-    identityId,
-    industryIds,
-    generalCategoryIds,
-    generalSubcategoryIds,
-    generalSubsubCategoryIds,
-    audienceIdentityIds,
-    audienceCategoryIds,
-    audienceSubcategoryIds,
-    audienceSubsubCategoryIds,
-    price,
-    serviceType,
-    priceType,
-    deliveryTime,
-    experienceLevel,
-    locationType,
-    jobType,
-    workMode,
-    workLocation,
-    workSchedule,
-    careerLevel,
-    paymentType,
-    jobsView,
-    postType,
-    season,
-    budgetRange,
-    fundingGoal,
-    amountRaised,
-    deadline,
-    date,
-    eventType,
-    registrationType,
-    limit,
-    offset,
-    currentUserId,
-    connectionsOnly: userSettings.connectionsOnly,
-    contentType: userSettings.contentType,
-  };
+   // Create a deterministic key based on all query parameters
+   const keyData = {
+     tab,
+     q,
+     country,
+     city,
+     categoryId,
+     subcategoryId,
+     subsubCategoryId,
+     identityId,
+     industryIds,
+     generalCategoryIds,
+     generalSubcategoryIds,
+     generalSubsubCategoryIds,
+     audienceIdentityIds,
+     audienceCategoryIds,
+     audienceSubcategoryIds,
+     audienceSubsubCategoryIds,
+     price,
+     serviceType,
+     priceType,
+     deliveryTime,
+     experienceLevel,
+     locationType,
+     jobType,
+     workMode,
+     workLocation,
+     workSchedule,
+     careerLevel,
+     paymentType,
+     jobsView,
+     postType,
+     season,
+     budgetRange,
+     fundingGoal,
+     amountRaised,
+     deadline,
+     date,
+     eventType,
+     registrationType,
+     limit,
+     offset,
+     userId, // Include userId in cache key
+     currentUserId,
+     connectionsOnly: userSettings.connectionsOnly,
+     contentType: userSettings.contentType,
+   };
 
   // Sort arrays and stringify for consistent key generation
   Object.keys(keyData).forEach(key => {
@@ -1043,6 +1045,7 @@ exports.getFeed = async (req, res) => {
       registrationType,
       limit = 40,
       offset = 0,
+      userId, // Add userId parameter for filtering specific user's posts
     } = req.query;
 
     const tabToEntityTypeMap = {
@@ -1302,6 +1305,18 @@ exports.getFeed = async (req, res) => {
     if (effGeneralCategoryIds.length > 0) whereFunding.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
     if (effGeneralSubcategoryIds.length > 0) whereFunding.generalSubcategoryId = { [Op.in]: effGeneralSubcategoryIds };
     if (effGeneralSubsubCategoryIds.length > 0) whereFunding.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
+
+    // Add user filtering when userId parameter is provided
+    if (userId) {
+      whereJob.postedByUserId = userId;
+      whereEvent.organizerUserId = userId;
+      whereService.providerUserId = userId;
+      whereProduct.sellerUserId = userId;
+      whereTourism.authorUserId = userId;
+      whereFunding.creatorUserId = userId;
+      whereNeed.userId = userId;
+      whereCommon.userId = userId; // For moments
+    }
 
     let excludedUserIds = [];
     if (currentUserId) {
@@ -1595,10 +1610,12 @@ exports.getFeed = async (req, res) => {
         description: j.description,
         city: j.city,
         country: j.country,
+        countries: j.countries || [],
         currency: j.currency,
         salaryMin: j.salaryMin,
         salaryMax: j.salaryMax,
         createdAt: j.createdAt,
+        make_company_name_private:j.make_company_name_private,
         timeAgo: timeAgo(j.createdAt),
         postedByUserId: j.postedByUserId || null,
         postedByUserName: j.postedBy?.name || null,

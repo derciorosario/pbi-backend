@@ -9,6 +9,8 @@ const register = [
   body("biography").optional().isString(),
   body("nationality").optional().isString(),
   body("countryOfResidence").optional().isString(),
+  body("webpage").optional().isString(),
+  body("otherCountries").optional().isArray(),
 ];
 
 const forgotPassword = [

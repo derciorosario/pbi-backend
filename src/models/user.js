@@ -15,12 +15,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         validate: { isEmail: true },
       },
-      
       phone: { type: DataTypes.STRING },
       biography: { type: DataTypes.TEXT },
       nationality: { type: DataTypes.STRING },
       country: { type: DataTypes.STRING, allowNull: true },
       city: { type: DataTypes.STRING, allowNull: true },
+      address: { type: DataTypes.STRING, allowNull: true },
       countryOfResidence: { type: DataTypes.STRING, allowNull: true },
 
       // Individual fields

@@ -6,9 +6,7 @@ const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
 // Create a new meeting request
 exports.createMeetingRequest = async (req, res) => {
   try {
-    console.log("Creating meeting request - Start");
-    console.log("Request body:", req.body);
-    console.log("User:", req.user);
+  
     
     const fromUserId = req.user.id;
     const {
@@ -23,7 +21,6 @@ exports.createMeetingRequest = async (req, res) => {
       link
     } = req.body;
 
-    console.log("Parsed data:", { fromUserId, toUserId, title, scheduledAt, mode });
 
     // Validate required fields
     if (!toUserId || !title || !scheduledAt) {
@@ -48,13 +45,13 @@ exports.createMeetingRequest = async (req, res) => {
     }
 
     // Validate mode-specific fields
-    if (mode === "video" && !link) {
+   /* if (mode === "video" && !link) {
       return res.status(400).json({ message: "Video meetings require a call link" });
     }
     if (mode === "in_person" && !location) {
       return res.status(400).json({ message: "In-person meetings require a location" });
     }
-
+*/
     // Create the meeting request
     console.log("Creating meeting request in database...");
     const meetingRequest = await MeetingRequest.create({
@@ -89,8 +86,13 @@ exports.createMeetingRequest = async (req, res) => {
         fromUserId,
         fromName: requester.name || requester.email,
         title,
-        scheduledAt,
-        mode
+      agenda,
+      scheduledAt: new Date(scheduledAt),
+      duration: parseInt(duration),
+      timezone,
+      mode,
+      location: mode === "in_person" ? location : null,
+      link: mode === "video" ? link : null,
       },
     });
 
@@ -126,8 +128,8 @@ exports.createMeetingRequest = async (req, res) => {
         console.log(`Email notification skipped for user ${toUserId} (meetingRequests disabled)`);
       }
     } catch (emailErr) {
-      console.error("Failed to send meeting request email:", emailErr);
-      // Continue even if email fails
+        console.error("Failed to send meeting request email:", emailErr);
+        // Continue even if email fails
     }
 
     // Return the created meeting request with requester info
@@ -175,6 +177,7 @@ exports.getMeetingRequests = async (req, res) => {
       received,
       sent
     });
+    
   } catch (error) {
     console.error("Error fetching meeting requests:", error);
     res.status(500).json({ message: "Failed to fetch meeting requests" });
@@ -235,9 +238,17 @@ exports.respondToMeetingRequest = async (req, res) => {
       payload: {
         item_id:meetingRequest,
         action,
+        fromName:meetingRequest.recipient.name,
         title: meetingRequest.title,
         scheduledAt: meetingRequest.scheduledAt,
-        rejectionReason
+        rejectionReason,
+          agenda:meetingRequest.agenda,
+          scheduledAt: new Date(meetingRequest.scheduledAt),
+          duration: parseInt(meetingRequest.duration),
+          timezone:meetingRequest.timezone,
+          mode:meetingRequest.mode,
+          location: meetingRequest.mode === "in_person" ? meetingRequest.location : null,
+          link: meetingRequest.mode === "video" ? meetingRequest.link : null,
       }
     });
 

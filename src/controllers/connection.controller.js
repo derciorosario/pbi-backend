@@ -8,6 +8,7 @@ const {
 } = require("../models");
 const { sendTemplatedEmail } = require("../utils/email");
 const { isEmailNotificationEnabled } = require("../utils/notificationSettings");
+const { cache } = require("../utils/redis");
 
 // normaliza par (userOneId < userTwoId) para conexão única
 function normalizePair(a, b) {
@@ -45,11 +46,15 @@ exports.removeConnection = async (req, res) => {
     });
 
     // Optional: notify the other user
-    await Notification.create({
+    /*await Notification.create({
       userId: otherUserId,
       type: "connection.removed",
       payload: { byUserId: userId, note }
-    }).catch(() => {});
+    }).catch(() => {});*/
+
+    await cache.deleteKeys([
+      ["people", req.user.id] 
+    ]);
 
     return res.json({ ok: true });
   } catch (err) {
@@ -107,7 +112,7 @@ exports.createRequest = async (req, res) => {
     await Notification.create({
       userId: toUserId,
       type: "connection.request",
-      payload: {item_id: reqRow.id,requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
+      payload: {item_id: reqRow.id,reason: reason || null,requestId: reqRow.id, fromUserId, fromName: fromUser?.name || "Someone" },
     });
     
     // Send email notification if enabled
@@ -239,15 +244,14 @@ exports.respond = async (req, res) => {
       const responder = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
       const requester = await User.findByPk(row.fromUserId, { attributes: ["id", "name", "email"] });
 
-      console.log('----accepted----')
       Notification.create({
         userId: row.fromUserId,
         type: "connection.accepted",
-        payload: { byUserId: userId, requestId: row.id, item_id:row.id},
+        payload: { byUserId: userId,reason:row.reason,fromName: responder?.name,requestId: row.id, item_id:row.id,toUserId:row.fromUserId},
       }).catch((e) => {
         console.log(e)
       });
-
+      
 
       (async () => {
         try {
@@ -284,7 +288,7 @@ exports.respond = async (req, res) => {
       Notification.create({
         userId: row.fromUserId,
         type: "connection.rejected",
-        payload: { byUserId: userId, requestId: row.id, item_id:row.item_id },
+        payload: { byUserId: userId,fromName: responder?.name,reason:row.reason, requestId: row.id, item_id:row.item_id, toUserId:userId},
       }).catch(() => {});
 
       (async () => {

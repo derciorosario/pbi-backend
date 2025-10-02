@@ -290,7 +290,7 @@ async function updatePersonal(req, res, next) {
     const userId = req.user.sub;
     const {
       name, phone, nationality, country, countryOfResidence, city,
-      birthDate, professionalTitle, about, avatarUrl,gender,otherCountries,webpage
+      birthDate, professionalTitle, about, avatarUrl,gender,otherCountries,webpage, address
     } = req.body;
 
 
@@ -310,6 +310,7 @@ async function updatePersonal(req, res, next) {
     if (avatarUrl !== undefined) user.avatarUrl = avatarUrl || null; // avatar principal do User
     user.otherCountries=otherCountries || []
     user.webpage=webpage || null
+    user.address=address || null
     await user.save();
 
     if (birthDate !== undefined) profile.birthDate = birthDate || null;
@@ -728,7 +729,14 @@ async function getJobApplicationsForCompany(req, res, next) {
         {
           model: User,
           as: "applicant",
-          attributes: ["id", "name", "email", "avatarUrl"],
+          attributes: ["id", "name", "email", "avatarUrl", "phone"],
+          include: [
+            {
+              model: Profile,
+              as: "profile",
+              attributes: ["professionalTitle"],
+            },
+          ],
         },
       ],
       order: [["createdAt", "DESC"]],
@@ -821,7 +829,14 @@ async function getEventRegistrationsForCompany(req, res, next) {
         {
           model: User,
           as: "registrant",
-          attributes: ["id", "name", "email", "avatarUrl"],
+          attributes: ["id", "name", "email", "avatarUrl", "phone"],
+          include: [
+            {
+              model: Profile,
+              as: "profile",
+              attributes: ["professionalTitle"],
+            },
+          ],
         },
       ],
       order: [["createdAt", "DESC"]],
