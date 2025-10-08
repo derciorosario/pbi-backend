@@ -35,6 +35,7 @@ const Need = require("./need")(sequelize, DataTypes);
 
 const UserBlock = require("./userBlock")(sequelize, DataTypes);
 const Report = require("./report")(sequelize, DataTypes);
+const Contact = require("./contact")(sequelize, DataTypes);
 
 // Portfolio models
 const WorkSample = require("./workSample")(sequelize, DataTypes);
@@ -76,11 +77,16 @@ Category.belongsToMany(User, { through: UserCategory, foreignKey: "categoryId", 
 User.belongsToMany(Subcategory, { through: UserSubcategory, foreignKey: "userId", otherKey: "subcategoryId", as: "subcategories" });
 Subcategory.belongsToMany(User, { through: UserSubcategory, foreignKey: "subcategoryId", otherKey: "userId", as: "users" });
 
-// User 1:N UserCategory (lista “interests” com cat/subcat resolvidos)
+// User 1:N UserCategory (lista "interests" com cat/subcat resolvidos)
 User.hasMany(UserCategory, { as: "interests", foreignKey: "userId" });
 UserCategory.belongsTo(User, { as: "user", foreignKey: "userId" });
 UserCategory.belongsTo(Category, { as: "category", foreignKey: "categoryId" });
 UserCategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
+
+// User 1:N UserSubcategory (for direct access to user's subcategories)
+User.hasMany(UserSubcategory, { as: "userSubcategories", foreignKey: "userId" });
+UserSubcategory.belongsTo(User, { as: "user", foreignKey: "userId" });
+UserSubcategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcategoryId" });
 
 
 // Job posting
@@ -214,6 +220,11 @@ SubsubCategory.belongsTo(Subcategory, { as: "subcategory", foreignKey: "subcateg
 // User ↔ SubsubCategory (M:N)
 User.belongsToMany(SubsubCategory, { through: UserSubsubCategory, as: "subsubcategories", foreignKey: "userId", otherKey: "subsubCategoryId" });
 SubsubCategory.belongsToMany(User, { through: UserSubsubCategory, as: "users", foreignKey: "subsubCategoryId", otherKey: "userId" });
+
+// UserSubsubCategory associations
+UserSubsubCategory.belongsTo(User, { foreignKey: "userId", as: "user" });
+UserSubsubCategory.belongsTo(SubsubCategory, { foreignKey: "subsubCategoryId", as: "subsubCategory" });
+User.hasMany(UserSubsubCategory, { foreignKey: "userId", as: "userSubsubCategories" });
 
 // Jobs / Events / Services (optional level-3 link)
 Job.belongsTo(SubsubCategory,   { as: "subsubCategory", foreignKey: "subsubCategoryId" });
@@ -1325,6 +1336,7 @@ module.exports = {
   UserSettings,
   Report,
   UserBlock,
+  Contact,
   // Portfolio models
   WorkSample,
 

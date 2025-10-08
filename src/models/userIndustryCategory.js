@@ -1,4 +1,4 @@
-// models/userIndustryCategory.js
+env// models/userIndustryCategory.js
 const { v4: uuidv4 } = require("uuid");
 
 module.exports = (sequelize, DataTypes) => {
@@ -26,8 +26,12 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
-  // Add the association to IndustryCategory
+  // Add the associations
   UserIndustryCategory.associate = (models) => {
+    UserIndustryCategory.belongsTo(models.User, {
+      foreignKey: 'userId',
+      as: 'user'
+    });
     UserIndustryCategory.belongsTo(models.IndustryCategory, {
       foreignKey: 'industryCategoryId',
       as: 'industryCategory'

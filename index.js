@@ -179,6 +179,9 @@ app.use("/api/company", require("./src/routes/company.routes"))
 // Organization join request routes
 app.use("/api/organization", require("./src/routes/organization.routes"))
 
+// Contact form routes
+app.use("/api/contact", require("./src/routes/contact.routes"))
+
 
 app.get('/api/download/:filename', (req, res) => {
   const fileName = req.params.filename;
@@ -314,6 +317,8 @@ const PORT = process.env.PORT || 5000;
 
 
 const { Message, Conversation, User, Connection, Profile, ConnectionRequest, MeetingRequest, Notification  } = require("./src/models");
+const { sendTemplatedEmail } = require("./src/utils/email");
+const { isEmailNotificationEnabled } = require("./src/utils/notificationSettings");
 
   
 
@@ -321,7 +326,7 @@ const { Message, Conversation, User, Connection, Profile, ConnectionRequest, Mee
 async function getHeaderBadgeCounts(userId) {
   const { Notification } = require("./src/models");
 
-  const [connectionsPending, meetingsPending] = await Promise.all([
+  const [connectionsPending, meetingsPending, messagesPending, jobApplicationsPending, eventRegistrationsPending, companyInvitationsPending] = await Promise.all([
     // Count unread connection notifications (connection.request)
     Notification.count({
       where: {
@@ -337,10 +342,45 @@ async function getHeaderBadgeCounts(userId) {
         type: { [Op.like]: 'meeting_%' },
         readAt: null
       }
+    }),
+    // Count unread message notifications (message.new)
+    Notification.count({
+      where: {
+        userId,
+        type: 'message.new',
+        readAt: null
+      }
+    }),
+    // Count unread job application notifications (job.application.*)
+    Notification.count({
+      where: {
+        userId,
+        type: { [Op.like]: 'job.application.%' },
+        readAt: null
+      }
+    }),
+    // Count unread event registration notifications (event.registration.*)
+    Notification.count({
+      where: {
+        userId,
+        type: { [Op.like]: 'event.registration.%' },
+        readAt: null
+      }
+    }),
+    // Count unread company and organization notifications (company.*, organization.*)
+    Notification.count({
+      where: {
+        userId,
+        type: { [Op.or]: [
+          { [Op.like]: 'company.%' },
+          { [Op.like]: 'organization.%' }
+        ]},
+        readAt: null
+      }
     })
   ]);
 
-  return { connectionsPending, meetingsPending };
+  return { connectionsPending, meetingsPending, messagesPending, jobApplicationsPending, eventRegistrationsPending, companyInvitationsPending };
 }
 
 // push counts to this socket (or all user sockets if you prefer)
@@ -930,6 +970,8 @@ async function pushHeaderCounts(socketOrUserId) {
             conversationId: conversation.id,
           });
 
+          console.log('-1')
+
           const msgPayload = {
             id: message.id,
             content: message.content,
@@ -947,6 +989,51 @@ async function pushHeaderCounts(socketOrUserId) {
 
           // broadcast for simplicity (client filters)
           io.emit("private_message", { message: msgPayload });
+
+          // Send email notification to receiver if enabled
+          try {
+            const receiver = await User.findByPk(receiverId, { attributes: ["id", "name", "email"] });
+            const isEnabled = await isEmailNotificationEnabled(receiverId, 'messages');
+
+            if (isEnabled && receiver) {
+              const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
+              const messagesLink = `${baseUrl}/messages?userId=${socket.userId}`;
+
+              await sendTemplatedEmail({
+                to: receiver.email,
+                subject: `New Message from ${socket.user?.name || "Someone"}`,
+                template: "new-message",
+                context: {
+                  name: receiver.name,
+                  senderName: socket.user?.name || "Someone",
+                  message: content,
+                  messagesLink
+                }
+              });
+            }
+          } catch (emailErr) {
+            console.error("Failed to send message notification email:", emailErr);
+            // Continue even if email fails
+          }
+
+          // Create in-app notification for receiver
+          try {
+            await Notification.create({
+              userId: receiverId,
+              type: "message.new",
+              payload: {
+                senderId: socket.userId,
+                senderName: socket.user?.name || "Someone",
+                conversationId: conversation.id,
+                messageId: message.id,
+                content: content,
+                item_id: message.id
+              }
+            });
+          } catch (notifErr) {
+            console.error("Failed to create message notification:", notifErr);
+            // Continue even if notification creation fails
+          }
 
           reply(socket, ack, "private_message_result", { ok: true, data: { message: msgPayload } });
 
@@ -1012,7 +1099,20 @@ async function pushHeaderCounts(socketOrUserId) {
                 const whereClause = { userId };
                 if (type && type !== "all") {
                   console.log({type})
-                  whereClause.type = { [Op.like]: `${type}%` };
+                  if (type === "invitation") {
+                    // Special case: invitation combines company and organization notifications
+                    whereClause.type = {
+                      [Op.or]: [
+                        { [Op.like]: 'company.%' },
+                        { [Op.like]: 'organization.%' }
+                      ]
+                    };
+                  } else if (type === "message") {
+                    // Special case: message notifications are exactly "message.new"
+                    whereClause.type = 'message.new';
+                  } else {
+                    whereClause.type = { [Op.like]: `${type}%` };
+                  }
                 }
 
                 const { count, rows: notifications } = await Notification.findAndCountAll({

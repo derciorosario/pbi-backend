@@ -40,55 +40,134 @@ async function normalizeIdentityIds(idsOrNames) {
 }
 
 async function validateAudienceHierarchy({ categoryIds, subcategoryIds, subsubCategoryIds }) {
-  if (subcategoryIds.length && categoryIds.length) {
-    const subcats = await Subcategory.findAll({
-      where: { id: { [Op.in]: subcategoryIds } },
-      attributes: ["id", "categoryId"],
-      raw: true,
-    });
-    const allowed = new Set(categoryIds.map(String));
-    const bad = subcats.filter(sc => !allowed.has(String(sc.categoryId)));
-    if (bad.length) {
-      throw new Error("Some subcategories do not belong to the selected categories.");
-    }
-  }
+  try {
+    // Convert to arrays if they're Sets - with safety checks
+    const cats = Array.isArray(categoryIds) ? categoryIds : (categoryIds ? Array.from(categoryIds).slice(0, 1000) : []);
+    const subs = Array.isArray(subcategoryIds) ? subcategoryIds : (subcategoryIds ? Array.from(subcategoryIds).slice(0, 1000) : []);
+    const subsubs = Array.isArray(subsubCategoryIds) ? subsubCategoryIds : (subsubCategoryIds ? Array.from(subsubCategoryIds).slice(0, 1000) : []);
 
-  if (subsubCategoryIds.length) {
-    const subsubs = await SubsubCategory.findAll({
-      where: { id: { [Op.in]: subsubCategoryIds } },
-      attributes: ["id", "subcategoryId"],
-      raw: true,
-    });
-    // Only validate against provided subcats if we have them
-    if (subcategoryIds.length) {
-      const allowedSubs = new Set(subcategoryIds.map(String));
-      const bad = subsubs.filter(s => !allowedSubs.has(String(s.subcategoryId)));
-      if (bad.length) {
-        throw new Error("Some sub-subcategories do not belong to the selected subcategories.");
-      }
-    }
-  }
+    console.log('Validating event hierarchy:', { cats: cats.length, subs: subs.length, subsubs: subsubs.length });
 
-  if (categoryIds.length) {
-    const n = await Category.count({ where: { id: { [Op.in]: categoryIds } } });
-    if (n !== categoryIds.length) throw new Error("Some categories do not exist.");
-  }
-  if (subcategoryIds.length) {
-    const n = await Subcategory.count({ where: { id: { [Op.in]: subcategoryIds } } });
-    if (n !== subcategoryIds.length) throw new Error("Some subcategories do not exist.");
-  }
-  if (subsubCategoryIds.length) {
-    const n = await SubsubCategory.count({ where: { id: { [Op.in]: subsubCategoryIds } } });
-    if (n !== subsubCategoryIds.length) throw new Error("Some sub-subcategories do not exist.");
+    // Limit the number of items to prevent memory issues
+    if (cats.length > 100 || subs.length > 500 || subsubs.length > 1000) {
+      console.warn('Large number of event audience items detected, limiting validation');
+      return {
+        categoryIds: cats.slice(0, 100),
+        subcategoryIds: subs.slice(0, 500),
+        subsubCategoryIds: subsubs.slice(0, 1000)
+      };
+    }
+
+    // Build valid subcategory and subsubcategory sets based on selected categories
+    let validSubs = new Set(subs.map(String));
+    let validSubsubs = new Set(subsubs.map(String));
+
+    if (subs.length && cats.length) {
+      console.log('Validating event subcategories against categories...');
+      const subcats = await Subcategory.findAll({
+        where: { id: { [Op.in]: subs.slice(0, 500) } }, // Limit query size
+        attributes: ["id", "categoryId"],
+        raw: true,
+      });
+      const allowed = new Set(cats.map(String));
+
+      // Filter to only valid subcategories
+      const validSubcats = subcats.filter(sc => allowed.has(String(sc.categoryId)));
+      validSubs = new Set(validSubcats.map(sc => sc.id).map(String));
+
+      console.log('Found event subcategories:', subcats.length, 'Valid:', validSubcats.length);
+    }
+
+    if (subsubs.length && validSubs.size > 0) {
+      console.log('Validating event subsubcategories against subcategories...');
+      const subsubcats = await SubsubCategory.findAll({
+        where: { id: { [Op.in]: subsubs.slice(0, 1000) } }, // Limit query size
+        attributes: ["id", "subcategoryId"],
+        raw: true,
+      });
+
+      // Filter to only valid subsubcategories
+      const validSubsubcats = subsubcats.filter(s => validSubs.has(String(s.subcategoryId)));
+      validSubsubs = new Set(validSubsubcats.map(s => s.id).map(String));
+
+      console.log('Found event subsubcategories:', subsubcats.length, 'Valid:', validSubsubcats.length);
+    }
+
+    // Validate existence of valid items only - with limits
+    if (cats.length) {
+      const n = await Category.count({ where: { id: { [Op.in]: cats.slice(0, 100) } } });
+      if (n !== cats.length && cats.length <= 100) throw new Error("Some categories do not exist.");
+    }
+    if (validSubs.size > 0) {
+      const subsArray = Array.from(validSubs).slice(0, 500);
+      const n = await Subcategory.count({ where: { id: { [Op.in]: subsArray } } });
+      if (n !== subsArray.length) throw new Error("Some subcategories do not exist.");
+    }
+    if (validSubsubs.size > 0) {
+      const subsubsArray = Array.from(validSubsubs).slice(0, 1000);
+      const n = await SubsubCategory.count({ where: { id: { [Op.in]: subsubsArray } } });
+      if (n !== subsubsArray.length) throw new Error("Some sub-subcategories do not exist.");
+    }
+
+    console.log('Event hierarchy validation passed. Valid items:', {
+      categories: cats.length,
+      subcategories: validSubs.size,
+      subsubcategories: validSubsubs.size
+    });
+
+    // Return the validated/filtered arrays
+    return {
+      categoryIds: cats,
+      subcategoryIds: Array.from(validSubs),
+      subsubCategoryIds: Array.from(validSubsubs)
+    };
+  } catch (error) {
+    console.error('Error in event validateAudienceHierarchy:', error);
+    // Return safe defaults on error
+    return {
+      categoryIds: [],
+      subcategoryIds: [],
+      subsubCategoryIds: []
+    };
   }
 }
 
 async function setEventAudience(event, { identityIds, categoryIds, subcategoryIds, subsubCategoryIds }) {
-  console.log({ identityIds, categoryIds, subcategoryIds, subsubCategoryIds });
-  if (identityIds)        await event.setAudienceIdentities(identityIds);
-  if (categoryIds)        await event.setAudienceCategories(categoryIds);
-  if (subcategoryIds)     await event.setAudienceSubcategories(subcategoryIds);
-  if (subsubCategoryIds)  await event.setAudienceSubsubs(subsubCategoryIds);
+  console.log('Original event audience data:', { identityIds, categoryIds, subcategoryIds, subsubCategoryIds });
+
+  // Validate and fix hierarchy
+  const validated = await validateAudienceHierarchy({ categoryIds, subcategoryIds, subsubCategoryIds });
+
+  console.log('Validated event audience data:', validated);
+
+  // Properly clear existing associations and set new ones
+  if (identityIds !== undefined) {
+    await event.setAudienceIdentities([]); // Clear first
+    if (identityIds && identityIds.length > 0) {
+      await event.setAudienceIdentities(identityIds);
+    }
+  }
+
+  if (categoryIds !== undefined) {
+    await event.setAudienceCategories([]); // Clear first
+    if (validated.categoryIds && validated.categoryIds.length > 0) {
+      await event.setAudienceCategories(validated.categoryIds);
+    }
+  }
+
+  if (subcategoryIds !== undefined) {
+    await event.setAudienceSubcategories([]); // Clear first
+    if (validated.subcategoryIds && validated.subcategoryIds.length > 0) {
+      await event.setAudienceSubcategories(validated.subcategoryIds);
+    }
+  }
+
+  if (subsubCategoryIds !== undefined) {
+    await event.setAudienceSubsubs([]); // Clear first
+    if (validated.subsubCategoryIds && validated.subsubCategoryIds.length > 0) {
+      await event.setAudienceSubsubs(validated.subsubCategoryIds);
+    }
+  }
 }
 
 module.exports = {

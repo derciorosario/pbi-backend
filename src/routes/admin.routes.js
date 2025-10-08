@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { resetAndRestart } = require("../utils/restart");
 const adminController = require("../controllers/admin.controller");
 const dashboardController = require("../controllers/dashboard.controller");
+
 const auth = require("../middleware/auth");
 
 // Admin middleware to check if user is admin
@@ -34,9 +35,16 @@ router.put("/admin/users/:id", auth(), isAdmin, adminController.updateUser);
 router.delete("/admin/users/:id", auth(), isAdmin, adminController.deleteUser);
 router.put("/admin/users/:id/suspension", auth(), isAdmin, adminController.toggleUserSuspension);
 
-// Dashboard routes
 router.get("/admin/dashboard/stats", auth(), isAdmin, dashboardController.getDashboardStats);
 router.get("/admin/dashboard/growth", auth(), isAdmin, dashboardController.getUserGrowthData);
 router.get("/admin/dashboard/activity", auth(), isAdmin, dashboardController.getRecentActivity);
+
+// Contact management routes
+
+router.get("/admin/contacts", auth(), isAdmin, adminController.getAllContacts);
+router.get("/admin/contacts/export", auth(), isAdmin, adminController.exportContacts);
+router.get("/admin/contacts/:id", auth(), isAdmin, adminController.getContactById);
+router.patch("/admin/contacts/:id/status", auth(), isAdmin, adminController.updateContactStatus);
+router.delete("/admin/contacts/:id", auth(), isAdmin, adminController.deleteContact);
 
 module.exports = router;

@@ -209,7 +209,7 @@ exports.update = async (req, res) => {
       price: body.price !== undefined ? (body.price ? Number(body.price) : null) : product.price,
       quantity: body.quantity !== undefined ? (body.quantity ? Number(body.quantity) : null) : product.quantity,
       description: body.description ?? product.description,
-      country: body.country ?? product.country,
+      country: body.country || null,
       tags,
       images,
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,

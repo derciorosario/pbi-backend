@@ -247,8 +247,8 @@ exports.update = async (req, res) => {
     Object.assign(funding, {
       title: body.title ?? funding.title,
       categoryId: body.categoryId === '' ? null : (body.categoryId ?? funding.categoryId),
-      country: body.country ?? funding.country,
-      city: body.city ?? funding.city,
+      country: body.country || null,
+      city: body.city || null,
       goal: body.goal !== undefined ? Number(body.goal) : funding.goal,
       raised: body.raised !== undefined ? Number(body.raised) : funding.raised,
       currency: body.currency ?? funding.currency,

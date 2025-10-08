@@ -26,6 +26,7 @@ exports.createApplication = async (req, res) => {
     }
 
     const application = await JobApplication.create({
+
       userId: req.user.id,
       jobId,
       coverLetter,
@@ -33,7 +34,8 @@ exports.createApplication = async (req, res) => {
       availability: availability || null,
       availabilityDate: availability === 'specific' ? availabilityDate : null,
       employmentType: employmentType || null,
-      cvBase64: cvData || null,
+      cvBase64: cvData || null
+
     });
 
     // Get job poster and applicant details for notifications and emails
@@ -41,10 +43,11 @@ exports.createApplication = async (req, res) => {
     const applicant = await User.findByPk(req.user.id, { attributes: ["id", "name", "email"] });
 
     // Create notification for job poster
-    /*await Notification.create({
+    await Notification.create({
       userId: job.postedByUserId,
       type: "job.application.received",
       payload: {
+        fromName:applicant?.name || "Someone",
         item_id: application.id,
         applicationId: application.id,
         applicantId: req.user.id,
@@ -52,7 +55,7 @@ exports.createApplication = async (req, res) => {
         jobId: job.id,
         jobTitle: job.title
       },
-    });*/
+    });
 
     // Send email notification if enabled
     try {
@@ -170,11 +173,13 @@ exports.updateApplicationStatus = async (req, res) => {
 
     // Send notifications and emails if status changed
     if (oldStatus !== status) {
+
       const applicant = await User.findByPk(application.userId, { attributes: ["id", "name", "email"] });
       const jobPoster = await User.findByPk(req.user.id, { attributes: ["id", "name", "email"] });
 
       // Create notification for applicant
-      /*await Notification.create({
+      await Notification.create({
+
         userId: application.userId,
         type: `job.application.${status}`,
         payload: {
@@ -185,10 +190,10 @@ exports.updateApplicationStatus = async (req, res) => {
           status: status,
           updatedBy: req.user.id
         },
-      });*/
+      });
 
       // Send email notification if enabled
-      /**try {
+      try {
         const isEnabled = await isEmailNotificationEnabled(application.userId, 'jobApplicationUpdates');
 
          if (isEnabled) {
@@ -212,7 +217,7 @@ exports.updateApplicationStatus = async (req, res) => {
         console.error("Failed to send job application update email:", emailErr);
         // Continue even if email fails
       }
-      **/
+      
     }
 
     res.json({ application });

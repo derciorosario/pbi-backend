@@ -14,5 +14,18 @@ module.exports = (sequelize, DataTypes) => {
       indexes: [{ fields: ["userId", "industrySubcategoryId"], unique: true }],
     }
   );
+
+  // Add the associations
+  UserIndustrySubcategory.associate = (models) => {
+    UserIndustrySubcategory.belongsTo(models.User, {
+      foreignKey: 'userId',
+      as: 'user'
+    });
+    UserIndustrySubcategory.belongsTo(models.IndustrySubcategory, {
+      foreignKey: 'industrySubcategoryId',
+      as: 'industrySubcategory'
+    });
+  };
+
   return UserIndustrySubcategory;
 };

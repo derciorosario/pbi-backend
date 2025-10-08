@@ -18,7 +18,6 @@ const {
   SubsubCategory,
   UserBlock,
   CompanyStaff,
-  IndustryCategory,
 } = require("../models");
 const { cache } = require("../utils/redis");
 
@@ -30,43 +29,29 @@ function ensureArray(val) {
   return [val];
 }
 
-function calculateBidirectionalMatch(aToB, bToA) {
-   const average = (aToB + bToA) / 2;
-   return average;
- }
-
-function calculateReciprocalWeightedMatch(aToB, bToA, weightSelf = 0.7) {
-   const weightOther = 1 - weightSelf;
-
-   // User A's perceived match score
-   const userAPerceived = (aToB * weightSelf) + (bToA * weightOther);
-
-   return userAPerceived;
- }
-
 const PEOPLE_CACHE_TTL = 300;
 
-function generatePeopleCacheKey(req, bidirectionalMatch = true, bidirectionalMatchFormula = "reciprocal") {
-   const {
-     q,
-     country,
-     accountType,
-     city,
-     categoryId,
-     cats,
-     subcategoryId,
-     goalId,
-     experienceLevel,
-     connectionStatus,
-     identityIds,
-     audienceCategoryIds,
-     audienceSubcategoryIds,
-     audienceSubsubCategoryIds,
-     viewOnlyConnections,
-     industryIds,
-     limit = 20,
-     offset = 0,
-   } = req.query;
+function generatePeopleCacheKey(req) {
+  const {
+    q,
+    country,
+    accountType,
+    city,
+    categoryId,
+    cats,
+    subcategoryId,
+    goalId,
+    experienceLevel,
+    connectionStatus,
+    identityIds,
+    audienceCategoryIds,
+    audienceSubcategoryIds,
+    audienceSubsubCategoryIds,
+    viewOnlyConnections,
+    industryIds,
+    limit = 20,
+    offset = 0,
+  } = req.query;
 
   const currentUserId = req.user?.id || 'anonymous';
 
@@ -82,8 +67,6 @@ function generatePeopleCacheKey(req, bidirectionalMatch = true, bidirectionalMat
     experienceLevel,
     connectionStatus,
     viewOnlyConnections,
-    bidirectionalMatch,
-    bidirectionalMatchFormula,
     identityIds: ensureArray(identityIds),
     audienceCategoryIds: ensureArray(audienceCategoryIds),
     audienceSubcategoryIds: ensureArray(audienceSubcategoryIds),
@@ -104,36 +87,34 @@ function generatePeopleCacheKey(req, bidirectionalMatch = true, bidirectionalMat
 }
 
 exports.searchPeople = async (req, res) => {
-   try {
-     const {
-       q,
-       country,
-       accountType,
-       city,
-       categoryId,
-       cats,
-       subcategoryId,
-       goalId,
-       experienceLevel,
-       connectionStatus,
-       identityIds,
-       audienceCategoryIds,
-       audienceSubcategoryIds,
-       audienceSubsubCategoryIds,
-       viewOnlyConnections,
-       industryIds,
-       bidirectionalMatch = true,
-       bidirectionalMatchFormula = "reciprocal", //simple
-       limit = 20,
-       offset = 0,
-     } = req.query;
+  try {
+    const {
+      q,
+      country,
+      accountType,
+      city,
+      categoryId,
+      cats,
+      subcategoryId,
+      goalId,
+      experienceLevel,
+      connectionStatus,
+      identityIds,
+      audienceCategoryIds,
+      audienceSubcategoryIds,
+      audienceSubsubCategoryIds,
+      viewOnlyConnections,
+      industryIds,
+      limit = 20,
+      offset = 0,
+    } = req.query;
 
     const lim = Number.isFinite(+limit) ? +limit : 20;
     const off = Number.isFinite(+offset) ? +offset : 0;
     const currentUserId = req.user?.id || null;
 
     // People cache: try read first
-    let __peopleCacheKey = generatePeopleCacheKey(req, bidirectionalMatch === 'true' || bidirectionalMatch === true, bidirectionalMatchFormula);
+    let __peopleCacheKey = generatePeopleCacheKey(req);
     try {
       const cached = await cache.get(__peopleCacheKey);
       if (cached) {
@@ -562,16 +543,16 @@ exports.searchPeople = async (req, res) => {
             }]),
         ...(effIndustryIds.length
           ? [{
-              model: IndustryCategory,
+              model: require("../models").UserIndustryCategory,
               as: "industryCategories",
               required: true,
-              where: { id: { [Op.in]: effIndustryIds } },
-              through: { attributes: [] },
+              where: { industryCategoryId: { [Op.in]: effIndustryIds } },
+              include: [{ model: require("../models").IndustryCategory, as: "industryCategory" }],
             }]
           : []),
         // Always include identities for match calculation
         {
-          model: Identity,
+          model: require("../models").Identity,
           as: "identities",
           required: false,
           through: { attributes: [] },
@@ -607,7 +588,7 @@ exports.searchPeople = async (req, res) => {
 
 
     // =============== Match % ===============
-    const calculateMatchPercentage = (u, useBidirectionalMatch = true) => {
+    const calculateMatchPercentage = (u) => {
       if (!currentUserId) {
         // When no current user, calculate based on applied filters (only taxonomy-based matching)
         const WEIGHTS = { identity: 25, category: 25, subcategory: 25, subsubcategory: 25 };
@@ -693,25 +674,11 @@ exports.searchPeople = async (req, res) => {
         subsubcategory: [...targetUserSubsubcategories]
       });
 
-      // Additional logging for what current user does and what target user wants
-      console.log('Current user does (what they offer):', {
-        identity: myIdentities.map(i => i.id),
-        category: myCategoryIds,
-        subcategory: mySubcategoryIds,
-        subsubcategory: mySubsubCategoryIds
-      });
-      console.log('Target user wants (what they are interested in):', {
-        identity: (u.identityInterests || []).map(i => i.identityId),
-        category: (u.categoryInterests || []).map(i => i.categoryId),
-        subcategory: (u.subcategoryInterests || []).map(i => i.subcategoryId),
-        subsubcategory: (u.subsubInterests || []).map(i => i.subsubCategoryId)
-      });
-
       // Direction 1: Current user wants -> Target user does (UNIDIRECTIONAL)
-      // 1. Identity matching - 100% if at least one match found
+      // 1. Identity matching
       if (currentUserIdentityInterests.size > 0) {
         const targetUserMatches = new Set([...currentUserIdentityInterests].filter(x => targetUserIdentities.has(x)));
-        matches.identity = targetUserMatches.size > 0 ? 1 : 0;
+        matches.identity = targetUserMatches.size / currentUserIdentityInterests.size;
         console.log(`Identity match: ${targetUserMatches.size}/${currentUserIdentityInterests.size} = ${Math.round(matches.identity * 100)}%`);
       }
 
@@ -770,120 +737,11 @@ exports.searchPeople = async (req, res) => {
       if (totalPossibleScore === 0) return 0;
       const finalPercentage = Math.max(0, Math.min(100, Math.round((totalScore / totalPossibleScore) * 100)));
       console.log(`Final percentage: ${finalPercentage}%`);
-
-      // If bidirectional matching is enabled, calculate and return average of both directions
-      if (useBidirectionalMatch) {
-        // Calculate reverse percentage - what target user would get if searching for current user
-        const reverseMatches = {
-          identity: 0,
-          category: 0,
-          subcategory: 0,
-          subsubcategory: 0
-        };
-
-        // Get target user's "looking for" (interests) - what they want from others
-        const targetUserIdentityInterests = new Set((u.identityInterests || []).map(i => String(i.identityId)));
-        const targetUserCategoryInterests = new Set((u.categoryInterests || []).map(i => String(i.categoryId)));
-        const targetUserSubcategoryInterests = new Set((u.subcategoryInterests || []).map(i => String(i.subcategoryId)));
-        const targetUserSubsubCategoryInterests = new Set((u.subsubInterests || []).map(i => String(i.subsubCategoryId)));
-
-        // Get current user's "does" (what they offer) - what they can provide
-        const currentUserIdentities = new Set(myIdentities.map(i => String(i.id)));
-        const currentUserCategories = new Set(myCategoryIds);
-        const currentUserSubcategories = new Set(mySubcategoryIds);
-        const currentUserSubsubcategories = new Set(mySubsubCategoryIds);
-
-        console.log('=== REVERSE MATCH CALCULATION DEBUG ===');
-        console.log('Target user interests (what they want):', {
-          identity: [...targetUserIdentityInterests],
-          category: [...targetUserCategoryInterests],
-          subcategory: [...targetUserSubcategoryInterests],
-          subsubcategory: [...targetUserSubsubCategoryInterests]
-        });
-        console.log('Current user does (what they offer):', {
-          identity: [...currentUserIdentities],
-          category: [...currentUserCategories],
-          subcategory: [...currentUserSubcategories],
-          subsubcategory: [...currentUserSubsubcategories]
-        });
-
-        // Direction 2: Target user wants -> Current user does (REVERSE DIRECTION)
-        // 1. Identity matching - 100% if at least one match found
-        if (targetUserIdentityInterests.size > 0) {
-          const currentUserMatches = new Set([...targetUserIdentityInterests].filter(x => currentUserIdentities.has(x)));
-          reverseMatches.identity = currentUserMatches.size > 0 ? 1 : 0;
-          console.log(`Reverse identity match: ${currentUserMatches.size}/${targetUserIdentityInterests.size} = ${Math.round(reverseMatches.identity * 100)}%`);
-        }
-
-        // 2. Category matching
-        if (targetUserCategoryInterests.size > 0) {
-          const currentUserMatches = new Set([...targetUserCategoryInterests].filter(x => currentUserCategories.has(x)));
-          reverseMatches.category = currentUserMatches.size / targetUserCategoryInterests.size;
-          console.log(`Reverse category match: ${currentUserMatches.size}/${targetUserCategoryInterests.size} = ${Math.round(reverseMatches.category * 100)}%`);
-        }
-
-        // 3. Subcategory matching - exact matching only
-        if (targetUserSubcategoryInterests.size > 0) {
-          const currentUserMatches = new Set([...targetUserSubcategoryInterests].filter(x => currentUserSubcategories.has(x)));
-          reverseMatches.subcategory = currentUserMatches.size / targetUserSubcategoryInterests.size;
-          console.log(`Reverse subcategory match: ${currentUserMatches.size}/${targetUserSubcategoryInterests.size} = ${Math.round(reverseMatches.subcategory * 100)}%`);
-        }
-
-        // 4. Subsubcategory matching
-        if (targetUserSubsubCategoryInterests.size > 0) {
-          const currentUserMatches = new Set([...targetUserSubsubCategoryInterests].filter(x => currentUserSubsubcategories.has(x)));
-          reverseMatches.subsubcategory = currentUserMatches.size / targetUserSubsubCategoryInterests.size;
-          console.log(`Reverse subsubcategory match: ${currentUserMatches.size}/${targetUserSubsubCategoryInterests.size} = ${Math.round(reverseMatches.subsubcategory * 100)}%`);
-        }
-
-        // Calculate reverse percentage based ONLY on what the target user is looking for
-        let reverseTotalScore = 0;
-        let reverseTotalPossibleScore = 0;
-
-        console.log('=== REVERSE FINAL CALCULATION DEBUG ===');
-        console.log('Reverse matches:', reverseMatches);
-
-        // Only include levels that the TARGET USER has specified interests in
-        Object.keys(reverseMatches).forEach(level => {
-          const targetUserHasInterest = (
-            (level === 'identity' && targetUserIdentityInterests.size > 0) ||
-            (level === 'category' && targetUserCategoryInterests.size > 0) ||
-            (level === 'subcategory' && targetUserSubcategoryInterests.size > 0) ||
-            (level === 'subsubcategory' && targetUserSubsubCategoryInterests.size > 0)
-          );
-
-          if (targetUserHasInterest) {
-            reverseTotalScore += WEIGHTS[level] * reverseMatches[level];
-            reverseTotalPossibleScore += WEIGHTS[level];
-            console.log(`Reverse ${level}: ${Math.round(WEIGHTS[level] * reverseMatches[level])}/${WEIGHTS[level]} (${Math.round(reverseMatches[level] * 100)}%)`);
-          }
-        });
-
-        console.log(`Reverse total score: ${Math.round(reverseTotalScore)}/${reverseTotalPossibleScore}`);
-
-        if (reverseTotalPossibleScore === 0) {
-          console.log('Reverse percentage: 0% (target user has no interests specified)');
-          const reversePercentage = 0;
-          const bidirectionalPercentage = (bidirectionalMatchFormula === "simple")
-            ? calculateBidirectionalMatch(finalPercentage, reversePercentage)
-            : calculateReciprocalWeightedMatch(finalPercentage, reversePercentage);
-          console.log(`Bidirectional percentage (${bidirectionalMatchFormula} of ${finalPercentage}% and ${reversePercentage}%): ${Math.round(bidirectionalPercentage)}%`);
-          return Math.round(bidirectionalPercentage);
-        } else {
-           const reversePercentage = Math.max(0, Math.min(100, Math.round((reverseTotalScore / reverseTotalPossibleScore) * 100)));
-           const bidirectionalPercentage = (bidirectionalMatchFormula === "simple")
-             ? calculateBidirectionalMatch(finalPercentage, reversePercentage)
-             : calculateReciprocalWeightedMatch(finalPercentage, reversePercentage);
-           console.log(`Bidirectional percentage (${bidirectionalMatchFormula} of ${finalPercentage}% and ${reversePercentage}%): ${Math.round(bidirectionalPercentage)}%`);
-           return Math.round(bidirectionalPercentage);
-         }
-      }
-
       return finalPercentage;
     };
 
       let items = rows.map((u) => {
-      const matchPercentage = calculateMatchPercentage(u, bidirectionalMatch === 'true' || bidirectionalMatch === true);
+      const matchPercentage = calculateMatchPercentage(u);
       let cStatus = "none";
       if (currentUserId) {
         const uid = String(u.id);

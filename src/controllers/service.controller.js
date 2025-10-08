@@ -243,8 +243,6 @@ exports.update = async (req, res) => {
         : [];
     }
 
-
-    console.log({a:body.country})
     // Simple update
     Object.assign(service, {
       title: body.title ?? service.title,
@@ -254,8 +252,8 @@ exports.update = async (req, res) => {
       priceType: body.priceType ?? service.priceType,
       deliveryTime: body.deliveryTime ?? service.deliveryTime,
       locationType: body.locationType ?? service.locationType,
-      country:  body.country ?? service.country,
-      city:  body.city ?? service.city,
+      country:  body.country || null,
+      city:  body.city || null,
       experienceLevel: body.experienceLevel ?? service.experienceLevel,
       categoryId: body.categoryId === '' ? null : (body.categoryId ?? service.categoryId),
       subcategoryId: body.subcategoryId === '' ? null : (body.subcategoryId ?? service.subcategoryId),

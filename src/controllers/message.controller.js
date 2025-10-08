@@ -305,6 +305,7 @@ async function sendMessage(req, res, next) {
       conversationId: conversation.id,
       attachments
     });
+    console.log('2')
 
     // Include sender info in response
     const messageWithSender = await Message.findByPk(message.id, {

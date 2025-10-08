@@ -74,10 +74,11 @@ exports.createRegistration = async (req, res) => {
         const organizer = await User.findByPk(organizerId, { attributes: ["id", "name", "email"] });
         const registrant = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
 
-       /* await Notification.create({
+        await Notification.create({
           userId: organizerId,
           type: "event.registration.received",
           payload: {
+            fromName: registrant?.name || "Someone",
             item_id: registration.id,
             registrationId: registration.id,
             registrantId: userId,
@@ -86,9 +87,10 @@ exports.createRegistration = async (req, res) => {
             eventTitle: event.title,
             numberOfPeople
           },
-        }).catch(() => {});*/
+        }).catch(() => {});
 
         // Send email to organizer if enabled
+        
         try {
           const isEnabled = true// await isEmailNotificationEnabled(organizerId, "eventRegistrations");
           if (isEnabled && organizer?.email) {
@@ -240,7 +242,7 @@ exports.updateRegistrationStatus = async (req, res) => {
       const registrant = await User.findByPk(registration.userId, { attributes: ["id", "name", "email"] });
       const organizer = await User.findByPk(userId, { attributes: ["id", "name", "email"] });
 
-      /*await Notification.create({
+      await Notification.create({
         userId: registration.userId,
         type: `event.registration.${status}`,
         payload: {
@@ -251,11 +253,11 @@ exports.updateRegistrationStatus = async (req, res) => {
           status,
           updatedBy: userId
         },
-      }).catch(() => {});*/
+      }).catch(() => {});
 
       // Send email to registrant if enabled
-      /*try {
-        const isEnabled = await isEmailNotificationEnabled(registration.userId, "eventRegistrationUpdates");
+      try {
+        const isEnabled = true// await isEmailNotificationEnabled(registration.userId, "eventRegistrationUpdates");
         if (isEnabled && registrant?.email) {
           const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
           const link = `${baseUrl}/my-event-registrations`;
@@ -274,7 +276,7 @@ exports.updateRegistrationStatus = async (req, res) => {
         }
       } catch (emailErr) {
         console.error("Failed to send event registration update email:", emailErr);
-      }*/
+      }
 
     } catch (notifErr) {
       console.error("Failed to create event registration status notification:", notifErr);

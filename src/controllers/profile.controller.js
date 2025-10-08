@@ -43,6 +43,10 @@ const {
 const IndustrySubcategory = require("../models/IndustrySubcategory");
 const IndustrySubsubCategory = require("../models/IndustrySubsubCategory");
 
+
+const { cache } = require("../utils/redis");
+
+
 const { computeProfileProgress } = require("../utils/profileProgress");
 
 /**
@@ -415,6 +419,14 @@ async function updateDoSelections(req, res, next) {
     if (payload.subsubCategoryIds.length)
       await UserSubsubCategory.bulkCreate(payload.subsubCategoryIds.map(subsubCategoryId => ({ userId, subsubCategoryId })), { transaction: t });
 
+
+    await cache.deleteKeys([
+      ["feed",req.user.id] 
+    ]);
+     await cache.deleteKeys([
+      ["people",req.user.id] 
+    ]);
+
     await t.commit();
     return getMe(req, res, next);
   } catch (e) {
@@ -461,6 +473,15 @@ async function updateInterestSelections(req, res, next) {
     if (payload.subsubCategoryIds.length)
       await UserSubsubCategoryInterest.bulkCreate(payload.subsubCategoryIds.map(subsubCategoryId => ({ userId, subsubCategoryId })), { transaction: t });
 
+
+    await cache.deleteKeys([
+      ["feed",req.user.id] 
+    ]);
+     await cache.deleteKeys([
+      ["people",req.user.id] 
+    ]);
+
+    
     await t.commit();
     return getMe(req, res, next);
   } catch (e) {

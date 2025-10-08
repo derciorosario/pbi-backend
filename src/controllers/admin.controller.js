@@ -6,6 +6,7 @@ const {
   UserIdentity, UserCategory, UserSubcategory, UserSubsubCategory,
   UserIdentityInterest, UserCategoryInterest, UserSubcategoryInterest, UserSubsubCategoryInterest,
   Goal, UserGoal,
+  Contact,
 } = require("../models");
 const { computeProfileProgress } = require("../utils/profileProgress");
 
@@ -582,3 +583,192 @@ exports.exportUsers = async (req, res) => {
     res.status(500).json({ message: "Failed to export users" });
   }
 };
+
+
+
+
+
+
+
+
+
+
+exports.getAllContacts= async (req, res, next)=> {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      contactReason,
+      search,
+      sortBy = "createdAt",
+      sortOrder = "DESC"
+    } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const whereClause = {};
+
+    // Apply filters
+    if (status) {
+      whereClause.status = status;
+    }
+
+    if (contactReason) {
+      whereClause.contactReason = contactReason;
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { fullName: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { companyName: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows: contacts } = await Contact.findAndCountAll({
+      where: whereClause,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [[sortBy, sortOrder.toUpperCase()]],
+      attributes: [
+        'id', 'fullName', 'email', 'phone', 'contactReason',
+        'companyName', 'website', 'status', 'createdAt', 'respondedAt', 'notes'
+      ]
+    });
+
+    res.json({
+      contacts,
+      total: count,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(count / parseInt(limit))
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Get contact by ID
+exports.getContactById=async (req, res, next)=> {
+  try {
+    const { id } = req.params;
+
+    const contact = await Contact.findByPk(id, {
+      attributes: [
+        'id', 'fullName', 'email', 'phone', 'contactReason',
+        'companyName', 'website', 'message', 'attachment', 'attachmentName',
+        'status', 'createdAt', 'respondedAt', 'notes'
+      ]
+    });
+
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    res.json({ contact });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Update contact status
+exports.updateContactStatus=async (req, res, next)=> {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+
+    const validStatuses = ["new", "in_progress", "responded", "closed"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status. Must be one of: " + validStatuses.join(", ")
+      });
+    }
+
+    const contact = await Contact.findByPk(id);
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    const updateData = { status };
+    if (notes !== undefined) {
+      updateData.notes = notes;
+    }
+
+    if (status === "responded") {
+      updateData.respondedAt = new Date();
+    }
+
+    await contact.update(updateData);
+
+    res.json({
+      message: "Contact updated successfully",
+      contact
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Delete contact
+exports.deleteContact=async (req, res, next)=> {
+  try {
+    const { id } = req.params;
+
+    const contact = await Contact.findByPk(id);
+    if (!contact) {
+      return res.status(404).json({ message: "Contact not found" });
+    }
+
+    await contact.destroy();
+
+    res.json({ message: "Contact deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Export contacts data
+exports.exportContacts=async (req, res, next)=> {
+  try {
+    const { format = 'json' } = req.query;
+
+    const contacts = await Contact.findAll({
+      attributes: [
+        'id', 'fullName', 'email', 'phone', 'contactReason',
+        'companyName', 'website', 'message', 'status', 'createdAt', 'respondedAt', 'notes'
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    if (format === 'csv') {
+      // Convert to CSV format
+      const headers = ['ID', 'Name', 'Email', 'Phone', 'Reason', 'Company', 'Website', 'Status', 'Message', 'Submitted At', 'Responded At', 'Notes'];
+      const csvRows = [
+        headers.join(','),
+        ...contacts.map(contact => [
+          contact.id,
+          `"${contact.fullName}"`,
+          `"${contact.email}"`,
+          `"${contact.phone || ''}"`,
+          `"${contact.contactReason}"`,
+          `"${contact.companyName || ''}"`,
+          `"${contact.website || ''}"`,
+          `"${contact.status}"`,
+          `"${(contact.message || '').replace(/"/g, '""')}"`,
+          `"${contact.createdAt}"`,
+          `"${contact.respondedAt || ''}"`,
+          `"${(contact.notes || '').replace(/"/g, '""')}"`
+        ].join(','))
+      ];
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="contacts-export.csv"');
+      return res.send(csvRows.join('\n'));
+    }
+
+    // Default JSON format
+    res.json({ contacts });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const dayjs = require("dayjs");
-const { Op } = require("sequelize");
+const { Op, where } = require("sequelize");
+const { OrganizationJoinRequest } = require('../models');
 const {
   User,
   CompanyRepresentative,
@@ -12,7 +13,8 @@ const {
   ConnectionRequest,
   Message,
   Event,
-  MeetingRequest
+  MeetingRequest,
+  Notification
 } = require("../models");
 const { sendTemplatedEmail } = require("../utils/email");
 
@@ -103,6 +105,20 @@ exports.inviteRepresentative = async (req, res, next) => {
         expiresInHours: 48,
       },
     });
+
+    // Create notification for the invited user
+    await Notification.create({
+      userId: representativeId,
+      type: "company.representative.invitation",
+      payload: {
+        item_id: invitation.id,
+        invitationId: invitation.id,
+        companyId: companyId,
+        companyName: company.name,
+        invitedBy: companyId,
+        actionLink: `${process.env.BASE_URL || ""}/profile/company/${companyId}/authorize?token=${invitationToken}`
+      },
+    }).catch(() => {});
 
     res.json({
       message: "Representative invitation sent successfully",
@@ -408,6 +424,19 @@ exports.authorizeRepresentative = async (req, res, next) => {
     user.representativeAuthorizedAt = new Date();
     await user.save();
 
+    // Create notification for the company
+    await Notification.create({
+      userId: invitation.companyId,
+      type: "company.representative.authorized",
+      payload: {
+        item_id: userId,
+        representativeId: userId,
+        representativeName: user.name,
+        companyId: invitation.companyId,
+        authorizedBy: userId
+      },
+    }).catch(() => {});
+
     res.json({
       message: "Successfully authorized as company representative",
       company: {
@@ -486,6 +515,21 @@ exports.inviteStaff = async (req, res, next) => {
     // Send invitation email
     const invitationLink = `${process.env.BASE_URL || ""}/profile/company/${companyId}/staff/confirm?token=${invitationToken}`;
 
+     // Create notification for the invited user
+    await Notification.create({
+      userId: staffId,
+      type: "company.staff.invitation",
+      payload: {
+        item_id: invitation.id,
+        invitationId: invitation.id,
+        companyId: companyId,
+        companyName: company.name,
+        role: role,
+        invitedBy: companyId,
+        actionLink: `${process.env.BASE_URL || ""}/profile/company/${companyId}/staff/confirm?token=${invitationToken}`
+      },
+    }).catch(() => {});
+
     await sendTemplatedEmail({
       to: staff.email,
       subject: `Invitation to Join ${company.name} Team`,
@@ -502,6 +546,8 @@ exports.inviteStaff = async (req, res, next) => {
         expiresInHours: 168,
       },
     });
+
+   
 
     res.json({
       message: "Staff invitation sent successfully",
@@ -773,6 +819,21 @@ exports.confirmStaffInvitation = async (req, res, next) => {
       invitation.rejectedBy = userId;
       await invitation.save();
 
+      // Create notification for the company
+      await Notification.create({
+        userId: invitation.companyId,
+        type: "company.staff.rejected",
+        payload: {
+          item_id: invitation.id,
+          invitationId: invitation.id,
+          staffId: userId,
+          staffName: user.name,
+          companyId: invitation.companyId,
+          role: invitation.role,
+          rejectedBy: userId
+        },
+      }).catch(() => {});
+
       return res.json({
         message: "Staff invitation declined",
         company: {
@@ -823,6 +884,21 @@ exports.confirmStaffInvitation = async (req, res, next) => {
     user.staffRole = invitation.role;
     user.staffJoinedAt = new Date();
     await user.save();
+
+    // Create notification for the company
+    await Notification.create({
+      userId: invitation.companyId,
+      type: "company.staff.accepted",
+      payload: {
+        item_id: invitation.id,
+        invitationId: invitation.id,
+        staffId: userId,
+        staffName: user.name,
+        companyId: invitation.companyId,
+        role: invitation.role,
+        acceptedBy: userId
+      },
+    }).catch(() => {});
 
     res.json({
       message: "Successfully joined company staff",
@@ -889,6 +965,9 @@ exports.removeStaff = async (req, res, next) => {
     const { staffId } = req.params;
     const companyId = req.user.sub;
 
+
+    console.log({staffId,companyId})
+    
     const staff = await CompanyStaff.findOne({
       where: {
         companyId,
@@ -901,11 +980,25 @@ exports.removeStaff = async (req, res, next) => {
       return res.status(404).json({ message: "Staff member not found" });
     }
 
+
+
+    let company=await User.findOne({where:{id:companyId}})
+
     // Update staff record
     staff.status = "removed";
     staff.removedAt = new Date();
     staff.removedBy = companyId;
     await staff.save();
+
+    // Remove any pending or sent invitations for this staff member
+    await CompanyInvitation.destroy({
+      where: {
+        companyId,
+        invitedUserId: staffId,
+        invitationType: "staff",
+        status: { [Op.in]: ["sent", "pending"] }
+      }
+    });
 
     // Update user flags
     const user = await User.findByPk(staffId);
@@ -916,6 +1009,21 @@ exports.removeStaff = async (req, res, next) => {
       user.staffLeftAt = new Date();
       await user.save();
     }
+    
+
+    // Create notification for the removed staff member
+    await Notification.create({
+      userId: staffId,
+      type: "company.staff.removed",
+      payload: {
+        item_id: staff.id,
+        staffId: staffId,
+        companyId: companyId,
+        companyName: company.name,
+        removedBy: companyId,
+        role: staff.role
+      },
+    }).catch(() => {});
 
     res.json({ message: "Staff member removed successfully" });
   } catch (error) {
@@ -1528,7 +1636,14 @@ exports.leaveCompany = async (req, res, next) => {
         id: membershipId,
         staffId: userId,
         status: { [Op.in]: ["pending", "confirmed"] }
-      }
+      },
+      include: [
+        {
+          model: User,
+          as: "company",
+          attributes: ["id", "name", "email"]
+        }
+      ]
     });
 
     if (!membership) {
@@ -1540,8 +1655,16 @@ exports.leaveCompany = async (req, res, next) => {
     membership.leftAt = new Date();
     await membership.save();
 
-    // Delete any pending join requests for this organization
-    const { OrganizationJoinRequest } = require('../models');
+    // Remove any pending or sent invitations for this staff member
+    await CompanyInvitation.destroy({
+      where: {
+        companyId: membership.companyId,
+        invitedUserId: userId,
+        invitationType: "staff",
+        status: { [Op.in]: ["sent", "pending"] }
+      }
+    });
+
     await OrganizationJoinRequest.destroy({
       where: {
         userId,
@@ -1559,6 +1682,22 @@ exports.leaveCompany = async (req, res, next) => {
       user.staffLeftAt = new Date();
       await user.save();
     }
+
+    // Create notification for the company
+    await Notification.create({
+      userId: membership.companyId,
+      type: "company.staff.left",
+      payload: {
+        item_id: membership.id,
+        membershipId: membership.id,
+        staffId: userId,
+        staffName: user.name,
+        companyId: membership.companyId,
+        companyName: membership.company.name,
+        role: membership.role,
+        leftBy: userId
+      },
+    }).catch(() => {});
 
     res.json({ message: "Successfully left the organization" });
   } catch (error) {
@@ -1684,6 +1823,19 @@ exports.revokeRepresentative = async (req, res, next) => {
       user.representativeRevokedAt = new Date();
       await user.save();
     }
+
+    // Create notification for the revoked representative
+    await Notification.create({
+      userId: representativeId,
+      type: "company.representative.revoked",
+      payload: {
+        item_id: representative.id,
+        representativeId: representativeId,
+        companyId: companyId,
+        companyName: company.name,
+        revokedBy: companyId
+      },
+    }).catch(() => {});
 
     res.json({ message: "Representative authorization revoked successfully" });
   } catch (error) {

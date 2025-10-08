@@ -19,7 +19,7 @@ exports.createJob = async (req, res) => {
       careerLevel, paymentType, description, requiredSkills,
       country, city, minSalary, maxSalary, currency, benefits,
       applicationDeadline, positions, applicationInstructions, contactEmail,
-      categoryId, subcategoryId, status,coverImageBase64,companyId,
+      categoryId, subcategoryId, status,coverImageBase64,companyId, countries,
 
       // Industry fields
       industryCategoryId,
@@ -74,6 +74,7 @@ exports.createJob = async (req, res) => {
       careerLevel, paymentType, description,
       requiredSkills: skills,
       country, city,
+      countries, countries,
       minSalary: minS, maxSalary: maxS, currency, benefits,
       applicationDeadline: applicationDeadline || null,
       positions: positions ? Number(positions) : 1,

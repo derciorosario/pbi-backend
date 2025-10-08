@@ -219,8 +219,8 @@ exports.update = async (req, res) => {
       budget: body.budget ?? need.budget,
       urgency: body.urgency ?? need.urgency,
       location: body.location ?? need.location,
-      city: body.city ?? need.city,
-      country: body.country ?? need.country,
+      city: body.city || null,
+      country: body.country || null,
       criteria: body.criteria ?? need.criteria,
       attachments: body.attachments !== undefined
         ? (Array.isArray(body.attachments) ? body.attachments : [])

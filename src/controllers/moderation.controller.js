@@ -250,7 +250,7 @@ exports.getContentForModeration = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting content for moderation:", error);
-    res.status(500).json({ message: "Failed to get content for moderation" });
+    res.status(500).json({ message: "Failed to get content for moderation",error });
   }
 };
 

@@ -219,7 +219,8 @@ exports.update = async (req, res) => {
     Object.assign(tourism, {
       postType: body.postType ?? tourism.postType,
       title: body.title ?? tourism.title,
-      country: body.country ?? tourism.country,
+      country: body.country || null,
+      city: body.city || null,
       location: body.location ?? tourism.location,
       description: body.description ?? tourism.description,
       season: body.season ?? tourism.season,

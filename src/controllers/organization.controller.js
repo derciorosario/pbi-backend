@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const crypto = require('crypto');
-const { User, OrganizationJoinRequest, CompanyStaff } = require('../models');
+const { User, OrganizationJoinRequest, CompanyStaff, Notification } = require('../models');
 const { sendTemplatedEmail } = require('../utils/email');
 const { isEmailNotificationEnabled } = require('../utils/notificationSettings');
 
@@ -101,7 +101,7 @@ class OrganizationController {
       // Send email notification to organization admin
       try {
         // Check if organization has enabled email notifications for join requests
-        const isEnabled = await isEmailNotificationEnabled(organization.id, 'organizationJoinRequests');
+        const isEnabled = true// await isEmailNotificationEnabled(organization.id, 'organizationJoinRequests');
 
         if (isEnabled) {
           const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
@@ -126,6 +126,23 @@ class OrganizationController {
         console.error('Failed to send join request email:', emailError);
         // Don't fail the request if email fails
       }
+
+      // Create notification for the organization
+      await Notification.create({
+        userId: organizationId,
+        type: "organization.join.request",
+        payload: {
+          item_id: joinRequest.id,
+          requestId: joinRequest.id,
+          userId: userId,
+          userName: user.name,
+          organizationId: organizationId,
+          organizationName: organization.name,
+          message: message || null,
+          requestedBy: userId,
+          actionLink: `${process.env.WEBSITE_URL || "https://54links.com"}/organization/join-requests`
+        },
+      }).catch(() => {});
 
       res.json({
         message: 'Join request submitted successfully',
@@ -252,7 +269,7 @@ class OrganizationController {
       // Send confirmation email to user
       try {
         // Check if user has enabled email notifications for organization updates
-        const isEnabled = await isEmailNotificationEnabled(joinRequest.userId, 'organizationUpdates');
+        const isEnabled = true //await isEmailNotificationEnabled(joinRequest.userId, 'organizationUpdates');
 
         if (isEnabled) {
           const baseUrl = process.env.WEBSITE_URL || "https://54links.com";
@@ -275,6 +292,22 @@ class OrganizationController {
       } catch (emailError) {
         console.error('Failed to send approval email:', emailError);
       }
+
+      // Create notification for the user
+      await Notification.create({
+        userId: joinRequest.userId,
+        type: "organization.join.approved",
+        payload: {
+          item_id: joinRequest.id,
+          requestId: joinRequest.id,
+          userId: joinRequest.userId,
+          userName: joinRequest.user.name,
+          organizationId: organizationId,
+          organizationName:joinRequest.organization.name,
+          approvedBy: organizationId,
+          actionLink: `${process.env.WEBSITE_URL || "https://54links.com"}/profile`
+        },
+      }).catch(() => {});
 
       res.json({
         message: 'Join request approved successfully',
@@ -318,7 +351,7 @@ class OrganizationController {
       // Send rejection email to user
       try {
         // Check if user has enabled email notifications for organization updates
-        const isEnabled = await isEmailNotificationEnabled(joinRequest.userId, 'organizationUpdates');
+        const isEnabled = true //await isEmailNotificationEnabled(joinRequest.userId, 'organizationUpdates');
 
         if (isEnabled) {
           await sendTemplatedEmail({
@@ -337,6 +370,22 @@ class OrganizationController {
       } catch (emailError) {
         console.error('Failed to send rejection email:', emailError);
       }
+
+      // Create notification for the user
+      await Notification.create({
+        userId: joinRequest.userId,
+        type: "organization.join.rejected",
+        payload: {
+          item_id: joinRequest.id,
+          requestId: joinRequest.id,
+          userId: joinRequest.userId,
+          userName: joinRequest.user.name,
+          organizationId: organizationId,
+          organizationName: joinRequest.organization.name,
+          rejectedBy: organizationId,
+          actionLink: `${process.env.WEBSITE_URL || "https://54links.com"}/profile`
+        },
+      }).catch(() => {});
 
       res.json({
         message: 'Join request rejected',
