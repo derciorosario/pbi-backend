@@ -59,7 +59,7 @@ const limiter = rateLimit({
 
 
 // --- Response size guard: cap at 10MB and log big payloads ---
-const TEN_MB = 10 * 1024 * 1024;
+const TEN_MB = 15 * 1024 * 1024;
 const FIVE_MB = 5 * 1024 * 1024;
 
 app.use((req, res, next) => {

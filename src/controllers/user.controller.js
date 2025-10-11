@@ -284,6 +284,7 @@ exports.getPublicProfile = async (req, res) => {
       skills: user.profile?.skills || [],
       languages: user.profile?.languages || [],
       primaryIdentity: user.profile?.primaryIdentity,
+      cvBase64: user.profile?.cvBase64 || [],
       memberSince: user.createdAt,
 
       workSamples,

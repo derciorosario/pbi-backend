@@ -256,8 +256,8 @@ async function loginWithGoogle({ idToken, accessToken, accountType = "individual
     user.googleId = user.googleId || googleId;
     user.provider = "google";
     user.isVerified = true;
-    if (picture && user.avatarUrl !== picture) user.avatarUrl = picture;
-
+    if (!user.avatarUrl) user.avatarUrl = picture;  //if (picture && user.avatarUrl !== picture) user.avatarUrl = picture;
+  
     // Update any additional fields if provided
     Object.assign(user, additionalFields);
     await user.save();

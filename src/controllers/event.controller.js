@@ -661,6 +661,7 @@ exports.update = async (req, res) => {
     
     if (registrationType) ensurePaidFields({ registrationType, ...body });
 
+
     // Normalize audience arrays if provided
     const identityIds = _identityIds !== undefined ? await normalizeIdentityIds(toIdArray(_identityIds)) : null;
     const categoryIds = _categoryIds !== undefined ? toIdArray(_categoryIds) : null;
@@ -701,9 +702,9 @@ exports.update = async (req, res) => {
       city: body.city || null,
       address: body.address ?? event.address,
       onlineUrl: body.onlineUrl ?? event.onlineUrl,
-      registrationType: body.registrationType ?? event.registrationType,
-      price: (body.registrationType || event.registrationType) === "Paid" ? (body.price ?? event.price) : null,
-      currency: (body.registrationType || event.registrationType) === "Paid" ? (body.currency ?? event.currency) : null,
+      registrationType: registrationType ?? event.registrationType,
+      price: (registrationType || event.registrationType) === "Paid" ? (body.price ?? event.price) : null,
+      currency: (registrationType || registrationType) === "Paid" ? (body.currency ?? event.currency) : null,
       capacity: body.capacity ?? event.capacity,
       registrationDeadline: body.registrationDeadline ? new Date(`${body.registrationDeadline}T23:59:00Z`) : event.registrationDeadline,
       coverImageUrl: body.coverImageUrl || null,

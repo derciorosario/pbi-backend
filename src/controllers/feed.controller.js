@@ -10,6 +10,8 @@ const {
   User,
   Profile,
   UserCategory,
+  UserSubcategory,
+  UserSubsubCategory,
   Goal,
   Connection,
   ConnectionRequest,
@@ -23,6 +25,7 @@ const {
   UserSubcategoryInterest,
   UserSubsubCategoryInterest,
   UserIdentityInterest,
+  UserIdentity,
   UserBlock,
   GeneralCategory,
   GeneralSubcategory,
@@ -69,6 +72,7 @@ const {
 } = require("../models");
 const { getConnectionStatusMap } = require("../utils/connectionStatus");
 const { cache } = require("../utils/redis");
+const { getIdentityCatalogFunc } = require("../utils/identity_taxonomy");
 
 // Cache configuration
 const CACHE_TTL = {
@@ -76,6 +80,65 @@ const CACHE_TTL = {
   META: 3600, // 1 hour for meta data
   SUGGESTIONS: 600, // 10 minutes for suggestions
 };
+
+// Load identity catalog for taxonomy validation
+let identityCatalog;
+(async () => {
+  identityCatalog = await getIdentityCatalogFunc('all');
+})();
+
+// Helper functions for matching logic
+function calculateBidirectionalMatch(aToB, bToA) {
+  const average = (aToB + bToA) / 2;
+  return average;
+}
+
+function calculateReciprocalWeightedMatch(aToB, bToA, weightSelf = 0.7) {
+  const weightOther = 1 - weightSelf;
+  const userAPerceived = (aToB * weightSelf) + (bToA * weightOther);
+  return userAPerceived;
+}
+
+// Add the checkIfBelongs function for taxonomy validation
+function checkIfBelongs(type, itemId, identityIds) {
+  if (!identityIds || identityIds.length === 0 || !itemId) {
+    return false;
+  }
+
+  const searchId = String(itemId);
+
+  for (const identity of identityCatalog) {
+    if (!identityIds.includes(String(identity.id))) {
+      continue;
+    }
+
+    if (identity.categories) {
+      for (const category of identity.categories) {
+        if (type === 'category' && String(category.id) === searchId) {
+          return true;
+        }
+
+        if (category.subcategories) {
+          for (const subcategory of category.subcategories) {
+            if (type === 'subcategory' && String(subcategory.id) === searchId) {
+              return true;
+            }
+
+            if (subcategory.subsubs) {
+              for (const subsub of subcategory.subsubs) {
+                if (type === 'subsubcategory' && String(subsub.id) === searchId) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
 
 // Generate cache key for feed requests
 function generateFeedCacheKey(req) {
@@ -103,7 +166,6 @@ function generateFeedCacheKey(req) {
      experienceLevel,
      locationType,
      jobType,
-     workMode,
      workLocation,
      workSchedule,
      careerLevel,
@@ -151,7 +213,6 @@ function generateFeedCacheKey(req) {
      experienceLevel,
      locationType,
      jobType,
-     workMode,
      workLocation,
      workSchedule,
      careerLevel,
@@ -809,8 +870,8 @@ const includeCategoryRefs = [
   {
     model: User,
     as: "postedBy",
-    attributes: ["id", "name", "avatarUrl"],
-    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+    attributes: ["id", "name", "avatarUrl","accountType"],
+    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
   },
 ];
 
@@ -818,8 +879,8 @@ const includeEventRefs = [
   {
     model: User,
     as: "organizer",
-    attributes: ["id", "name", "avatarUrl"],
-    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+    attributes: ["id", "name", "avatarUrl","accountType"],
+    include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
   },
 ];
 
@@ -827,8 +888,8 @@ const includeNeedRefs = [
    {
      model: User,
      as: "user",
-     attributes: ["id", "name", "avatarUrl"],
-     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+     attributes: ["id", "name", "avatarUrl","accountType"],
+     include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
    },
 ];
 
@@ -863,7 +924,7 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
     {
       model: User,
       as: "provider",
-      attributes: ["id", "name", "avatarUrl"],
+      attributes: ["id", "name", "avatarUrl","accountType"],
       include: [
         {
           model: UserCategory,
@@ -875,19 +936,20 @@ function makeServiceInclude({ categoryId, subcategoryId, subsubCategoryId }) {
             { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
           ],
         },
-        { model: Profile, as: "profile", attributes: ["avatarUrl"] },
+        { model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] },
       ],
     },
   ];
 }
+
 
 function makeProductInclude({ categoryId, subcategoryId, subsubCategoryId }) {
   const include = [
     {
       model: User,
       as: "seller",
-      attributes: ["id", "name", "avatarUrl"],
-      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+      attributes: ["id", "name", "avatarUrl","accountType"],
+      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
     },
   ];
   return include;
@@ -898,8 +960,8 @@ function makeTourismInclude({ categoryId, subcategoryId, subsubCategoryId }) {
      {
        model: User,
        as: "author",
-       attributes: ["id", "name", "avatarUrl"],
-       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+       attributes: ["id", "name", "avatarUrl","accountType"],
+       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
      },
     ];
      return include;
@@ -910,8 +972,8 @@ function makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }) {
       {
         model: User,
         as: "user",
-        attributes: ["id", "name", "avatarUrl"],
-        include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+        attributes: ["id", "name", "avatarUrl","accountType"],
+        include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
       },
     ];
     return include;
@@ -922,8 +984,8 @@ function makeFundingInclude() {
      {
        model: User,
        as: "creator",
-       attributes: ["id", "name", "avatarUrl"],
-       include: [{ model: Profile, as: "profile", attributes: ["avatarUrl"] }],
+      attributes: ["id", "name", "avatarUrl","accountType"],
+      include: [{ model: Profile, as: "profile", attributes: ["avatarUrl","professionalTitle"] }],
      },
   ];
  }
@@ -965,8 +1027,14 @@ function diversifyFeed(items, { maxSeq = 1 } = {}) {
   return out;
 }
 
+
+
 async function fetchMomentsPaged({ where, include, limit, offset, order = [["createdAt", "DESC"]] }) {
-  const whereIds = { ...(where || {}), moderation_status: "approved" };
+  const whereIds = { 
+    ...(where || {}), 
+    moderation_status: "approved" 
+  };
+  
   const idRows = await Moment.findAll({
     where: whereIds,
     attributes: ["id", "createdAt"],
@@ -975,16 +1043,20 @@ async function fetchMomentsPaged({ where, include, limit, offset, order = [["cre
     offset: offset ?? 0,
     raw: true,
   });
+  
   const ids = idRows.map((r) => r.id);
   if (!ids.length) return [];
+  
   const rows = await Moment.findAll({
     where: { id: { [Op.in]: ids } },
     include,
     order: [["createdAt", "DESC"]],
     distinct: true,
   });
+  
   return rows;
 }
+
 
 function normalizeToArray(v) {
   if (!v) return null;
@@ -1028,7 +1100,6 @@ exports.getFeed = async (req, res) => {
       experienceLevel,
       locationType,
       jobType,
-      workMode,
       workLocation,
       workSchedule,
       careerLevel,
@@ -1068,30 +1139,51 @@ exports.getFeed = async (req, res) => {
     let contentType = 'all';
     let connectedUserIds = [];
 
+    const hasIncompatibleFilters = Boolean(
+      price || serviceType || priceType || deliveryTime ||
+      experienceLevel || locationType || jobType ||
+      workLocation || workSchedule || careerLevel || paymentType ||
+      postType || season || budgetRange || fundingGoal || generalCategoryIds || generalSubcategoryIds ||
+      amountRaised || deadline || eventType || registrationType
+    );
+
+    console.log({generalCategoryIds})
+
+
     if (currentUserId) {
+  try {
+    const me = await User.findByPk(currentUserId, {
+      attributes: ["id", "country", "city", "accountType"],
+      include: [
+        { model: UserCategory, as: "interests", attributes: ["categoryId", "subcategoryId"] }
+      ],
+    });
+    
+    if (me) {
+      userDefaults.country = me.country || null;
+      userDefaults.city = me.city || null;
+      userDefaults.categoryIds = (me.interests || []).map((i) => i.categoryId).filter(Boolean);
+      userDefaults.subcategoryIds = (me.interests || []).map((i) => i.subcategoryId).filter(Boolean);
+      
+      // ADD THESE LINES to load the missing interest types:
       try {
-        userSettings = await UserSettings.findOne({
+        const subsubInterests = await UserSubsubCategoryInterest.findAll({
           where: { userId: currentUserId },
-          attributes: ['connectionsOnly', 'contentType']
+          include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }],
         });
-        connectionsOnly = userSettings?.connectionsOnly || false;
-        contentType = userSettings?.contentType || 'all';
-        if (connectionsOnly) {
-          const connections = await Connection.findAll({
-            where: {
-              [Op.or]: [
-                { userOneId: currentUserId },
-                { userTwoId: currentUserId }
-              ]
-            },
-            attributes: ['userOneId', 'userTwoId']
-          });
-          connectedUserIds = connections.flatMap(conn =>
-            conn.userOneId === currentUserId ? [conn.userTwoId] : [conn.userOneId]
-          );
-        }
+        userDefaults.subsubcategoryIds = subsubInterests.map((i) => i.subsubCategoryId).filter(Boolean);
+      } catch {}
+      
+      try {
+        const identityInterests = await UserIdentityInterest.findAll({
+          where: { userId: currentUserId },
+          include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }],
+        });
+        userDefaults.identityIds = identityInterests.map((i) => i.identityId).filter(Boolean);
       } catch {}
     }
+  } catch {}
+}
 
     const effIndustryIds = ensureArray(industryIds).filter(Boolean);
 
@@ -1130,7 +1222,7 @@ exports.getFeed = async (req, res) => {
       effAudienceIdentityIds.length || effAudienceCategoryIds.length ||
       effAudienceSubcategoryIds.length || effAudienceSubsubCategoryIds.length ||
       price || serviceType || priceType || deliveryTime ||
-      experienceLevel || locationType || jobType || workMode ||
+      experienceLevel || locationType || jobType ||
       postType || season || budgetRange ||
       fundingGoal || amountRaised || deadline ||
       eventType || date || registrationType ||
@@ -1220,7 +1312,7 @@ exports.getFeed = async (req, res) => {
 
     const countries = ensureArray(country);
 
-    const createFlexibleLocationFilter = () => {
+    /*const createFlexibleLocationFilter = () => {
       const filter = {};
       const countryExact = countries.length ? [{ country: { [Op.in]: countries } }] : [];
       const cityLikes = buildOrLikes("city", cities);
@@ -1238,13 +1330,113 @@ exports.getFeed = async (req, res) => {
         filter[Op.or] = orParts;
       }
       return filter;
-    };
+    };*/
 
-    const whereCommon = createFlexibleLocationFilter();
-    const whereJob = { ...whereCommon };
-    const whereEvent = { ...whereCommon };
-    const whereService = { ...whereCommon };
-    const whereNeed = { ...whereCommon };
+
+    const createFlexibleLocationFilter = () => {
+        const filter = {};
+        const countryExact = countries.length ? [{ country: { [Op.in]: countries } }] : [];
+        const cityLikes = buildOrLikes("city", cities);
+        const cityInCountryField = buildOrLikes("country", cities);
+        const countryInCityField = buildOrLikes("city", countries);
+        
+        if (countries.length && cities.length) {
+          // Create AND conditions: must match both city AND country
+          const andConditions = [];
+          
+          // Add country condition
+          andConditions.push({ country: { [Op.in]: countries } });
+          
+          // Add city condition (partial matches)
+          andConditions.push({
+            [Op.or]: [
+              ...cityLikes,
+              ...cityInCountryField
+            ]
+          });
+          
+          filter[Op.and] = andConditions;
+        } else if (countries.length) {
+          filter[Op.or] = [...countryExact, ...cityInCountryField];
+        } else if (cities.length) {
+          filter[Op.or] = [...cityLikes, ...cityInCountryField];
+        }
+        return filter;
+};
+
+
+const createJobLocationFilter = () => {
+  const filter = {};
+  
+  if (countries.length && cities.length) {
+    // AND logic: must match both city AND country
+    filter[Op.or] = [
+      // Match in regular fields (AND logic)
+      {
+        [Op.and]: [
+          { country: { [Op.in]: countries } },
+          {
+            [Op.or]: [
+              ...buildOrLikes("city", cities),
+              ...buildOrLikes("country", cities)
+            ]
+          }
+        ]
+      },
+      // Match in countries JSON array - create separate conditions for each combination
+      {
+        [Op.and]: [
+          // At least one country matches in the JSON array
+          {
+            [Op.or]: countries.map(country => 
+              sequelize.literal(`JSON_SEARCH(countries, 'one', '%${country}%', NULL, '$[*].country') IS NOT NULL`)
+            )
+          },
+          // At least one city matches in the JSON array
+          {
+            [Op.or]: cities.map(city => 
+              sequelize.literal(`JSON_SEARCH(countries, 'one', '%${city}%', NULL, '$[*].city') IS NOT NULL`)
+            )
+          }
+        ]
+      }
+    ];
+  } else if (countries.length) {
+    // Only country specified
+    filter[Op.or] = [
+      // Regular fields
+      { country: { [Op.in]: countries } },
+      ...buildOrLikes("country", countries),
+      // Countries JSON array - create separate conditions for each country
+      {
+        [Op.or]: countries.map(country => 
+          sequelize.literal(`JSON_SEARCH(countries, 'one', '%${country}%', NULL, '$[*].country') IS NOT NULL`)
+        )
+      }
+    ];
+  } else if (cities.length) {
+    // Only city specified
+    filter[Op.or] = [
+      // Regular fields
+      ...buildOrLikes("city", cities),
+      ...buildOrLikes("country", cities),
+      // Countries JSON array - create separate conditions for each city
+      {
+        [Op.or]: cities.map(city => 
+          sequelize.literal(`JSON_SEARCH(countries, 'one', '%${city}%', NULL, '$[*].city') IS NOT NULL`)
+        )
+      }
+    ];
+  }
+  
+  return filter;
+};
+
+    let whereCommon = createFlexibleLocationFilter();
+    let whereJob = { ...createJobLocationFilter() };
+    let whereEvent = { ...whereCommon };
+    let whereService = { ...whereCommon };
+    let whereNeed = { ...whereCommon };
 
     if (effGeneralCategoryIds.length > 0) {
       whereService.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
@@ -1276,32 +1468,78 @@ exports.getFeed = async (req, res) => {
       whereEvent.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
     }
 
-    const whereProduct = {};
-    const productOr = [];
-    if (countries.length) productOr.push({ country: { [Op.in]: countries } });
-    if (cities.length) productOr.push(...buildOrLikes("country", cities));
-    if (productOr.length) whereProduct[Op.or] = productOr;
+    let whereProduct = {};
+    
+    
+  
+  if (countries.length || cities.length) {
+    if (countries.length && cities.length) {
+      // AND logic: must match both country AND city
+      whereProduct[Op.and] = [
+        { country: { [Op.in]: countries } },
+        {
+          [Op.or]: [
+            ...buildOrLikes("city", cities),
+            ...buildOrLikes("country", cities)
+          ]
+        }
+      ];
+    } else if (countries.length) {
+      whereProduct[Op.or] = [
+        { country: { [Op.in]: countries } },
+        ...buildOrLikes("country", countries)
+      ];
+    } else if (cities.length) {
+      whereProduct[Op.or] = [
+        ...buildOrLikes("city", cities),
+        ...buildOrLikes("country", cities)
+      ];
+    }
+  }
+
     if (price) whereProduct.price = { [Op.lte]: Number(price) };
     if (effGeneralCategoryIds.length > 0) whereProduct.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
     if (effGeneralSubcategoryIds.length > 0) whereProduct.generalSubcategoryId = { [Op.in]: effGeneralSubcategoryIds };
     if (effGeneralSubsubCategoryIds.length > 0) whereProduct.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
 
-    const whereTourism = {};
+    let whereTourism = {};
     const tourismOr = [];
-    if (countries.length) {
-      tourismOr.push({ country: { [Op.in]: countries } });
-      tourismOr.push(...buildOrLikes("location", countries));
+   
+    if (countries.length || cities.length) {
+    const tourismConditions = [];
+    
+    if (countries.length && cities.length) {
+      tourismConditions.push(
+        { country: { [Op.in]: countries } },
+        {
+          [Op.or]: [
+            ...buildOrLikes("location", cities),
+            ...buildOrLikes("country", cities)
+          ]
+        }
+      );
+      whereTourism[Op.and] = tourismConditions;
+    } else if (countries.length) {
+      whereTourism[Op.or] = [
+        { country: { [Op.in]: countries } },
+        ...buildOrLikes("location", countries),
+        ...buildOrLikes("country", countries)
+      ];
+    } else if (cities.length) {
+      whereTourism[Op.or] = [
+        ...buildOrLikes("location", cities),
+        ...buildOrLikes("country", cities)
+      ];
     }
-    if (cities.length) {
-      tourismOr.push(...buildOrLikes("location", cities));
-      tourismOr.push(...buildOrLikes("country", cities));
-    }
+  }
+
+
     if (tourismOr.length) whereTourism[Op.or] = tourismOr;
     if (effGeneralCategoryIds.length > 0) whereTourism.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
     if (effGeneralSubcategoryIds.length > 0) whereTourism.generalSubcategoryId = { [Op.in]: effGeneralSubcategoryIds };
     if (effGeneralSubsubCategoryIds.length > 0) whereTourism.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
 
-    const whereFunding = createFlexibleLocationFilter();
+    let whereFunding = createFlexibleLocationFilter();
     if (effGeneralCategoryIds.length > 0) whereFunding.generalCategoryId = { [Op.in]: effGeneralCategoryIds };
     if (effGeneralSubcategoryIds.length > 0) whereFunding.generalSubcategoryId = { [Op.in]: effGeneralSubcategoryIds };
     if (effGeneralSubsubCategoryIds.length > 0) whereFunding.generalSubsubCategoryId = { [Op.in]: effGeneralSubsubCategoryIds };
@@ -1379,6 +1617,7 @@ exports.getFeed = async (req, res) => {
       whereTourism.industryCategoryId = { [Op.in]: effIndustryIds };
       whereFunding.industryCategoryId = { [Op.in]: effIndustryIds };
       whereNeed.industryCategoryId = { [Op.in]: effIndustryIds };
+      whereCommon.industryCategoryId = { [Op.in]: effIndustryIds }; // For moments
     }
 
     // Audience filtering is now handled after lazy loading since we removed eager loading
@@ -1388,10 +1627,7 @@ exports.getFeed = async (req, res) => {
       const jobTypes = jobType.split(",").filter(Boolean);
       if (jobTypes.length) whereJob.jobType = { [Op.in]: jobTypes };
     }
-    if (workMode) {
-      const workModes = workMode.split(",").filter(Boolean);
-      if (workModes.length) whereJob.workMode = { [Op.in]: workModes };
-    }
+   
     if (workLocation) {
       const workLocations = workLocation.split(",").filter(Boolean);
       if (workLocations.length) whereJob.workLocation = { [Op.in]: workLocations };
@@ -1459,7 +1695,7 @@ exports.getFeed = async (req, res) => {
       if (rts.length) whereEvent.registrationType = { [Op.in]: rts };
     }
 
-    if (hasTextSearch) {
+    /*if (hasTextSearch) {
       const termClauses = (fields) =>
         searchTerms.flatMap((term) => fields.map((f) => ({ [f]: like(term) })));
       whereJob[Op.or] = [
@@ -1490,7 +1726,95 @@ exports.getFeed = async (req, res) => {
         ...(whereNeed[Op.or] || []),
         ...termClauses(["title", "description", "city", "country"]),
       ];
-    }
+    }*/
+
+     
+      
+   
+       if (hasTextSearch) {
+  console.log('🔍 Search initiated:', { q, searchTerms, tab });
+  
+  // More precise search conditions
+  const createSearchCondition = (fields, boostFields = []) => {
+    return {
+      [Op.or]: [
+        // Exact phrase match (highest priority)
+        ...fields.map(field => ({ [field]: { [Op.like]: `%${q}%` } })),
+        
+        // Individual term matches in boosted fields
+        ...boostFields.flatMap(field => 
+          searchTerms.map(term => ({ [field]: { [Op.like]: `%${term}%` } }))
+        ),
+        
+        // Individual term matches in regular fields
+        ...fields.flatMap(field => 
+          searchTerms.map(term => ({ [field]: { [Op.like]: `%${term}%` } }))
+        )
+      ]
+    };
+  };
+
+  // Job search: Boost title and companyName, include description
+  whereJob = { 
+    ...whereJob, 
+    ...createSearchCondition(
+      ['title', 'description', 'companyName'], // All searchable fields
+      ['title', 'companyName'] // Boosted fields (appear in multiple conditions)
+    )
+  };
+
+  // Event search
+  whereEvent = { 
+    ...whereEvent, 
+    ...createSearchCondition(['title', 'description'], ['title']) 
+  };
+
+  // Service search  
+  whereService = { 
+    ...whereService, 
+    ...createSearchCondition(['title', 'description'], ['title']) 
+  };
+
+  // Product search
+  whereProduct = { 
+    ...whereProduct, 
+    ...createSearchCondition(['title', 'description'], ['title']) 
+  };
+
+  // Tourism search
+  whereTourism = { 
+    ...whereTourism, 
+    ...createSearchCondition(['title', 'description', 'location'], ['title']) 
+  };
+
+  // Funding search (uses pitch instead of description)
+  whereFunding = { 
+    ...whereFunding, 
+    ...createSearchCondition(['title', 'pitch'], ['title']) 
+  };
+
+  // Need search
+  whereNeed = { 
+    ...whereNeed, 
+    ...createSearchCondition(['title', 'description'], ['title']) 
+  };
+
+  // Moment search
+  whereCommon = { 
+    ...whereCommon, 
+    ...createSearchCondition(['title', 'description'], ['title']) 
+  };
+}
+
+
+    if (hasTextSearch) {
+  console.log('🔍 Final search conditions:');
+  console.log('- Jobs:', Object.keys(whereJob).filter(k => k.includes('Op')));
+  console.log('- Events:', Object.keys(whereEvent).filter(k => k.includes('Op')));
+
+}
+
+
 
     if (categoryId) {
       if (!whereFunding[Op.or]) whereFunding[Op.or] = [];
@@ -1595,6 +1919,7 @@ exports.getFeed = async (req, res) => {
 
     const mapJob = (j, companyMap = null) => {
       const jobData = {
+
         kind: "job",
         id: j.id,
         title: j.title,
@@ -1602,7 +1927,6 @@ exports.getFeed = async (req, res) => {
         companyId: j.companyId || null,
         company: j.companyId && companyMap ? companyMap[String(j.companyId)] || null : null,
         jobType: j.jobType,
-        workMode: j.workMode,
         categoryId: j.categoryId ? String(j.categoryId) : "",
         categoryName: j.category?.name || "",
         subcategoryId: j.subcategoryId ? String(j.subcategoryId) : "",
@@ -1622,6 +1946,8 @@ exports.getFeed = async (req, res) => {
         postedByUserAvatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
         avatarUrl: j.postedBy?.avatarUrl || j.postedBy?.profile?.avatarUrl || null,
         coverImage: j.coverImage || j.coverImageBase64 || null,
+        profile:j.postedBy?.profile || null,
+        postedBy:j.postedBy || null,
         audienceCategories: (j.audienceCategories || []).map((c) => ({ id: String(c.id), name: c.name })),
         audienceSubcategories: (j.audienceSubcategories || []).map((s) => ({ id: String(s.id), name: s.name })),
         audienceSubsubs: (j.audienceSubsubs || []).map((s) => ({ id: String(s.id), name: s.name })),
@@ -1688,6 +2014,8 @@ exports.getFeed = async (req, res) => {
         subcategoryId: e.subcategoryId ? String(e.subcategoryId) : "",
         subcategoryName: e.subcategory?.name || "",
         city: e.city,
+        profile:e.organizer?.profile || null,
+        postedBy:e.organizer || null,
         country: e.country,
         createdAt: e.createdAt,
         timeAgo: timeAgo(e.createdAt),
@@ -1749,6 +2077,8 @@ exports.getFeed = async (req, res) => {
         timeAgo: timeAgo(s.createdAt),
         providerUserId: s.providerUserId || null,
         providerUserName: s.provider?.name || null,
+        profile:s.provider?.profile || null,
+        postedBy:s.provider || null,
         avatarUrl: s.provider?.avatarUrl || s.provider?.profile?.avatarUrl || null,
         audienceCategories: (s.audienceCategories || []).map((c) => ({ id: String(c.id), name: c.name })),
         audienceSubcategories: (s.audienceSubcategories || []).map((sub) => ({ id: String(sub.id), name: sub.name })),
@@ -1812,8 +2142,11 @@ exports.getFeed = async (req, res) => {
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
         subcategoryName: picked.subcategoryName || "",
         country: p.country || null,
+        city: p.city || null,
         createdAt: p.createdAt,
         timeAgo: timeAgo(p.createdAt),
+        profile:p.seller?.profile || null,
+        postedBy:p.seller || null,
         sellerUserId: p.sellerUserId || null,
         sellerUserName: p.seller?.name || null,
         avatarUrl: p.seller?.avatarUrl || p.seller?.profile?.avatarUrl || null,
@@ -1882,6 +2215,8 @@ exports.getFeed = async (req, res) => {
         location: t.location || null,
         country: t.country || null,
         createdAt: t.createdAt,
+        profile:t.author?.profile || null,
+        postedBy:t.author || null,
         timeAgo: timeAgo(t.createdAt),
         authorUserId: t.authorUserId || null,
         authorUserName: t.author?.name || null,
@@ -1965,6 +2300,8 @@ exports.getFeed = async (req, res) => {
         links: parsedLinks,
         raised: f.raised,
         images: parsedImages,
+        profile:f.creator?.profile || null,
+        postedBy:f.creator || null,
         categoryId: picked.categoryId ? String(picked.categoryId) : "",
         categoryName: picked.categoryName || "",
         subcategoryId: picked.subcategoryId ? String(picked.subcategoryId) : "",
@@ -2033,7 +2370,7 @@ exports.getFeed = async (req, res) => {
             totalScore += WEIGHTS.subsubcategory * pct; matchedFactors++;
           }
         }
-        if (hasTextSearch) {
+        /*if (hasTextSearch) {
           const itemText = [
             item.title,
             item.description,
@@ -2050,7 +2387,104 @@ exports.getFeed = async (req, res) => {
             totalScore += WEIGHTS.text;
             matchedFactors++;
           }
+        }*/
+
+
+          
+          
+            
+
+          if (hasTextSearch) {
+    const searchText = q.toLowerCase();
+    const itemTitle = (item.title || '').toLowerCase();
+    
+    // Get the correct description field
+    let descriptionField = '';
+    switch(item.kind) {
+      case 'funding':
+        descriptionField = item.pitch || '';
+        break;
+      default:
+        descriptionField = item.description || '';
+    }
+    const itemDesc = descriptionField.toLowerCase();
+    
+    let textScore = 0;
+
+    // SCORING TIERS:
+    
+    // Tier 1: EXACT PHRASE MATCHES (Highest priority)
+    if (itemTitle.includes(searchText)) {
+      textScore += 60; // Exact phrase in title
+    } else if (itemDesc.includes(searchText)) {
+      textScore += 50; // Exact phrase in description
+    }
+    
+    // Tier 2: MULTIPLE TERM MATCHES
+    const matchedTerms = searchTerms.filter(term => {
+      const termLower = term.toLowerCase();
+      return itemTitle.includes(termLower) || itemDesc.includes(termLower);
+    });
+    
+    if (matchedTerms.length > 0) {
+      const coverage = matchedTerms.length / searchTerms.length;
+      
+      // More terms matched = higher score
+      if (coverage >= 0.8) textScore += 45; // 80%+ terms matched
+      else if (coverage >= 0.6) textScore += 35; // 60%+ terms matched  
+      else if (coverage >= 0.4) textScore += 25; // 40%+ terms matched
+      else textScore += 15; // Some terms matched
+    }
+
+    // Tier 3: FIELD-SPECIFIC BOOSTS
+    searchTerms.forEach(term => {
+      const termLower = term.toLowerCase();
+      
+      // Title matches are very valuable
+      if (itemTitle.includes(termLower)) {
+        textScore += 8;
+      }
+      
+      // Description matches are valuable but less than title
+      if (itemDesc.includes(termLower)) {
+        textScore += 5;
+      }
+      
+      // Context-specific boosts
+      if (item.kind === 'job') {
+        if (item.companyName?.toLowerCase().includes(termLower)) {
+          textScore += 6;
         }
+        // Boost for job-specific terms
+        if (['hire', 'looking', 'need', 'wanted', 'required', 'seeking'].includes(termLower)) {
+          textScore += 3;
+        }
+      }
+    });
+
+    // Apply the text score
+    totalScore += Math.min(80, textScore);
+    
+    console.log('🔍 SCORING DEBUG:', {
+      kind: item.kind,
+      title: item.title?.substring(0, 40),
+      textScore,
+      totalScore,
+      matchedTerms,
+      searchTerms
+    });
+  }
+
+
+
+  // RECENCY BOOST (smaller to not override text relevance)
+  const daysOld = Math.floor((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+  if (daysOld <= 1) totalScore += 8;
+  else if (daysOld <= 7) totalScore += 4;
+
+
+
+
         let locationScore = 0;
         const itemCity = (item.city || item.location || "").toLowerCase();
         if (cities.length && itemCity) {
@@ -2091,150 +2525,86 @@ exports.getFeed = async (req, res) => {
         return Math.max(0, Math.min(100, Math.round(totalScore)));
       }
 
-      const itemTaxonomies = {
+      // New matching logic like people.controller.js with taxonomy validation
+      console.log('=== FEED MATCH DEBUG ===');
+      console.log('Item:', item.kind, item.id, item.title?.substring(0, 30));
+      const itemOfferings = {
         categories: (item.audienceCategories || []).map((c) => String(c.id)),
         subcategories: (item.audienceSubcategories || []).map((s) => String(s.id)),
         subsubcategories: (item.audienceSubsubs || []).map((s) => String(s.id)),
         identities: (item.audienceIdentities || []).map((i) => String(i.id)),
-        directCategory: item.categoryId ? String(item.categoryId) : null,
-        directSubcategory: item.subcategoryId ? String(item.subcategoryId) : null,
-        directSubsubCategory: item.subsubCategoryId ? String(item.subsubCategoryId) : null,
-        generalCategory: item.generalCategoryId ? String(item.generalCategoryId) : null,
-        generalSubcategory: item.generalSubcategoryId ? String(item.generalSubcategoryId) : null,
-        generalSubsubCategory: item.generalSubsubCategoryId ? String(item.generalSubsubCategoryId) : null,
-        industryCategory: item.industryCategoryId ? String(item.industryCategoryId) : null,
-        industrySubcategory: item.industrySubcategoryId ? String(item.industrySubcategoryId) : null,
-        industrySubsubCategory: item.industrySubsubCategoryId ? String(item.industrySubsubCategoryId) : null,
       };
+     // console.log('Item offerings:', itemOfferings);
+      const postIdentities = itemOfferings.identities;
+      const userInterests = {
+        categories: userDefaults.interestCategoryIds.map(String).filter(id => checkIfBelongs('category', id, postIdentities)),
+        subcategories: userDefaults.interestSubcategoryIds.map(String).filter(id => checkIfBelongs('subcategory', id, postIdentities)),
+        subsubcategories: userDefaults.interestSubsubCategoryIds.map(String).filter(id => checkIfBelongs('subsubcategory', id, postIdentities)),
+        identities: userDefaults.interestIdentityIds.map(String),
+      };
+     // console.log('User interests (filtered):', userInterests);
 
-      if (itemTaxonomies.directCategory) itemTaxonomies.categories.push(itemTaxonomies.directCategory);
-      if (itemTaxonomies.directSubcategory) itemTaxonomies.subcategories.push(itemTaxonomies.directSubcategory);
-      if (itemTaxonomies.directSubsubCategory) itemTaxonomies.subsubcategories.push(itemTaxonomies.directSubsubCategory);
 
-      itemTaxonomies.categories = [...new Set(itemTaxonomies.categories)];
-      itemTaxonomies.subcategories = [...new Set(itemTaxonomies.subcategories)];
-      itemTaxonomies.subsubcategories = [...new Set(itemTaxonomies.subsubcategories)];
-      itemTaxonomies.identities = [...new Set(itemTaxonomies.identities)];
-
-      const WEIGHTS = { category: 25, subcategory: 30, subsubcategory: 20, identity: 15, location: 10 };
-      const GENERAL_WEIGHTS = { category: 10, subcategory: 12, subsubcategory: 8 };
-      const INDUSTRY_WEIGHTS = { category: 15, subcategory: 10, subsubcategory: 8 };
-      const REQUIRED_FACTORS = 3;
-
+      const WEIGHTS = { identity: 25, category: 25, subcategory: 25, subsubcategory: 25 };
       let totalScore = 0;
-      let matchedFactors = 0;
-
-      const allUserCategoryIds = [...new Set([...userDefaults.interestCategoryIds, ...effAudienceCategoryIds])];
-      if (allUserCategoryIds.length && itemTaxonomies.categories.length) {
-        const catMatches = itemTaxonomies.categories.filter((id) => allUserCategoryIds.includes(id));
-        if (catMatches.length) {
-          const pct = Math.min(
-            1,
-            catMatches.length / Math.max(allUserCategoryIds.length, itemTaxonomies.categories.length)
-          );
-          totalScore += WEIGHTS.category * pct;
-          matchedFactors++;
+      let totalPossibleScore = 0;
+      // Identity matching - one match gives 100%
+      if (userInterests.identities.length > 0) {
+        const hasMatch = itemOfferings.identities.length > 0 && itemOfferings.identities.some(id => userInterests.identities.includes(id));
+        console.log('Identity match:', hasMatch);
+        if (hasMatch) {
+          totalScore += WEIGHTS.identity;
         }
+        totalPossibleScore += WEIGHTS.identity;
       }
-
-      const allUserSubcategoryIds = [...new Set([...userDefaults.interestSubcategoryIds, ...effAudienceSubcategoryIds])];
-      if (allUserSubcategoryIds.length && itemTaxonomies.subcategories.length) {
-        const subMatches = itemTaxonomies.subcategories.filter((id) => allUserSubcategoryIds.includes(id));
-        if (subMatches.length) {
-          const pct = Math.min(
-            1,
-            subMatches.length / Math.max(allUserSubcategoryIds.length, itemTaxonomies.subcategories.length)
-          );
-          totalScore += WEIGHTS.subcategory * pct;
-          matchedFactors++;
-        }
+      // Category matching - proportion based
+      if (userInterests.categories.length > 0) {
+        const targetMatches = itemOfferings.categories.filter(id => userInterests.categories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.categories.length, itemOfferings.categories.length));
+        console.log('Category matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.category * pct;
+        totalPossibleScore += WEIGHTS.category;
       }
-
-      const allUserSubsubCategoryIds = [
-        ...new Set([...userDefaults.interestSubsubCategoryIds, ...effAudienceSubsubCategoryIds]),
-      ];
-      if (allUserSubsubCategoryIds.length && itemTaxonomies.subsubcategories.length) {
-        const xMatches = itemTaxonomies.subsubcategories.filter((id) => allUserSubsubCategoryIds.includes(id));
-        if (xMatches.length) {
-          const pct = Math.min(
-            1,
-            xMatches.length / Math.max(allUserSubsubCategoryIds.length, itemTaxonomies.subsubcategories.length)
-          );
-          totalScore += WEIGHTS.subsubcategory * pct;
-          matchedFactors++;
-        }
+      // Subcategory matching - proportion based
+      if (userInterests.subcategories.length > 0) {
+        const targetMatches = itemOfferings.subcategories.filter(id => userInterests.subcategories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subcategories.length, itemOfferings.subcategories.length));
+        console.log('Subcategory matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.subcategory * pct;
+        totalPossibleScore += WEIGHTS.subcategory;
       }
-
-      const allUserIdentityIds = [...new Set([...userDefaults.interestIdentityIds, ...effAudienceIdentityIds])];
-      if (allUserIdentityIds.length && itemTaxonomies.identities.length) {
-        const idMatches = itemTaxonomies.identities.filter((id) => allUserIdentityIds.includes(id));
-        if (idMatches.length) {
-          const pct = Math.min(
-            1,
-            idMatches.length / Math.max(allUserIdentityIds.length, itemTaxonomies.identities.length)
-          );
-          totalScore += WEIGHTS.identity * pct;
-          matchedFactors++;
-        }
+      // Subsubcategory matching - proportion based
+      if (userInterests.subsubcategories.length > 0) {
+        const targetMatches = itemOfferings.subsubcategories.filter(id => userInterests.subsubcategories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subsubcategories.length, itemOfferings.subsubcategories.length));
+        console.log('Subsubcategory matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.subsubcategory * pct;
+        totalPossibleScore += WEIGHTS.subsubcategory;
       }
-
+      // Location matching
       const itemCity = (item.city || item.location || "").toLowerCase();
+      let locationScore = 0;
       if (userDefaults.city && itemCity && itemCity === userDefaults.city.toLowerCase()) {
-        totalScore += WEIGHTS.location * 0.6;
-        matchedFactors++;
-      } else if (
-        userDefaults.city &&
-        itemCity &&
-        (itemCity.includes(userDefaults.city.toLowerCase()) ||
-          userDefaults.city.toLowerCase().includes(itemCity))
-      ) {
-        totalScore += WEIGHTS.location * 0.3;
-        matchedFactors++;
+        locationScore = 10 * 0.6;
+        totalScore += locationScore;
+        totalPossibleScore += 10;
+        console.log('Location match: exact city');
       } else if (userDefaults.country && item.country === userDefaults.country) {
-        totalScore += WEIGHTS.location * 0.4;
-        matchedFactors++;
+        locationScore = 10 * 0.4;
+        totalScore += locationScore;
+        totalPossibleScore += 10;
+        console.log('Location match: country');
+      } else {
+        console.log('Location match: none');
       }
-
-      if (Array.isArray(effGeneralCategoryIds) && effGeneralCategoryIds.length && itemTaxonomies.generalCategory) {
-        if (effGeneralCategoryIds.map(String).includes(itemTaxonomies.generalCategory)) {
-          totalScore += GENERAL_WEIGHTS.category;
-          matchedFactors++;
-        }
+      if (totalPossibleScore === 0) {
+        console.log('No possible score, returning 0');
+        return 0;
       }
-      if (
-        Array.isArray(effGeneralSubcategoryIds) &&
-        effGeneralSubcategoryIds.length &&
-        itemTaxonomies.generalSubcategory
-      ) {
-        if (effGeneralSubcategoryIds.map(String).includes(itemTaxonomies.generalSubcategory)) {
-          totalScore += GENERAL_WEIGHTS.subcategory;
-          matchedFactors++;
-        }
-      }
-      if (
-        Array.isArray(effGeneralSubsubCategoryIds) &&
-        effGeneralSubsubCategoryIds.length &&
-        itemTaxonomies.generalSubsubCategory
-      ) {
-        if (effGeneralSubsubCategoryIds.map(String).includes(itemTaxonomies.generalSubsubCategory)) {
-          totalScore += GENERAL_WEIGHTS.subsubcategory;
-          matchedFactors++;
-        }
-      }
-
-      if (Array.isArray(effIndustryIds) && effIndustryIds.length && itemTaxonomies.industryCategory) {
-        if (effIndustryIds.map(String).includes(itemTaxonomies.industryCategory)) {
-          totalScore += INDUSTRY_WEIGHTS.category;
-          matchedFactors++;
-        }
-      }
-
-      if (matchedFactors < REQUIRED_FACTORS) {
-        const scalingFactor = Math.max(0.5, matchedFactors / REQUIRED_FACTORS);
-        totalScore = totalScore * scalingFactor;
-      }
-
-      return Math.max(0, Math.min(100, Math.round(totalScore)));
+      const percentage = Math.max(0, Math.min(100, Math.round((totalScore / totalPossibleScore) * 100)));
+      console.log('Total score:', totalScore, 'Total possible:', totalPossibleScore, 'Percentage:', percentage);
+      console.log('=== END FEED MATCH DEBUG ===');
+      return percentage;
     };
 
 
@@ -2261,6 +2631,8 @@ exports.getFeed = async (req, res) => {
         userId: n.userId || null,
         userName: n.user?.name || null,
         tags:n.criteria,
+        profile:n.user?.profile || null,
+        postedBy:n.user || null,
         userAvatarUrl: n.user?.avatarUrl || n.user?.profile?.avatarUrl || null,
         attachments: n.attachments
           ? typeof n.attachments === "string"
@@ -2316,6 +2688,8 @@ exports.getFeed = async (req, res) => {
         relatedEntityType:m.relatedEntityType,
         userId: m.userId || null,
         userName: user.name || null,
+        profile:user?.profile || null,
+        postedBy:user || null,
         avatarUrl: user.avatarUrl || user.profile?.avatarUrl || null,
         audienceCategories: (m.audienceCategories || []).map((c) => ({ id: String(c.id), name: c.name })),
         audienceSubcategories: (m.audienceSubcategories || []).map((s) => ({ id: String(s.id), name: s.name })),
@@ -2413,20 +2787,28 @@ exports.getFeed = async (req, res) => {
         });
         const eventsWithAudience = await lazyLoadEventAudienceData(events, currentUserId);
         const eventsFiltered = filterByAudienceCriteria(eventsWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
-        const relatedNeeds = await Need.findAll({
-          subQuery: false,
-          where: { ...whereNeed, relatedEntityType: 'event', moderation_status: "approved" },
-          include: includeNeedRefs,
-          order: [["createdAt", "DESC"]],
-          limit: lim,
-          offset: off,
-        });
-        const relatedMomentsRows = await fetchMomentsPaged({
-          where: { ...whereCommon, relatedEntityType: "event" },
-          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-          limit: lim,
-          offset: off,
-        });
+         // Only show related needs/moments if no incompatible filters
+
+         let relatedNeeds = [];
+         let relatedMomentsRows = []
+
+        if (!hasIncompatibleFilters) {
+          relatedNeeds = await Need.findAll({
+            subQuery: false,
+            where: { ...whereNeed, relatedEntityType: 'event', moderation_status: "approved" },
+            include: includeNeedRefs,
+            order: [["createdAt", "DESC"]],
+            limit: lim,
+            offset: off,
+          });
+          relatedMomentsRows = await fetchMomentsPaged({
+            where: { ...whereCommon, relatedEntityType: "event" },
+            include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            limit: lim,
+            offset: off,
+          });
+        }
+
         const mappedEvents = eventsFiltered.map(mapEvent);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
         const mappedNeeds = relatedNeeds.map(mapNeed);
@@ -2462,7 +2844,7 @@ exports.getFeed = async (req, res) => {
             effAudienceSubsubCategoryIds
           );
         }
-        if (showJobSeekers) {
+        if (showJobSeekers && !hasIncompatibleFilters) {
           relatedNeeds = await Need.findAll({
             subQuery: false,
             where: { ...whereNeed, relatedEntityType: 'job', moderation_status: "approved" },
@@ -2481,12 +2863,15 @@ exports.getFeed = async (req, res) => {
             effAudienceSubsubCategoryIds
           );
 
-          relatedMomentsRows = await fetchMomentsPaged({
+          if(showJobOffers && showJobSeekers){
+             relatedMomentsRows = await fetchMomentsPaged({
             where: { ...whereCommon, relatedEntityType: "job" },
             include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
             limit: lim,
             offset: off,
           });
+          
+          }
           // Load audience for moments and filter by audience params
           relatedMomentsRows = await lazyLoadMomentAudienceData(relatedMomentsRows, currentUserId);
           relatedMomentsRows = filterByAudienceCriteria(
@@ -2520,7 +2905,12 @@ exports.getFeed = async (req, res) => {
         });
         const servicesWithAudience = await lazyLoadServiceAudienceData(services, currentUserId);
         const servicesFiltered = filterByAudienceCriteria(servicesWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
-        const relatedNeeds = await Need.findAll({
+       
+        let relatedMomentsRows=[]
+        let relatedNeeds = []
+       
+        if(!hasIncompatibleFilters){
+           relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'service', moderation_status: "approved" },
           include: includeNeedRefs,
@@ -2528,12 +2918,14 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const relatedMomentsRows = await fetchMomentsPaged({
+         relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "service" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: lim,
           offset: off,
         });
+        }
+
         const mappedServices = servicesFiltered.map(mapService);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -2554,7 +2946,13 @@ exports.getFeed = async (req, res) => {
         });
         const productsWithAudience = await lazyLoadProductAudienceData(products, currentUserId);
         const productsFiltered = filterByAudienceCriteria(productsWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
-        const relatedNeeds = await Need.findAll({
+          let relatedNeeds = [];
+      let relatedMomentsRows = []
+
+      
+       if(!hasIncompatibleFilters){
+          
+        relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'product', moderation_status: "approved" },
           include: includeNeedRefs,
@@ -2562,12 +2960,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const relatedMomentsRows = await fetchMomentsPaged({
+        relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "product" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: lim,
           offset: off,
         });
+       }
         const mappedProducts = productsFiltered.map(mapProduct);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -2588,7 +2987,14 @@ exports.getFeed = async (req, res) => {
         });
         const tourismWithAudience = await lazyLoadTourismAudienceData(tourism, currentUserId);
         const tourismFiltered = filterByAudienceCriteria(tourismWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
-        const relatedNeeds = await Need.findAll({
+        
+          let relatedNeeds = [];
+      let relatedMomentsRows = []
+
+     
+       if(!hasIncompatibleFilters){
+         
+        relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'tourism', moderation_status: "approved" },
           include: includeNeedRefs,
@@ -2596,12 +3002,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const relatedMomentsRows = await fetchMomentsPaged({
+        relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "tourism" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: lim,
           offset: off,
         });
+       }
         const mappedTourism = tourismFiltered.map(mapTourism);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -2628,7 +3035,12 @@ exports.getFeed = async (req, res) => {
           effAudienceSubcategoryIds,
           effAudienceSubsubCategoryIds
         );
-        const relatedNeeds = await Need.findAll({
+
+         let relatedNeeds = [];
+        let relatedMomentsRows = []
+
+       if(!hasIncompatibleFilters){
+         relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: 'funding', moderation_status: "approved" },
           include: includeNeedRefs,
@@ -2636,12 +3048,13 @@ exports.getFeed = async (req, res) => {
           limit: lim,
           offset: off,
         });
-        const relatedMomentsRows = await fetchMomentsPaged({
+        relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "funding" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: lim,
           offset: off,
         });
+       }
         const mappedFunding = fundingFiltered.map(mapFunding);
         const mappedNeeds = relatedNeeds.map(mapNeed);
         const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -2710,16 +3123,9 @@ if (tab === "needs") {
         sortByMatchThenRecency(mapped);
         return { items: await getConStatusItems(mapped) };
       }
-      const [
-        jobsAll,
-        eventsAll,
-        servicesAll,
-        productsAll,
-        tourismAll,
-        fundingAll,
-        needsAll,
-        momentsAll,
-      ] = await Promise.all([
+      
+       
+        const promises=await Promise.all([
         (async () => {
           const jobs = await Job.findAll({
             subQuery: false,
@@ -2782,6 +3188,13 @@ if (tab === "needs") {
           });
           return await lazyLoadFundingAudienceData(funding, currentUserId);
         })(),
+      
+      ]);
+
+      
+    // Only fetch Needs and Moments if no incompatible filters
+    if (!hasIncompatibleFilters) {
+      promises.push(
         Need.findAll({
           subQuery: false,
           where: { ...whereNeed, moderation_status: "approved" },
@@ -2793,8 +3206,24 @@ if (tab === "needs") {
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: lim,
           offset: 0,
-        }),
-      ]);
+        })
+      );
+    } else {
+      // Return empty arrays for Needs and Moments
+      promises.push(Promise.resolve([]), Promise.resolve([]));
+    }
+
+   
+    const [
+      jobsAll,
+      eventsAll,
+      servicesAll,
+      productsAll,
+      tourismAll,
+      fundingAll,
+      needsAll,
+      momentsAll,
+    ] = await Promise.all(promises);
 
       const applyTextMatchFlag = (items) => {
         if (!hasTextSearch) return items;
@@ -2892,6 +3321,8 @@ if (tab === "needs") {
         ),
       ];
 
+    
+
       sortByMatchThenRecency(merged);
       const diversified = diversifyFeed(merged, { maxSeq: 1 });
       const windowed = diversified.slice(off, off + lim);
@@ -2910,19 +3341,25 @@ if (tab === "needs") {
         limit: bufferLimit,
       });
       const eventsWithAudience = await lazyLoadEventAudienceData(events, currentUserId);
-      const relatedNeeds = await Need.findAll({
+
+      let relatedNeeds = [];
+      let relatedMomentsRows = []
+
+      if(!hasIncompatibleFilters){
+         relatedNeeds = await Need.findAll({
         subQuery: false,
         where: { ...whereNeed, relatedEntityType: "event", moderation_status: "approved" },
         include: includeNeedRefs,
         order: [["createdAt", "DESC"]],
         limit: bufferLimit,
       });
-      const relatedMomentsRows = await fetchMomentsPaged({
+      relatedMomentsRows = await fetchMomentsPaged({
         where: { ...whereCommon, relatedEntityType: "event" },
         include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
         limit: bufferLimit,
         offset: 0,
       });
+      }
       const mappedEvents = eventsWithAudience.map(mapEvent);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -2954,7 +3391,7 @@ if (tab === "needs") {
         jobs = filterByAudienceCriteria(jobs, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
       }
 
-      if (showJobSeekers) {
+      if (showJobSeekers && !hasIncompatibleFilters) {
         relatedNeeds = await Need.findAll({
           subQuery: false,
           where: { ...whereNeed, relatedEntityType: "job", moderation_status: "approved" },
@@ -2972,12 +3409,16 @@ if (tab === "needs") {
           effAudienceSubsubCategoryIds
         );
 
-        relatedMomentsRows = await fetchMomentsPaged({
+         if(showJobOffers && showJobSeekers){
+              relatedMomentsRows = await fetchMomentsPaged({
           where: { ...whereCommon, relatedEntityType: "job" },
           include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
           limit: bufferLimit,
           offset: 0,
         });
+         }
+
+       
         // Load audience data for moments and filter by provided audience params
         relatedMomentsRows = await lazyLoadMomentAudienceData(relatedMomentsRows, currentUserId);
         relatedMomentsRows = filterByAudienceCriteria(
@@ -3012,20 +3453,26 @@ if (tab === "needs") {
       });
       const servicesWithAudience = await lazyLoadServiceAudienceData(services, currentUserId);
 
-      const relatedNeeds = await Need.findAll({
-        subQuery: false,
-        where: { ...whereNeed, relatedEntityType: "service", moderation_status: "approved" },
-        include: includeNeedRefs,
-        order: [["createdAt", "DESC"]],
-        limit: bufferLimit,
-      });
+       let relatedMomentsRows=[]
+        let relatedNeeds = []
+       // Only show related needs/moments if no incompatible filters
+      if (!hasIncompatibleFilters) {
+        relatedNeeds = await Need.findAll({
+          subQuery: false,
+          where: { ...whereNeed, relatedEntityType: 'service', moderation_status: "approved" },
+          include: includeNeedRefs,
+          order: [["createdAt", "DESC"]],
+          limit: lim,
+          offset: off,
+        });
+        relatedMomentsRows = await fetchMomentsPaged({
+          where: { ...whereCommon, relatedEntityType: "service" },
+          include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+          limit: lim,
+          offset: off,
+        });
+      }
 
-      const relatedMomentsRows = await fetchMomentsPaged({
-        where: { ...whereCommon, relatedEntityType: "service" },
-        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-        offset: 0,
-      });
 
       const mappedServices = servicesWithAudience.map(mapService);
       const mappedNeeds = relatedNeeds.map(mapNeed);
@@ -3048,7 +3495,13 @@ if (tab === "needs") {
       });
       const productsWithAudience = await lazyLoadProductAudienceData(products, currentUserId);
 
-      const relatedNeeds = await Need.findAll({
+      let relatedNeeds = [];
+      let relatedMomentsRows = []
+
+
+
+     if(!hasIncompatibleFilters){
+        relatedNeeds = await Need.findAll({
         subQuery: false,
         where: { ...whereNeed, relatedEntityType: "product", moderation_status: "approved" },
         include: includeNeedRefs,
@@ -3056,12 +3509,13 @@ if (tab === "needs") {
         limit: bufferLimit,
       });
 
-      const relatedMomentsRows = await fetchMomentsPaged({
+      relatedMomentsRows = await fetchMomentsPaged({
         where: { ...whereCommon, relatedEntityType: "product" },
         include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
         limit: bufferLimit,
         offset: 0,
       });
+     }
 
       const mappedProducts = productsWithAudience.map(mapProduct);
       const mappedNeeds = relatedNeeds.map(mapNeed);
@@ -3084,21 +3538,28 @@ if (tab === "needs") {
       });
       const tourismWithAudience = await lazyLoadTourismAudienceData(tourism, currentUserId);
 
-      const relatedNeeds = await Need.findAll({
-        subQuery: false,
-        where: { ...whereNeed, relatedEntityType: "tourism", moderation_status: "approved" },
-        include: includeNeedRefs,
-        order: [["createdAt", "DESC"]],
-        limit: bufferLimit,
-      });
 
-      const relatedMomentsRows = await fetchMomentsPaged({
-        where: { ...whereCommon, relatedEntityType: "tourism" },
-        include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
-        limit: bufferLimit,
-        offset: 0,
-      });
+      let relatedNeeds = [];
+      let relatedMomentsRows = []
 
+      if(!hasIncompatibleFilters){
+        
+          relatedNeeds = await Need.findAll({
+            subQuery: false,
+            where: { ...whereNeed, relatedEntityType: "tourism", moderation_status: "approved" },
+            include: includeNeedRefs,
+            order: [["createdAt", "DESC"]],
+            limit: bufferLimit,
+          });
+
+          relatedMomentsRows = await fetchMomentsPaged({
+            where: { ...whereCommon, relatedEntityType: "tourism" },
+            include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
+            limit: bufferLimit,
+            offset: 0,
+          });
+
+      }
       const mappedTourism = tourismWithAudience.map(mapTourism);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -3122,7 +3583,12 @@ if (tab === "needs") {
       const fundingWithAudience= await lazyLoadFundingAudienceData(funding, currentUserId);
       const fundingFiltered = filterByAudienceCriteria(fundingWithAudience, effAudienceIdentityIds, effAudienceCategoryIds, effAudienceSubcategoryIds, effAudienceSubsubCategoryIds);
 
-      const relatedNeeds = await Need.findAll({
+      let relatedNeeds = [];
+      let relatedMomentsRows = []
+
+     
+      if(!hasIncompatibleFilters){
+         relatedNeeds = await Need.findAll({
         subQuery: false,
         where: { ...whereNeed, relatedEntityType: "funding", moderation_status: "approved" },
         include: includeNeedRefs,
@@ -3130,13 +3596,14 @@ if (tab === "needs") {
         limit: bufferLimit,
       });
 
-      const relatedMomentsRows = await fetchMomentsPaged({
+      relatedMomentsRows = await fetchMomentsPaged({
         where: { ...whereCommon, relatedEntityType: "funding" },
         include: makeMomentInclude({ categoryId, subcategoryId, subsubCategoryId }),
         limit: bufferLimit,
         offset: 0,
       });
 
+      }
       const mappedFunding = fundingWithAudience.map(mapFunding);
       const mappedNeeds = relatedNeeds.map(mapNeed);
       const mappedMoments = relatedMomentsRows.map(mapMoment);
@@ -3347,23 +3814,105 @@ exports.getSuggestions = async (req, res) => {
       identityIds: [],
     };
 
+   
+  
+  
     if (currentUserId) {
-      try {
-        const me = await User.findByPk(currentUserId, {
-          attributes: ["id", "country", "city", "accountType"],
-          include: [{ model: UserCategory, as: "interests", attributes: ["categoryId", "subcategoryId"] }],
-        });
-        if (me) {
-          userDefaults.country = me.country || null;
-          userDefaults.city = me.city || null;
-          userDefaults.categoryIds = (me.interests || []).map((i) => i.categoryId).filter(Boolean);
-          userDefaults.subcategoryIds = (me.interests || []).map((i) => i.subcategoryId).filter(Boolean);
-          userDefaults.subsubcategoryIds = [];
-          userDefaults.identityIds = [];
+  try {
+    const me = await User.findByPk(currentUserId, {
+      attributes: ["id", "country", "city", "accountType"],
+      include: [
+        { 
+          model: UserCategory, 
+          as: "interests", 
+          attributes: ["categoryId", "subcategoryId"] 
         }
-      } catch {}
-    }
+      ],
+    });
+    
+    if (me) {
+      userDefaults.country = me.country || null;
+      userDefaults.city = me.city || null;
+      userDefaults.categoryIds = (me.interests || []).map((i) => i.categoryId).filter(Boolean);
+      userDefaults.subcategoryIds = (me.interests || []).map((i) => i.subcategoryId).filter(Boolean);
+      
+      // Load UserIdentity for current user
+      try {
+        const userIdentities = await UserIdentity.findAll({
+          where: { userId: currentUserId },
+          attributes: ['identityId']
+        });
+        const identitiesFromUserIdentities = userIdentities.map((i) => i.identityId).filter(Boolean);
+        
+        // Load subcategory interests from UserSubcategoryInterest
+        try {
+          const subcategoryInterests = await UserSubcategoryInterest.findAll({
+            where: { userId: currentUserId },
+            include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name", "categoryId"] }],
+          });
+          userDefaults.subcategoryIds = [
+            ...userDefaults.subcategoryIds,
+            ...subcategoryInterests.map((i) => i.subcategoryId).filter(Boolean)
+          ];
+          
+          // Extract categories from subcategory interests
+          const categoriesFromSubcategoryInterests = subcategoryInterests
+            .map((i) => i.subcategory?.categoryId)
+            .filter(Boolean);
+          userDefaults.categoryIds = [
+            ...userDefaults.categoryIds,
+            ...categoriesFromSubcategoryInterests
+          ];
+          
+          // Remove duplicates
+          userDefaults.subcategoryIds = [...new Set(userDefaults.subcategoryIds)];
+          userDefaults.categoryIds = [...new Set(userDefaults.categoryIds)];
+        } catch (error) {
+          console.error('Error loading subcategory interests:', error);
+        }
+        
+        // Load subsubcategory interests
+        try {
+          const subsubInterests = await UserSubsubCategoryInterest.findAll({
+            where: { userId: currentUserId },
+            include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }],
+          });
+          userDefaults.subsubcategoryIds = subsubInterests.map((i) => i.subsubCategoryId).filter(Boolean);
+        } catch (error) {
+          console.error('Error loading subsubcategory interests:', error);
+          userDefaults.subsubcategoryIds = [];
+        }
+        
+        // Load identity interests
+        try {
+          const identityInterests = await UserIdentityInterest.findAll({
+            where: { userId: currentUserId },
+            include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }],
+          });
+          userDefaults.identityIds = [
+            ...identityInterests.map((i) => i.identityId).filter(Boolean),
+            ...identitiesFromUserIdentities // Include identities from UserIdentity too
+          ];
+          userDefaults.identityIds = [...new Set(userDefaults.identityIds)]; // Remove duplicates
+        } catch (error) {
+          console.error('Error loading identity interests:', error);
+          userDefaults.identityIds = identitiesFromUserIdentities; // Fallback to just UserIdentity
+        }
+      } catch (error) {
+        console.error('Error loading user identities:', error);
+      }
 
+      console.log('Loaded current user interests:', {
+        categories: userDefaults.categoryIds,
+        subcategories: userDefaults.subcategoryIds,
+        subsubcategories: userDefaults.subsubcategoryIds,
+        identities: userDefaults.identityIds
+      });
+    }
+  } catch (error) {
+    console.error('Error loading user defaults:', error);
+  }
+}
     const qCats = normalizeToArray(cats) || normalizeToArray(categoryId);
     const qSubcats = normalizeToArray(subcategoryId);
 
@@ -3395,16 +3944,73 @@ exports.getSuggestions = async (req, res) => {
     if (eff.categoryIds) interestsWhere.categoryId = { [Op.in]: eff.categoryIds };
     if (eff.subcategoryIds) interestsWhere.subcategoryId = { [Op.in]: eff.subcategoryIds };
 
-    const makeInterestsInclude = (required) => ({
-      model: UserCategory,
-      as: "interests",
-      required,
-      where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
-      include: [
-        { model: Category, as: "category", attributes: ["id", "name"], required: false },
-        { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
-      ],
-    });
+    
+  
+    
+  
+    const makeInterestsInclude = (required) => ([
+  {
+    model: UserCategory,
+    as: "interests",
+    required,
+    where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
+    include: [
+      { model: Category, as: "category", attributes: ["id", "name"], required: false },
+      { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
+    ],
+  },
+  {
+    model: UserSubcategory,
+    as: "userSubcategories",
+    attributes: ["subcategoryId"],
+    required: false,
+    include: [
+      {
+        model: Subcategory,
+        as: "subcategory",
+        attributes: ["id", "name", "categoryId"],
+        required: false
+      }
+    ]
+  },
+  {
+    model: UserSubcategoryInterest,
+    as: "subcategoryInterests",
+    attributes: ["subcategoryId"],
+    required: false,
+    include: [
+      {
+        model: Subcategory,
+        as: "subcategory",
+        attributes: ["id", "name", "categoryId"],
+        required: false
+      }
+    ]
+  },
+  {
+    model: UserSubsubCategory,
+    as: "userSubsubCategories",
+    attributes: ["subsubCategoryId"],
+    required: false,
+  },
+  {
+    model: UserIdentityInterest,
+    as: "identityInterests",
+    attributes: ["identityId"],
+    required: false,
+    include: [
+      {
+        model: Identity,
+        as: "identity",
+        attributes: ["id", "name"],
+        required: false
+      }
+    ]
+  },
+  // REMOVED: UserIdentity association
+]);
+
+
 
     const profileInclude = {
       model: Profile,
@@ -3421,7 +4027,7 @@ exports.getSuggestions = async (req, res) => {
       matchesRaw = await User.findAll({
         subQuery: false,
         where: whereUserBase,
-        include: [profileInclude, makeInterestsInclude(Boolean(qCats || qSubcats))],
+        include: [profileInclude, ...makeInterestsInclude(Boolean(qCats || qSubcats))],
         limit: Number(limit),
         order: [["createdAt", "DESC"]],
       });
@@ -3430,7 +4036,7 @@ exports.getSuggestions = async (req, res) => {
         matchesRaw = await User.findAll({
           subQuery: false,
           where: whereUserBase,
-          include: [profileInclude, makeInterestsInclude(true)],
+          include: [profileInclude, ...makeInterestsInclude(true)],
           limit: Number(limit),
           order: [["createdAt", "DESC"]],
         });
@@ -3439,7 +4045,7 @@ exports.getSuggestions = async (req, res) => {
         matchesRaw = await User.findAll({
           subQuery: false,
           where: whereUserBase,
-          include: [profileInclude, makeInterestsInclude(false)],
+          include: [profileInclude, ...makeInterestsInclude(false)],
           limit: Number(limit),
           order: [["createdAt", "DESC"]],
         });
@@ -3448,7 +4054,7 @@ exports.getSuggestions = async (req, res) => {
       matchesRaw = await User.findAll({
         subQuery: false,
         where: whereUserBase,
-        include: [profileInclude, makeInterestsInclude(false)],
+        include: [profileInclude, ...makeInterestsInclude(false)],
         limit: Number(limit),
         order: [["createdAt", "DESC"]],
       });
@@ -3469,79 +4075,173 @@ exports.getSuggestions = async (req, res) => {
     const nearbyRaw = await User.findAll({
       subQuery: false,
       where: nearbyWhere,
-      include: [profileInclude, makeInterestsInclude(Boolean(qCats || qSubcats))],
+      include: [profileInclude, ...makeInterestsInclude(Boolean(qCats || qSubcats))],
       limit: Number(limit),
       order: [["createdAt", "DESC"]],
     });
 
-    const calculateMatchPercentage = (myWant, u) => {
-      const other = {
-        xs: (u.interests || []).map((i) => i.subsubcategoryId).filter(Boolean).map(String),
-        subs: (u.interests || []).map((i) => i.subcategoryId).filter(Boolean).map(String),
-        cats: (u.interests || []).map((i) => i.categoryId).filter(Boolean).map(String),
-        ids: (u.interests || []).map((i) => i.identityId).filter(Boolean).map(String),
-      };
 
-      const REQUIRED_FACTORS = 4;
-      const WEIGHTS = { category: 20, subcategory: 25, subsubcategory: 15, identity: 10, country: 15, city: 15 };
 
+    // Enhance user data with manually loaded UserIdentity data
+const enhancedMatchesRaw = await Promise.all(
+  matchesRaw.map(async (user) => {
+    try {
+      // Manually load UserIdentity records for this user
+      const userIdentities = await UserIdentity.findAll({
+        where: { userId: user.id },
+        attributes: ['identityId'],
+        include: [
+          {
+            model: Identity,
+            as: 'identity',
+            attributes: ['id', 'name']
+          }
+        ]
+      });
+      
+      // Add the manually loaded data to the user object
+      user.userIdentities = userIdentities;
+    } catch (error) {
+      console.error(`Error loading UserIdentity for user ${user.id}:`, error);
+      user.userIdentities = [];
+    }
+    return user;
+  })
+);
+
+const enhancedNearbyRaw = await Promise.all(
+  nearbyRaw.map(async (user) => {
+    try {
+      // Manually load UserIdentity records for this user
+      const userIdentities = await UserIdentity.findAll({
+        where: { userId: user.id },
+        attributes: ['identityId'],
+        include: [
+          {
+            model: Identity,
+            as: 'identity',
+            attributes: ['id', 'name']
+          }
+        ]
+      });
+      
+      // Add the manually loaded data to the user object
+      user.userIdentities = userIdentities;
+    } catch (error) {
+      console.error(`Error loading UserIdentity for user ${user.id}:`, error);
+      user.userIdentities = [];
+    }
+    return user;
+  })
+);
+  
+ const calculateMatchPercentage = (myWant, u) => {
+  console.log('=== SUGGESTIONS MATCH DEBUG ===');
+  console.log('Other user:', u.name, u.id);
+  
+  // Extract categories from interests
+  const categoriesFromInterests = (u.interests || []).map((i) => i.categoryId).filter(id => id != null).map(String);
+  
+  // Extract categories from subcategory associations
+  const categoriesFromUserSubcategories = (u.userSubcategories || [])
+    .map((us) => us.subcategory?.categoryId)
+    .filter(id => id != null)
+    .map(String);
+  
+  const categoriesFromSubcategoryInterests = (u.subcategoryInterests || [])
+    .map((si) => si.subcategory?.categoryId)
+    .filter(id => id != null)
+    .map(String);
+  
+  // Combine subcategories from both sources
+  const subcategoriesFromUserSubcategory = (u.userSubcategories || []).map((i) => i.subcategoryId).filter(id => id != null).map(String);
+  const subcategoriesFromSubcategoryInterests = (u.subcategoryInterests || []).map((i) => i.subcategoryId).filter(id => id != null).map(String);
+  
+  // Extract identities from BOTH sources (now using manually loaded userIdentities)
+  const identitiesFromIdentityInterests = (u.identityInterests || []).map((i) => i.identityId).filter(id => id != null).map(String);
+  const identitiesFromUserIdentities = (u.userIdentities || []).map((i) => i.identityId).filter(id => id != null).map(String);
+  
+  const itemOfferings = {
+    categories: [...new Set([...categoriesFromInterests, ...categoriesFromUserSubcategories, ...categoriesFromSubcategoryInterests])],
+    subcategories: [...new Set([...subcategoriesFromUserSubcategory, ...subcategoriesFromSubcategoryInterests])],
+    subsubcategories: (u.userSubsubCategories || []).map((i) => i.subsubCategoryId).filter(id => id != null).map(String),
+    identities: [...new Set([...identitiesFromIdentityInterests, ...identitiesFromUserIdentities])], // Combine both identity sources
+  };
+  
+  console.log('Other user offerings (interests):', itemOfferings);
+  
+  const userInterests = {
+    categories: Array.from(myWant.catSet).map(String),
+    subcategories: Array.from(myWant.subSet).map(String),
+    subsubcategories: Array.from(myWant.xSet).map(String),
+    identities: Array.from(myWant.idSet).map(String),
+  };
+  
+  console.log('Current user interests:', userInterests);
+  
+  
+ 
+
+      const WEIGHTS = { identity: 25, category: 25, subcategory: 25, subsubcategory: 25 };
       let totalScore = 0;
-      let matchedFactors = 0;
-
-      if (myWant.catSet.size > 0 && other.cats.length > 0) {
-        const catMatches = other.cats.filter((id) => myWant.catSet.has(id));
-        if (catMatches.length > 0) {
-          const pct = Math.min(1, catMatches.length / Math.max(myWant.catSet.size, other.cats.length));
-          totalScore += WEIGHTS.category * pct;
-          matchedFactors++;
+      let totalPossibleScore = 0;
+      // Identity matching - one match gives 100%
+      if (userInterests.identities.length > 0) {
+        const hasMatch = itemOfferings.identities.length > 0 && itemOfferings.identities.some(id => userInterests.identities.includes(id));
+        console.log('Identity match:', hasMatch);
+        if (hasMatch) {
+          totalScore += WEIGHTS.identity;
         }
+        totalPossibleScore += WEIGHTS.identity;
       }
-
-      if (myWant.subSet.size > 0 && other.subs.length > 0) {
-        const subMatches = other.subs.filter((id) => myWant.subSet.has(id));
-        if (subMatches.length > 0) {
-          const pct = Math.min(1, subMatches.length / Math.max(myWant.subSet.size, other.subs.length));
-          totalScore += WEIGHTS.subcategory * pct;
-          matchedFactors++;
-        }
+      // Category matching - proportion based
+      if (userInterests.categories.length > 0) {
+        const targetMatches = itemOfferings.categories.filter(id => userInterests.categories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.categories.length, itemOfferings.categories.length));
+        console.log('Category matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.category * pct;
+        totalPossibleScore += WEIGHTS.category;
       }
-
-      if (myWant.xSet.size > 0 && other.xs.length > 0) {
-        const xMatches = other.xs.filter((id) => myWant.xSet.has(id));
-        if (xMatches.length > 0) {
-          const pct = Math.min(1, xMatches.length / Math.max(myWant.xSet.size, other.xs.length));
-          totalScore += WEIGHTS.subsubcategory * pct;
-          matchedFactors++;
-        }
+      // Subcategory matching - proportion based
+      if (userInterests.subcategories.length > 0) {
+        const targetMatches = itemOfferings.subcategories.filter(id => userInterests.subcategories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subcategories.length, itemOfferings.subcategories.length));
+        console.log('Subcategory matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.subcategory * pct;
+        totalPossibleScore += WEIGHTS.subcategory;
       }
-
-      if (myWant.idSet.size > 0 && other.ids.length > 0) {
-        const idMatches = other.ids.filter((id) => myWant.idSet.has(id));
-        if (idMatches.length > 0) {
-          const pct = Math.min(1, idMatches.length / Math.max(myWant.idSet.size, other.ids.length));
-          totalScore += WEIGHTS.identity * pct;
-          matchedFactors++;
-        }
+      // Subsubcategory matching - proportion based
+      if (userInterests.subsubcategories.length > 0) {
+        const targetMatches = itemOfferings.subsubcategories.filter(id => userInterests.subsubcategories.includes(id));
+        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subsubcategories.length, itemOfferings.subsubcategories.length));
+        console.log('Subsubcategory matches:', targetMatches.length, 'pct:', pct);
+        totalScore += WEIGHTS.subsubcategory * pct;
+        totalPossibleScore += WEIGHTS.subsubcategory;
       }
-
-      const hisCity = (u.city || "").toLowerCase();
-      if (myWant.city && hisCity && myWant.city === hisCity) {
-        totalScore += WEIGHTS.city;
-        matchedFactors++;
+      // Location matching
+      const otherCity = (u.city || "").toLowerCase();
+      let locationScore = 0;
+      if (myWant.city && otherCity && otherCity === myWant.city) {
+        locationScore = 10 * 0.6;
+        totalScore += locationScore;
+        totalPossibleScore += 10;
+        console.log('Location match: exact city');
+      } else if (myWant.country && u.country === myWant.country) {
+        locationScore = 10 * 0.4;
+        totalScore += locationScore;
+        totalPossibleScore += 10;
+        console.log('Location match: country');
+      } else {
+        console.log('Location match: none');
       }
-
-      const hisCountry = u.countryOfResidence || u.country || null;
-      if (myWant.country && hisCountry && myWant.country === hisCountry) {
-        totalScore += WEIGHTS.country;
-        matchedFactors++;
+      if (totalPossibleScore === 0) {
+        console.log('No possible score, returning 0');
+        return 0;
       }
-
-      if (matchedFactors < REQUIRED_FACTORS) {
-        const scalingFactor = Math.max(0.3, matchedFactors / REQUIRED_FACTORS);
-        totalScore = totalScore * scalingFactor;
-      }
-
-      return Math.max(0, Math.min(100, Math.round(totalScore)));
+      const percentage = Math.max(0, Math.min(100, Math.round((totalScore / totalPossibleScore) * 100)));
+      console.log('Total score:', totalScore, 'Total possible:', totalPossibleScore, 'Percentage:', percentage);
+      console.log('=== END SUGGESTIONS MATCH DEBUG ===');
+      return percentage;
     };
 
     const mapUser = (u, idx) => {
@@ -3577,9 +4277,9 @@ exports.getSuggestions = async (req, res) => {
         mockIndex: 30 + idx,
       };
     };
-
-    let matches = matchesRaw.map(mapUser);
-    let nearby = nearbyRaw.map(mapUser);
+    
+let matches = enhancedMatchesRaw.map(mapUser);
+let nearby = enhancedNearbyRaw.map(mapUser);
 
     const allTargets = [...matches, ...nearby].map((u) => u.id).filter(Boolean);
     const statusMap = await getConnectionStatusMap(currentUserId, allTargets, {

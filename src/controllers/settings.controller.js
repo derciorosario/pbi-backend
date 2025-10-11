@@ -1,5 +1,7 @@
 // src/controllers/settings.controller.js
 const { User, UserSettings } = require("../models");
+const { cache } = require("../utils/redis");
+
 
 /**
  * Get user settings
@@ -29,6 +31,7 @@ exports.getSettings = async (req, res) => {
         contentType: "all"
       }
     });
+  
 
     // Return the settings
     res.json(settings);
@@ -46,7 +49,7 @@ exports.getSettings = async (req, res) => {
 exports.updateSettings = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { notifications, emailFrequency, hideMainFeed, connectionsOnly, contentType } = req.body;
+    const { notifications, emailFrequency, hideMainFeed, connectionsOnly, contentType, bidirectionalMatch, bidirectionalMatchFormula } = req.body;
 
     // Validate input
     if (!notifications || !emailFrequency) {
@@ -75,6 +78,17 @@ exports.updateSettings = async (req, res) => {
       return res.status(400).json({ message: "Invalid content type" });
     }
 
+    // Validate bidirectionalMatch
+    if (typeof bidirectionalMatch !== 'boolean') {
+      return res.status(400).json({ message: "bidirectionalMatch must be a boolean" });
+    }
+
+    // Validate bidirectionalMatchFormula
+    const validFormulas = ["simple", "reciprocal"];
+    if (!validFormulas.includes(bidirectionalMatchFormula)) {
+      return res.status(400).json({ message: "Invalid bidirectional match formula" });
+    }
+
     // Find or create user settings
     let [settings, created] = await UserSettings.findOrCreate({
       where: { userId },
@@ -90,16 +104,31 @@ exports.updateSettings = async (req, res) => {
         emailFrequency: "daily",
         hideMainFeed: false,
         connectionsOnly: false,
-        contentType: "all"
+        contentType: "all",
+        bidirectionalMatch: true,
+        bidirectionalMatchFormula: "reciprocal"
       }
     });
 
     // Update settings
+     if((settings.bidirectionalMatch!= bidirectionalMatch) || (settings.bidirectionalMatchFormula != bidirectionalMatchFormula)){
+        await cache.deleteKeys([
+          ["feed",req.user.id] 
+        ]);
+        await cache.deleteKeys([
+          ["people",req.user.id] 
+        ]);
+    }
+   
+
     settings.notifications = typeof notifications === 'string' ? notifications : JSON.stringify(notifications);
     settings.emailFrequency = emailFrequency;
     settings.hideMainFeed = hideMainFeed;
     settings.connectionsOnly = connectionsOnly;
     settings.contentType = contentType;
+    settings.bidirectionalMatch = bidirectionalMatch;
+    settings.bidirectionalMatchFormula = bidirectionalMatchFormula;
+
     await settings.save();
 
     // Return the updated settings

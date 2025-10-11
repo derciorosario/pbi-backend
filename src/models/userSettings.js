@@ -51,6 +51,18 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'all',
       comment: 'Type of content to display: all, text only, or images only'
     },
+    bidirectionalMatch: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Whether to use bidirectional matching algorithm'
+    },
+    bidirectionalMatchFormula: {
+      type: DataTypes.ENUM('simple', 'reciprocal'),
+      allowNull: false,
+      defaultValue: 'reciprocal',
+      comment: 'Formula to use for bidirectional matching: simple (average) or reciprocal (weighted)'
+    },
   }, {
     timestamps: true,
     // optional: freezeTableName: true,

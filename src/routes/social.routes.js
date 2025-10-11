@@ -4,7 +4,7 @@ const S = require("../controllers/social.controller");
 
 // Like routes
 router.post("/likes", auth(true), S.toggleLike);
-router.get("/likes/:targetType/:targetId", auth(true), S.getLikeStatus);
+router.get("/likes/:targetType/:targetId", auth(false), S.getLikeStatus);
 
 // Comment routes
 router.post("/comments", auth(true), S.createComment);

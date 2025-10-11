@@ -427,6 +427,12 @@ async function updateDoSelections(req, res, next) {
       ["people",req.user.id] 
     ]);
 
+     await cache.deleteKeys([
+      ["suggestions",req.user.id] 
+    ]);
+
+    
+
     await t.commit();
     return getMe(req, res, next);
   } catch (e) {
@@ -479,6 +485,9 @@ async function updateInterestSelections(req, res, next) {
     ]);
      await cache.deleteKeys([
       ["people",req.user.id] 
+    ]);
+     await cache.deleteKeys([
+      ["suggestions",req.user.id] 
     ]);
 
     

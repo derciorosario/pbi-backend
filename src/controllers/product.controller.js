@@ -162,6 +162,7 @@ exports.update = async (req, res) => {
       generalCategoryId,
       generalSubcategoryId,
       generalSubsubCategoryId,
+      images,
 
       // Industry fields
       industryCategoryId,
@@ -196,10 +197,7 @@ exports.update = async (req, res) => {
         : (typeof body.tags === 'string' ? body.tags.split(',').map(s => s.trim()) : []);
     }
 
-    // Handle images array
-    let images = product.images || [];
-
-
+   
 
     // Simple update
     Object.assign(product, {
@@ -210,6 +208,7 @@ exports.update = async (req, res) => {
       quantity: body.quantity !== undefined ? (body.quantity ? Number(body.quantity) : null) : product.quantity,
       description: body.description ?? product.description,
       country: body.country || null,
+      city: body.city || null,
       tags,
       images,
       generalCategoryId: generalCategoryId === '' ? null : generalCategoryId,
