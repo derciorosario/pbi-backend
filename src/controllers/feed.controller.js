@@ -312,6 +312,7 @@ async function invalidateUserFeedCache(userId) {
 }
 
 exports.getMeta = async (req, res) => {
+
   const categories = await Category.findAll({
     include: [{ model: Subcategory, as: "subcategories" }],
     order: [
@@ -1070,6 +1071,7 @@ function normalizeToArray(v) {
 const W = { x: 3, sub: 2.5, cat: 2, id: 1.5, city: 1.5, country: 1 };
 
 exports.getFeed = async (req, res) => {
+
   try {
     // Generate cache key for this request
     const cacheKey = generateFeedCacheKey(req);
@@ -3789,6 +3791,11 @@ if (tab === "needs") {
   }
 };
 
+
+
+
+
+
 exports.getSuggestions = async (req, res) => {
   try {
     const {
@@ -3798,12 +3805,39 @@ exports.getSuggestions = async (req, res) => {
       categoryId,
       cats,
       subcategoryId,
+      bidirectionalMatch,
+      bidirectionalMatchFormula,
       limit = 10,
     } = req.query;
 
     const like = (v) => ({ [Op.like]: `%${v}%` });
 
     const currentUserId = req.user?.id || null;
+
+    // Set default values for matching configuration
+    let userBidirectionalMatch = bidirectionalMatch !== undefined ? bidirectionalMatch : true;
+    let userBidirectionalMatchFormula = bidirectionalMatchFormula || "reciprocal";
+
+    // Load user settings for matching configuration if not provided in query and user is logged in
+    if (currentUserId && (bidirectionalMatch === undefined || bidirectionalMatchFormula === undefined)) {
+      try {
+        const userSettings = await UserSettings.findOne({
+          where: { userId: currentUserId },
+          attributes: ['bidirectionalMatch', 'bidirectionalMatchFormula']
+        });
+
+        if (userSettings) {
+          if (bidirectionalMatch === undefined) {
+            userBidirectionalMatch = userSettings.bidirectionalMatch;
+          }
+          if (bidirectionalMatchFormula === undefined) {
+            userBidirectionalMatchFormula = userSettings.bidirectionalMatchFormula;
+          }
+        }
+      } catch (error) {
+        console.error("Error loading user settings for matching configuration:", error);
+      }
+    }
 
     let userDefaults = {
       country: null,
@@ -3812,107 +3846,110 @@ exports.getSuggestions = async (req, res) => {
       subcategoryIds: [],
       subsubcategoryIds: [],
       identityIds: [],
+      interestCategoryIds: [],
+      interestSubcategoryIds: [],
+      interestSubsubCategoryIds: [],
+      interestIdentityIds: [],
     };
 
-   
-  
-  
     if (currentUserId) {
-  try {
-    const me = await User.findByPk(currentUserId, {
-      attributes: ["id", "country", "city", "accountType"],
-      include: [
-        { 
-          model: UserCategory, 
-          as: "interests", 
-          attributes: ["categoryId", "subcategoryId"] 
-        }
-      ],
-    });
-    
-    if (me) {
-      userDefaults.country = me.country || null;
-      userDefaults.city = me.city || null;
-      userDefaults.categoryIds = (me.interests || []).map((i) => i.categoryId).filter(Boolean);
-      userDefaults.subcategoryIds = (me.interests || []).map((i) => i.subcategoryId).filter(Boolean);
-      
-      // Load UserIdentity for current user
       try {
-        const userIdentities = await UserIdentity.findAll({
-          where: { userId: currentUserId },
-          attributes: ['identityId']
+        const me = await User.findByPk(currentUserId, {
+          attributes: ["id", "country", "city", "accountType"],
+          include: [
+            { 
+              model: UserCategory, 
+              as: "interests", 
+              attributes: ["categoryId", "subcategoryId"] 
+            },
+            { 
+              model: UserSubcategory, 
+              as: "userSubcategories", 
+              attributes: ["subcategoryId"],
+              include: [{ model: Subcategory, as: "subcategory", attributes: ["id"] }]
+            },
+            { 
+              model: UserSubsubCategory, 
+              as: "userSubsubCategories", 
+              attributes: ["subsubCategoryId"],
+              include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id"] }]
+            },
+            { 
+              model: Goal, 
+              as: "goals", 
+              attributes: ["id"] 
+            },
+            { 
+              model: Identity, 
+              as: "identities", 
+              attributes: ["id"], 
+              through: { attributes: [] } 
+            },
+            { 
+              model: UserIdentityInterest, 
+              as: "identityInterests", 
+              attributes: ["identityId"], 
+              include: [{ model: Identity, as: "identity", attributes: ["id"] }] 
+            },
+            { 
+              model: UserCategoryInterest, 
+              as: "categoryInterests", 
+              attributes: ["categoryId"], 
+              include: [{ model: Category, as: "category", attributes: ["id"] }] 
+            },
+            { 
+              model: UserSubcategoryInterest, 
+              as: "subcategoryInterests", 
+              attributes: ["subcategoryId"], 
+              include: [{ model: Subcategory, as: "subcategory", attributes: ["id"] }] 
+            },
+            { 
+              model: UserSubsubCategoryInterest, 
+              as: "subsubInterests", 
+              attributes: ["subsubCategoryId"], 
+              include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id"] }] 
+            },
+          ],
         });
-        const identitiesFromUserIdentities = userIdentities.map((i) => i.identityId).filter(Boolean);
         
-        // Load subcategory interests from UserSubcategoryInterest
-        try {
-          const subcategoryInterests = await UserSubcategoryInterest.findAll({
-            where: { userId: currentUserId },
-            include: [{ model: Subcategory, as: "subcategory", attributes: ["id", "name", "categoryId"] }],
-          });
-          userDefaults.subcategoryIds = [
-            ...userDefaults.subcategoryIds,
-            ...subcategoryInterests.map((i) => i.subcategoryId).filter(Boolean)
-          ];
+        if (me) {
+          userDefaults.country = me.country || null;
+          userDefaults.city = me.city || null;
           
-          // Extract categories from subcategory interests
-          const categoriesFromSubcategoryInterests = subcategoryInterests
-            .map((i) => i.subcategory?.categoryId)
-            .filter(Boolean);
-          userDefaults.categoryIds = [
-            ...userDefaults.categoryIds,
-            ...categoriesFromSubcategoryInterests
-          ];
+          // Load all interest types properly
+          userDefaults.categoryIds = (me.interests || []).map((i) => i.categoryId).filter(Boolean);
+          userDefaults.subcategoryIds = (me.userSubcategories || []).map((i) => i.subcategoryId).filter(Boolean);
+          userDefaults.subsubcategoryIds = (me.userSubsubCategories || []).map((i) => i.subsubCategoryId).filter(Boolean);
+          userDefaults.identityIds = (me.identities || []).map(i => i.id).filter(Boolean);
           
-          // Remove duplicates
-          userDefaults.subcategoryIds = [...new Set(userDefaults.subcategoryIds)];
-          userDefaults.categoryIds = [...new Set(userDefaults.categoryIds)];
-        } catch (error) {
-          console.error('Error loading subcategory interests:', error);
-        }
-        
-        // Load subsubcategory interests
-        try {
-          const subsubInterests = await UserSubsubCategoryInterest.findAll({
-            where: { userId: currentUserId },
-            include: [{ model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"] }],
+          // Load interest interests (what the user is looking for)
+          userDefaults.interestCategoryIds = (me.categoryInterests || []).map((i) => i.categoryId).filter(Boolean);
+          userDefaults.interestSubcategoryIds = (me.subcategoryInterests || []).map((i) => i.subcategoryId).filter(Boolean);
+          userDefaults.interestSubsubCategoryIds = (me.subsubInterests || []).map((i) => i.subsubCategoryId).filter(Boolean);
+          userDefaults.interestIdentityIds = (me.identityInterests || []).map((i) => i.identityId).filter(Boolean);
+          
+          console.log('Current user interests loaded:', {
+            categories: userDefaults.interestCategoryIds,
+            subcategories: userDefaults.interestSubcategoryIds,
+            subsubcategories: userDefaults.interestSubsubCategoryIds,
+            identities: userDefaults.interestIdentityIds
           });
-          userDefaults.subsubcategoryIds = subsubInterests.map((i) => i.subsubCategoryId).filter(Boolean);
-        } catch (error) {
-          console.error('Error loading subsubcategory interests:', error);
-          userDefaults.subsubcategoryIds = [];
-        }
-        
-        // Load identity interests
-        try {
-          const identityInterests = await UserIdentityInterest.findAll({
-            where: { userId: currentUserId },
-            include: [{ model: Identity, as: "identity", attributes: ["id", "name"] }],
-          });
-          userDefaults.identityIds = [
-            ...identityInterests.map((i) => i.identityId).filter(Boolean),
-            ...identitiesFromUserIdentities // Include identities from UserIdentity too
-          ];
-          userDefaults.identityIds = [...new Set(userDefaults.identityIds)]; // Remove duplicates
-        } catch (error) {
-          console.error('Error loading identity interests:', error);
-          userDefaults.identityIds = identitiesFromUserIdentities; // Fallback to just UserIdentity
         }
       } catch (error) {
-        console.error('Error loading user identities:', error);
+        console.error("Error loading current user data:", error);
       }
-
-      console.log('Loaded current user interests:', {
-        categories: userDefaults.categoryIds,
-        subcategories: userDefaults.subcategoryIds,
-        subsubcategories: userDefaults.subsubcategoryIds,
-        identities: userDefaults.identityIds
-      });
     }
-  } catch (error) {
-    console.error('Error loading user defaults:', error);
-  }
-}
+
+    // Create myWant object here so it's accessible in calculateMatchPercentage
+    const myWant = {
+      xSet: new Set(userDefaults.interestSubsubCategoryIds?.map(String) || []),
+      subSet: new Set(userDefaults.interestSubcategoryIds?.map(String) || []),
+      catSet: new Set(userDefaults.interestCategoryIds?.map(String) || []),
+      idSet: new Set(userDefaults.interestIdentityIds?.map(String) || []),
+      city: (userDefaults.city || "").toLowerCase(),
+      country: userDefaults.country,
+    };
+
     const qCats = normalizeToArray(cats) || normalizeToArray(categoryId);
     const qSubcats = normalizeToArray(subcategoryId);
 
@@ -3944,73 +3981,79 @@ exports.getSuggestions = async (req, res) => {
     if (eff.categoryIds) interestsWhere.categoryId = { [Op.in]: eff.categoryIds };
     if (eff.subcategoryIds) interestsWhere.subcategoryId = { [Op.in]: eff.subcategoryIds };
 
-    
-  
-    
-  
     const makeInterestsInclude = (required) => ([
-  {
-    model: UserCategory,
-    as: "interests",
-    required,
-    where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
-    include: [
-      { model: Category, as: "category", attributes: ["id", "name"], required: false },
-      { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
-    ],
-  },
-  {
-    model: UserSubcategory,
-    as: "userSubcategories",
-    attributes: ["subcategoryId"],
-    required: false,
-    include: [
       {
-        model: Subcategory,
-        as: "subcategory",
-        attributes: ["id", "name", "categoryId"],
-        required: false
-      }
-    ]
-  },
-  {
-    model: UserSubcategoryInterest,
-    as: "subcategoryInterests",
-    attributes: ["subcategoryId"],
-    required: false,
-    include: [
+        model: UserCategory,
+        as: "interests",
+        required,
+        where: Object.keys(interestsWhere).length ? interestsWhere : undefined,
+        include: [
+          { model: Category, as: "category", attributes: ["id", "name"], required: false },
+          { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false },
+        ],
+      },
       {
-        model: Subcategory,
-        as: "subcategory",
-        attributes: ["id", "name", "categoryId"],
-        required: false
-      }
-    ]
-  },
-  {
-    model: UserSubsubCategory,
-    as: "userSubsubCategories",
-    attributes: ["subsubCategoryId"],
-    required: false,
-  },
-  {
-    model: UserIdentityInterest,
-    as: "identityInterests",
-    attributes: ["identityId"],
-    required: false,
-    include: [
+        model: UserSubcategory,
+        as: "userSubcategories",
+        attributes: ["subcategoryId"],
+        required: false,
+        include: [
+          { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false }
+        ]
+      },
+      {
+        model: UserSubsubCategory,
+        as: "userSubsubCategories",
+        attributes: ["subsubCategoryId"],
+        required: false,
+        include: [
+          { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"], required: false }
+        ]
+      },
+      {
+        model: UserIdentityInterest,
+        as: "identityInterests",
+        attributes: ["identityId"],
+        required: false,
+        include: [
+          { model: Identity, as: "identity", attributes: ["id", "name"], required: false }
+        ]
+      },
+      {
+        model: UserCategoryInterest,
+        as: "categoryInterests", 
+        attributes: ["categoryId"],
+        required: false,
+        include: [
+          { model: Category, as: "category", attributes: ["id", "name"], required: false }
+        ]
+      },
+      {
+        model: UserSubcategoryInterest,
+        as: "subcategoryInterests",
+        attributes: ["subcategoryId"],
+        required: false,
+        include: [
+          { model: Subcategory, as: "subcategory", attributes: ["id", "name"], required: false }
+        ]
+      },
+      {
+        model: UserSubsubCategoryInterest,
+        as: "subsubInterests",
+        attributes: ["subsubCategoryId"],
+        required: false,
+        include: [
+          { model: SubsubCategory, as: "subsubCategory", attributes: ["id", "name"], required: false }
+        ]
+      },
       {
         model: Identity,
-        as: "identity",
+        as: "identities",
         attributes: ["id", "name"],
-        required: false
+        required: false,
+        through: { attributes: [] }
       }
-    ]
-  },
-  // REMOVED: UserIdentity association
-]);
-
-
+    ]);
 
     const profileInclude = {
       model: Profile,
@@ -4021,41 +4064,48 @@ exports.getSuggestions = async (req, res) => {
 
     const hasExplicitFilter = Boolean(q || qCountry || qCity || qCats || qSubcats);
 
+    // INCREASE THE INITIAL FETCH LIMIT TO ENSURE ALL ASSOCIATIONS ARE LOADED
+    const bufferLimit = Math.max(Number(limit) * 3, 50); // Fetch at least 50 users initially
+
     let matchesRaw = [];
 
-    if (hasExplicitFilter) {
+      if (hasExplicitFilter) {
       matchesRaw = await User.findAll({
         subQuery: false,
         where: whereUserBase,
         include: [profileInclude, ...makeInterestsInclude(Boolean(qCats || qSubcats))],
-        limit: Number(limit),
+        limit: bufferLimit, // Use buffer limit instead of actual limit
         order: [["createdAt", "DESC"]],
       });
     } else if (currentUserId) {
       if (userDefaults.categoryIds.length || userDefaults.subcategoryIds.length) {
+       console.log('-1')
         matchesRaw = await User.findAll({
           subQuery: false,
           where: whereUserBase,
           include: [profileInclude, ...makeInterestsInclude(true)],
-          limit: Number(limit),
+          limit: bufferLimit, // Use buffer limit instead of actual limit
           order: [["createdAt", "DESC"]],
         });
+        console.log('1',matchesRaw.length)
       }
       if (!matchesRaw || matchesRaw.length === 0) {
+         console.log('-2')
         matchesRaw = await User.findAll({
           subQuery: false,
           where: whereUserBase,
           include: [profileInclude, ...makeInterestsInclude(false)],
-          limit: Number(limit),
+          limit: bufferLimit, // Use buffer limit instead of actual limit
           order: [["createdAt", "DESC"]],
         });
+        console.log('2',matchesRaw.length)
       }
     } else {
       matchesRaw = await User.findAll({
         subQuery: false,
         where: whereUserBase,
         include: [profileInclude, ...makeInterestsInclude(false)],
-        limit: Number(limit),
+        limit: bufferLimit, // Use buffer limit instead of actual limit
         order: [["createdAt", "DESC"]],
       });
     }
@@ -4076,115 +4126,51 @@ exports.getSuggestions = async (req, res) => {
       subQuery: false,
       where: nearbyWhere,
       include: [profileInclude, ...makeInterestsInclude(Boolean(qCats || qSubcats))],
-      limit: Number(limit),
+      limit: bufferLimit, // Use buffer limit instead of actual limit
       order: [["createdAt", "DESC"]],
     });
 
-
-
-    // Enhance user data with manually loaded UserIdentity data
-const enhancedMatchesRaw = await Promise.all(
-  matchesRaw.map(async (user) => {
-    try {
-      // Manually load UserIdentity records for this user
-      const userIdentities = await UserIdentity.findAll({
-        where: { userId: user.id },
-        attributes: ['identityId'],
-        include: [
-          {
-            model: Identity,
-            as: 'identity',
-            attributes: ['id', 'name']
-          }
-        ]
-      });
-      
-      // Add the manually loaded data to the user object
-      user.userIdentities = userIdentities;
-    } catch (error) {
-      console.error(`Error loading UserIdentity for user ${user.id}:`, error);
-      user.userIdentities = [];
+    // Helper functions for bidirectional matching
+    function calculateBidirectionalMatch(aToB, bToA) {
+      const average = (aToB + bToA) / 2;
+      return average;
     }
-    return user;
-  })
-);
 
-const enhancedNearbyRaw = await Promise.all(
-  nearbyRaw.map(async (user) => {
-    try {
-      // Manually load UserIdentity records for this user
-      const userIdentities = await UserIdentity.findAll({
-        where: { userId: user.id },
-        attributes: ['identityId'],
-        include: [
-          {
-            model: Identity,
-            as: 'identity',
-            attributes: ['id', 'name']
-          }
-        ]
-      });
-      
-      // Add the manually loaded data to the user object
-      user.userIdentities = userIdentities;
-    } catch (error) {
-      console.error(`Error loading UserIdentity for user ${user.id}:`, error);
-      user.userIdentities = [];
+    function calculateReciprocalWeightedMatch(aToB, bToA, weightSelf = 0.7) {
+      const weightOther = 1 - weightSelf;
+      const userAPerceived = (aToB * weightSelf) + (bToA * weightOther);
+      return userAPerceived;
     }
-    return user;
-  })
-);
-  
- const calculateMatchPercentage = (myWant, u) => {
-  console.log('=== SUGGESTIONS MATCH DEBUG ===');
-  console.log('Other user:', u.name, u.id);
-  
-  // Extract categories from interests
-  const categoriesFromInterests = (u.interests || []).map((i) => i.categoryId).filter(id => id != null).map(String);
-  
-  // Extract categories from subcategory associations
-  const categoriesFromUserSubcategories = (u.userSubcategories || [])
-    .map((us) => us.subcategory?.categoryId)
-    .filter(id => id != null)
-    .map(String);
-  
-  const categoriesFromSubcategoryInterests = (u.subcategoryInterests || [])
-    .map((si) => si.subcategory?.categoryId)
-    .filter(id => id != null)
-    .map(String);
-  
-  // Combine subcategories from both sources
-  const subcategoriesFromUserSubcategory = (u.userSubcategories || []).map((i) => i.subcategoryId).filter(id => id != null).map(String);
-  const subcategoriesFromSubcategoryInterests = (u.subcategoryInterests || []).map((i) => i.subcategoryId).filter(id => id != null).map(String);
-  
-  // Extract identities from BOTH sources (now using manually loaded userIdentities)
-  const identitiesFromIdentityInterests = (u.identityInterests || []).map((i) => i.identityId).filter(id => id != null).map(String);
-  const identitiesFromUserIdentities = (u.userIdentities || []).map((i) => i.identityId).filter(id => id != null).map(String);
-  
-  const itemOfferings = {
-    categories: [...new Set([...categoriesFromInterests, ...categoriesFromUserSubcategories, ...categoriesFromSubcategoryInterests])],
-    subcategories: [...new Set([...subcategoriesFromUserSubcategory, ...subcategoriesFromSubcategoryInterests])],
-    subsubcategories: (u.userSubsubCategories || []).map((i) => i.subsubCategoryId).filter(id => id != null).map(String),
-    identities: [...new Set([...identitiesFromIdentityInterests, ...identitiesFromUserIdentities])], // Combine both identity sources
-  };
-  
-  console.log('Other user offerings (interests):', itemOfferings);
-  
-  const userInterests = {
-    categories: Array.from(myWant.catSet).map(String),
-    subcategories: Array.from(myWant.subSet).map(String),
-    subsubcategories: Array.from(myWant.xSet).map(String),
-    identities: Array.from(myWant.idSet).map(String),
-  };
-  
-  console.log('Current user interests:', userInterests);
-  
-  
- 
 
+    const calculateMatchPercentage = (u, useBidirectionalMatch = true) => {
+
+      console.log('=== SUGGESTIONS MATCH DEBUG ===');
+      console.log('Other user:', u.name, u.id);
+      
+      // Get what the other user OFFERS (does)
+      const itemOfferings = {
+        categories: (u.interests || []).map((i) => i.categoryId).filter(id => id != null).map(String),
+        subcategories: (u.userSubcategories || []).map((i) => i.subcategoryId).filter(id => id != null).map(String),
+        subsubcategories: (u.userSubsubCategories || []).map((i) => i.subsubCategoryId).filter(id => id != null).map(String),
+        identities: (u.identities || []).map((i) => i.id).filter(id => id != null).map(String),
+      };
+      
+      console.log('Other user offerings (what they do):', itemOfferings);
+      
+      // Get what the current user WANTS (looking for)
+      const userInterests = {
+        categories: Array.from(myWant.catSet).map(String),
+        subcategories: Array.from(myWant.subSet).map(String),
+        subsubcategories: Array.from(myWant.xSet).map(String),
+        identities: Array.from(myWant.idSet).map(String),
+      };
+      
+      console.log('Current user interests (what they want):', userInterests);
+      
       const WEIGHTS = { identity: 25, category: 25, subcategory: 25, subsubcategory: 25 };
       let totalScore = 0;
       let totalPossibleScore = 0;
+      
       // Identity matching - one match gives 100%
       if (userInterests.identities.length > 0) {
         const hasMatch = itemOfferings.identities.length > 0 && itemOfferings.identities.some(id => userInterests.identities.includes(id));
@@ -4194,30 +4180,34 @@ const enhancedNearbyRaw = await Promise.all(
         }
         totalPossibleScore += WEIGHTS.identity;
       }
-      // Category matching - proportion based
+      
+      // Category matching - PROPORTIONAL based on matches
       if (userInterests.categories.length > 0) {
         const targetMatches = itemOfferings.categories.filter(id => userInterests.categories.includes(id));
-        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.categories.length, itemOfferings.categories.length));
-        console.log('Category matches:', targetMatches.length, 'pct:', pct);
+        const pct = targetMatches.length / userInterests.categories.length;
+        console.log(`Category matches: ${targetMatches.length}/${userInterests.categories.length} = ${Math.round(pct * 100)}%`);
         totalScore += WEIGHTS.category * pct;
         totalPossibleScore += WEIGHTS.category;
       }
-      // Subcategory matching - proportion based
+      
+      // Subcategory matching - PROPORTIONAL based on matches
       if (userInterests.subcategories.length > 0) {
         const targetMatches = itemOfferings.subcategories.filter(id => userInterests.subcategories.includes(id));
-        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subcategories.length, itemOfferings.subcategories.length));
-        console.log('Subcategory matches:', targetMatches.length, 'pct:', pct);
+        const pct = targetMatches.length / userInterests.subcategories.length;
+        console.log(`Subcategory matches: ${targetMatches.length}/${userInterests.subcategories.length} = ${Math.round(pct * 100)}%`);
         totalScore += WEIGHTS.subcategory * pct;
         totalPossibleScore += WEIGHTS.subcategory;
       }
-      // Subsubcategory matching - proportion based
+      
+      // Subsubcategory matching - PROPORTIONAL based on matches
       if (userInterests.subsubcategories.length > 0) {
         const targetMatches = itemOfferings.subsubcategories.filter(id => userInterests.subsubcategories.includes(id));
-        const pct = Math.min(1, targetMatches.length / Math.max(userInterests.subsubcategories.length, itemOfferings.subsubcategories.length));
-        console.log('Subsubcategory matches:', targetMatches.length, 'pct:', pct);
+        const pct = targetMatches.length / userInterests.subsubcategories.length;
+        console.log(`Subsubcategory matches: ${targetMatches.length}/${userInterests.subsubcategories.length} = ${Math.round(pct * 100)}%`);
         totalScore += WEIGHTS.subsubcategory * pct;
         totalPossibleScore += WEIGHTS.subsubcategory;
       }
+      
       // Location matching
       const otherCity = (u.city || "").toLowerCase();
       let locationScore = 0;
@@ -4234,29 +4224,139 @@ const enhancedNearbyRaw = await Promise.all(
       } else {
         console.log('Location match: none');
       }
+      
       if (totalPossibleScore === 0) {
         console.log('No possible score, returning 0');
         return 0;
       }
-      const percentage = Math.max(0, Math.min(100, Math.round((totalScore / totalPossibleScore) * 100)));
-      console.log('Total score:', totalScore, 'Total possible:', totalPossibleScore, 'Percentage:', percentage);
-      console.log('=== END SUGGESTIONS MATCH DEBUG ===');
-      return percentage;
+      
+      const unidirectionalPercentage = Math.max(0, Math.min(100, Math.round((totalScore / totalPossibleScore) * 100)));
+      console.log('Unidirectional percentage:', unidirectionalPercentage);
+      
+      // If bidirectional matching is disabled, return unidirectional percentage
+      if (!useBidirectionalMatch) {
+        return unidirectionalPercentage;
+      }
+
+      // BIDIRECTIONAL MATCHING CALCULATION
+      console.log('=== BIDIRECTIONAL MATCH CALCULATION ===');
+      
+      // Calculate reverse percentage - what target user would get if searching for current user
+      const reverseMatches = {
+        identity: 0,
+        category: 0,
+        subcategory: 0,
+        subsubcategory: 0
+      };
+
+      // Get target user's "looking for" (interests) - what they want from others
+      const targetUserIdentityInterests = new Set((u.identityInterests || []).map(i => String(i.identityId)));
+      const targetUserCategoryInterests = new Set((u.categoryInterests || []).map(i => String(i.categoryId)));
+      const targetUserSubcategoryInterests = new Set((u.subcategoryInterests || []).map(i => String(i.subcategoryId)));
+      const targetUserSubsubCategoryInterests = new Set((u.subsubInterests || []).map(i => String(i.subsubCategoryId)));
+
+      // Get current user's "does" (what they offer) - what they can provide
+      const currentUserIdentities = new Set(userDefaults.identityIds.map(String));
+      const currentUserCategories = new Set(userDefaults.categoryIds.map(String));
+      const currentUserSubcategories = new Set(userDefaults.subcategoryIds.map(String));
+      const currentUserSubsubcategories = new Set(userDefaults.subsubcategoryIds.map(String));
+
+      console.log('Target user interests (what they want):', {
+        identity: [...targetUserIdentityInterests],
+        category: [...targetUserCategoryInterests],
+        subcategory: [...targetUserSubcategoryInterests],
+        subsubcategory: [...targetUserSubsubCategoryInterests]
+      });
+      console.log('Current user does (what they offer):', {
+        identity: [...currentUserIdentities],
+        category: [...currentUserCategories],
+        subcategory: [...currentUserSubcategories],
+        subsubcategory: [...currentUserSubsubcategories]
+      });
+
+      // Direction 2: Target user wants -> Current user does (REVERSE DIRECTION)
+      // 1. Identity matching - 100% if at least one match found
+      if (targetUserIdentityInterests.size > 0) {
+        const currentUserMatches = new Set([...targetUserIdentityInterests].filter(x => currentUserIdentities.has(x)));
+        reverseMatches.identity = currentUserMatches.size > 0 ? 1 : 0;
+        console.log(`Reverse identity match: ${currentUserMatches.size}/${targetUserIdentityInterests.size} = ${Math.round(reverseMatches.identity * 100)}%`);
+      }
+
+      // 2. Category matching - PROPORTIONAL based on matches
+      if (targetUserCategoryInterests.size > 0) {
+        const currentUserMatches = new Set([...targetUserCategoryInterests].filter(x => currentUserCategories.has(x)));
+        const pct = currentUserMatches.size / targetUserCategoryInterests.size;
+        console.log(`Reverse category match: ${currentUserMatches.size}/${targetUserCategoryInterests.size} = ${Math.round(pct * 100)}%`);
+        reverseMatches.category = pct;
+      }
+
+      // 3. Subcategory matching - PROPORTIONAL based on matches
+      if (targetUserSubcategoryInterests.size > 0) {
+        const currentUserMatches = new Set([...targetUserSubcategoryInterests].filter(x => currentUserSubcategories.has(x)));
+        const pct = currentUserMatches.size / targetUserSubcategoryInterests.size;
+        console.log(`Reverse subcategory match: ${currentUserMatches.size}/${targetUserSubcategoryInterests.size} = ${Math.round(pct * 100)}%`);
+        reverseMatches.subcategory = pct;
+      }
+
+      // 4. Subsubcategory matching - PROPORTIONAL based on matches
+      if (targetUserSubsubCategoryInterests.size > 0) {
+        const currentUserMatches = new Set([...targetUserSubsubCategoryInterests].filter(x => currentUserSubsubcategories.has(x)));
+        const pct = currentUserMatches.size / targetUserSubsubCategoryInterests.size;
+        console.log(`Reverse subsubcategory match: ${currentUserMatches.size}/${targetUserSubsubCategoryInterests.size} = ${Math.round(pct * 100)}%`);
+        reverseMatches.subsubcategory = pct;
+      }
+
+      // Calculate reverse percentage
+      let reverseTotalScore = 0;
+      let reverseTotalPossibleScore = 0;
+
+      console.log('=== REVERSE FINAL CALCULATION DEBUG ===');
+      console.log('Reverse matches:', reverseMatches);
+
+      Object.keys(reverseMatches).forEach(level => {
+        const targetUserHasInterest = (
+          (level === 'identity' && targetUserIdentityInterests.size > 0) ||
+          (level === 'category' && targetUserCategoryInterests.size > 0) ||
+          (level === 'subcategory' && targetUserSubcategoryInterests.size > 0) ||
+          (level === 'subsubcategory' && targetUserSubsubCategoryInterests.size > 0)
+        );
+
+        if (targetUserHasInterest) {
+          reverseTotalScore += WEIGHTS[level] * reverseMatches[level];
+          reverseTotalPossibleScore += WEIGHTS[level];
+          console.log(`Reverse ${level}: ${Math.round(WEIGHTS[level] * reverseMatches[level])}/${WEIGHTS[level]} (${Math.round(reverseMatches[level] * 100)}%)`);
+        }
+      });
+
+      console.log(`Reverse total score: ${Math.round(reverseTotalScore)}/${reverseTotalPossibleScore}`);
+
+      let reversePercentage = 0;
+      if (reverseTotalPossibleScore > 0) {
+        reversePercentage = Math.max(0, Math.min(100, Math.round((reverseTotalScore / reverseTotalPossibleScore) * 100)));
+      }
+      
+      console.log(`Reverse percentage: ${reversePercentage}%`);
+
+      // Calculate final bidirectional percentage based on selected formula
+      let bidirectionalPercentage;
+      if (userBidirectionalMatchFormula === "simple") {
+        bidirectionalPercentage = calculateBidirectionalMatch(unidirectionalPercentage, reversePercentage);
+        console.log(`Bidirectional percentage (simple average of ${unidirectionalPercentage}% and ${reversePercentage}%): ${Math.round(bidirectionalPercentage)}%`);
+      } else {
+        bidirectionalPercentage = calculateReciprocalWeightedMatch(unidirectionalPercentage, reversePercentage);
+        console.log(`Bidirectional percentage (reciprocal weighted of ${unidirectionalPercentage}% and ${reversePercentage}%): ${Math.round(bidirectionalPercentage)}%`);
+      }
+
+      console.log('=== END BIDIRECTIONAL MATCH CALCULATION ===');
+      return Math.round(bidirectionalPercentage);
     };
+
 
     const mapUser = (u, idx) => {
       const professionalTitle = u.profile?.professionalTitle || null;
       let matchPercentage = 0;
       if (currentUserId) {
-        const myWant = {
-          xSet: new Set(userDefaults.subsubcategoryIds?.map(String) || []),
-          subSet: new Set(userDefaults.subcategoryIds?.map(String) || []),
-          catSet: new Set(userDefaults.categoryIds?.map(String) || []),
-          idSet: new Set(userDefaults.identityIds?.map(String) || []),
-          city: (userDefaults.city || "").toLowerCase(),
-          country: userDefaults.country,
-        };
-        matchPercentage = calculateMatchPercentage(myWant, u);
+        matchPercentage = calculateMatchPercentage(u, userBidirectionalMatch === 'true' || userBidirectionalMatch === true);
       }
       const interests = u.interests || [];
       const cats = interests.map((it) => it.category?.name).filter(Boolean);
@@ -4277,9 +4377,10 @@ const enhancedNearbyRaw = await Promise.all(
         mockIndex: 30 + idx,
       };
     };
-    
-let matches = enhancedMatchesRaw.map(mapUser);
-let nearby = enhancedNearbyRaw.map(mapUser);
+
+
+    let matches =  matchesRaw.map(mapUser);
+    let nearby = nearbyRaw.map(mapUser);
 
     const allTargets = [...matches, ...nearby].map((u) => u.id).filter(Boolean);
     const statusMap = await getConnectionStatusMap(currentUserId, allTargets, {
@@ -4310,11 +4411,19 @@ let nearby = enhancedNearbyRaw.map(mapUser);
     matches.sort((a, b) => b.matchPercentage - a.matchPercentage);
     nearby.sort((a, b) => b.matchPercentage - a.matchPercentage);
 
+    // APPLY THE ACTUAL LIMIT AFTER CALCULATING ALL MATCH PERCENTAGES
+    matches = matches.slice(0, Number(limit));
+    nearby = nearby.slice(0, Number(limit));
+
     res.json({
       matchesCount: matches.length,
       nearbyCount: nearby.length,
       matches,
       nearby,
+      matchingConfig: {
+        bidirectionalMatch: userBidirectionalMatch,
+        bidirectionalMatchFormula: userBidirectionalMatchFormula
+      }
     });
   } catch (err) {
     console.error(err);
